@@ -41,8 +41,8 @@ export default function Page() {
   const onboardingComplete = !!(profile?.college && profile.college.trim().length > 0);
 
   // ── Loading ──────────────────────────────────────────────
-  // In live mode: wait for auth + profile to load
-  const stillLoading = !isDemo && (authLoading || (user && !profile));
+  // Only block on auth check — profile loads in background after
+  const stillLoading = !isDemo && authLoading;
 
   if (!ready || (stillLoading && !isDemo)) {
     return (
