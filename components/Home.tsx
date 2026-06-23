@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { useStore } from "./store";
 import { useAuth } from "@/lib/auth";
-import { dbSaveAttendance } from "@/lib/dbActions";
+import { dbSaveAttendance, dbSaveTimetableSlot, dbDeleteTimetableSlot, dbSaveTimetableBulk } from "@/lib/dbActions";
 import { isDemo } from "@/lib/config";
 import {
   overallStats,
@@ -1028,16 +1028,12 @@ function TimetableSheet({
   function addClass() {
     const sid = subjectId || data.subjects[0]?.id;
     if (!sid) return;
-    update((d) => {
-      d.timetable.push({
-        id: uid(),
-        day,
-        subjectId: sid,
-        start,
-        end: start,
-        room: room.trim() || undefined,
-      });
-    });
+    const newSlot = { id: uid(), day, subjectId: sid, start, end: start, room: room.trim() || undefined };
+    update((d) => { d.timetable.push(newSlot); });
+    if (!isDemo() && user) {
+      const subjectName = data.subjects.find(s => s.id === sid)?.name ?? sid;
+      dbSaveTimetableSlot(user.id, newSlot, subjectName);
+    }
     setRoom("");
   }
 
@@ -1116,11 +1112,10 @@ function TimetableSheet({
                   </p>
                 </div>
                 <button
-                  onClick={() =>
-                    update((d) => {
-                      d.timetable = d.timetable.filter((x) => x.id !== slot.id);
-                    })
-                  }
+                  onClick={() => {
+                    update((d) => { d.timetable = d.timetable.filter((x) => x.id !== slot.id); });
+                    if (!isDemo() && user) dbDeleteTimetableSlot(slot.id);
+                  }}
                   className="text-ink-mute"
                 >
                   <TrashIcon className="w-4 h-4" />

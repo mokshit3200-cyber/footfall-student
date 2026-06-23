@@ -18,7 +18,30 @@ export default function Profile({
 }) {
   const { data, update, reset } = useStore();
   const { profile, business, subjects, attendance, grades, deadlines } = data;
-  const { signOut, refreshProfile } = useAuth();
+  const { user, signOut, refreshProfile } = useAuth();
+  const [followerCount, setFollowerCount] = useState<number | null>(null);
+  const [followingCount, setFollowingCount] = useState<number | null>(null);
+  const [isPrivate, setIsPrivate] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!user) return;
+    Promise.all([
+      supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", user.id).eq("status", "accepted"),
+      supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", user.id).eq("status", "accepted"),
+      supabase.from("profiles").select("is_private").eq("id", user.id).single(),
+    ]).then(([followers, following, prof]) => {
+      setFollowerCount(followers.count ?? 0);
+      setFollowingCount(following.count ?? 0);
+      setIsPrivate(prof.data?.is_private ?? false);
+    });
+  }, [user]);
+
+  async function togglePrivacy() {
+    if (!user) return;
+    const next = !isPrivate;
+    setIsPrivate(next);
+    await supabase.from("profiles").update({ is_private: next }).eq("id", user.id);
+  }
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [remindersOpen, setRemindersOpen] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
@@ -91,11 +114,11 @@ export default function Profile({
             <p className="text-[9px] text-ink-mute font-bold uppercase tracking-wider">Listings</p>
           </div>
           <div>
-            <p className="text-base font-black text-ink tabular-nums">{profile.followersCount || 142}</p>
+            <p className="text-base font-black text-ink tabular-nums">{followerCount ?? "—"}</p>
             <p className="text-[9px] text-ink-mute font-bold uppercase tracking-wider">Followers</p>
           </div>
           <div>
-            <p className="text-base font-black text-ink tabular-nums">{profile.followingCount || 98}</p>
+            <p className="text-base font-black text-ink tabular-nums">{followingCount ?? "—"}</p>
             <p className="text-[9px] text-ink-mute font-bold uppercase tracking-wider">Following</p>
           </div>
         </div>
@@ -153,7 +176,7 @@ export default function Profile({
       </div>
 
       {/* Social Actions */}
-      <div className="flex gap-2.5 mb-6">
+      <div className="flex gap-2.5 mb-3">
         <button
           onClick={() => setEditProfileOpen(true)}
           className="flex-1 py-2 text-xs font-bold rounded-xl bg-white/[0.07] hover:bg-white/10 active:scale-[0.98] transition text-ink text-center"
@@ -167,6 +190,18 @@ export default function Profile({
           + Add Story
         </button>
       </div>
+
+      {/* Private / Public toggle */}
+      <button onClick={togglePrivacy}
+        className="w-full mb-4 flex items-center justify-between px-4 py-3 rounded-2xl bg-white/[0.04] border border-white/[0.07] active:scale-[0.99] transition">
+        <div className="text-left">
+          <p className="text-xs font-bold text-ink">{isPrivate ? "🔒 Private account" : "🌐 Public account"}</p>
+          <p className="text-[10px] text-ink-mute mt-0.5">{isPrivate ? "New followers need your approval" : "Anyone can follow you instantly"}</p>
+        </div>
+        <div className={`w-10 h-5 rounded-full transition-colors relative shrink-0 ${isPrivate ? "bg-brand-500" : "bg-white/10"}`}>
+          <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all ${isPrivate ? "left-5" : "left-0.5"}`} />
+        </div>
+      </button>
       {profile?.verified ? (
         <div className="w-full -mt-4 mb-6 py-2.5 flex items-center justify-center gap-1.5 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-bold uppercase tracking-wider">
           ✓ Verified

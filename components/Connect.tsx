@@ -192,11 +192,27 @@ function formatSeparatorDate(dateStr: string) {
 
 function LiveConnect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (tab: any) => void; onChatOpen?: (open: boolean) => void }) {
   const { user, profile } = useAuth();
-  const [classmates, setClassmates] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  // Sub-tabs
+  const [subTab, setSubTab] = useState<"people" | "requests">("people");
   const [scope, setScope] = useState<"campus" | "all">("campus");
 
-  // DM State
+  // People list
+  const [people, setPeople] = useState<any[]>([]);
+  const [loadingPeople, setLoadingPeople] = useState(true);
+
+  // follow states: userId → 'none' | 'pending' | 'following' | 'mutual'
+  const [followStates, setFollowStates] = useState<Record<string, string>>({});
+
+  // Pending incoming requests
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loadingReqs, setLoadingReqs] = useState(false);
+  const [reqCount, setReqCount] = useState(0);
+
+  // Free/busy status for mutuals
+  const [freeBusy, setFreeBusy] = useState<Record<string, "free" | "busy">>({});
+
+  // DM state
   const [activeDmId, setActiveDmId] = useState<string | null>(null);
   const [activePeer, setActivePeer] = useState<any | null>(null);
   const [messages, setMessages] = useState<{ id: string; sender_id: string; content: string; created_at: string }[]>([]);
@@ -204,336 +220,334 @@ function LiveConnect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (tab: any) => 
   const [msgLoading, setMsgLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // ── Fetch people + follow states ──────────────────────────
   useEffect(() => {
-    async function fetchClassmates() {
-      if (!user || !profile?.college) {
-        setLoading(false);
-        return;
+    if (!user || !profile?.college) { setLoadingPeople(false); return; }
+    setLoadingPeople(true);
+    (async () => {
+      let query = supabase
+        .from("profiles")
+        .select("id, name, username, course, year, avatar_url, verified, college, is_private")
+        .neq("id", user.id)
+        .limit(60);
+      if (scope === "campus") query = query.eq("college", profile.college);
+      const { data: peopleData } = await query;
+      if (!peopleData) { setLoadingPeople(false); return; }
+      setPeople(peopleData);
+
+      const ids = peopleData.map((p: any) => p.id);
+      const [{ data: outgoing }, { data: incoming }] = await Promise.all([
+        supabase.from("follows").select("following_id,status").eq("follower_id", user.id).in("following_id", ids),
+        supabase.from("follows").select("follower_id,status").eq("following_id", user.id).in("follower_id", ids),
+      ]);
+      const outMap = Object.fromEntries((outgoing ?? []).map((f: any) => [f.following_id, f.status]));
+      const inMap  = Object.fromEntries((incoming ?? []).map((f: any) => [f.follower_id, f.status]));
+      const states: Record<string, string> = {};
+      for (const p of peopleData) {
+        const myOut = outMap[p.id];
+        const theirOut = inMap[p.id];
+        if (myOut === "accepted" && theirOut === "accepted") states[p.id] = "mutual";
+        else if (myOut === "accepted") states[p.id] = "following";
+        else if (myOut === "pending")  states[p.id] = "pending";
+        else                           states[p.id] = "none";
       }
-      setLoading(true);
-      try {
-        let query = supabase
-          .from("profiles")
-          .select("id, name, username, course, year, avatar_url, bio, verified, college")
-          .neq("id", user.id)
-          .limit(50);
-        if (scope === "campus") query = query.eq("college", profile.college);
-        const { data, error } = await query;
-        if (error) {
-          console.error(error);
-        } else if (data) {
-          setClassmates(data);
+      setFollowStates(states);
+
+      // free/busy for mutuals
+      const mutualIds = Object.entries(states).filter(([,v]) => v === "mutual").map(([k]) => k);
+      if (mutualIds.length > 0) {
+        const now = new Date();
+        const day = now.getDay();
+        const cur = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+        const { data: slots } = await supabase.from("timetable").select("user_id,start_time,end_time").in("user_id", mutualIds).eq("day", day);
+        const fb: Record<string, "free"|"busy"> = {};
+        for (const id of mutualIds) {
+          const s = (slots ?? []).filter((x: any) => x.user_id === id);
+          fb[id] = s.some((x: any) => x.start_time <= cur && x.end_time > cur) ? "busy" : "free";
         }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
+        setFreeBusy(fb);
       }
-    }
-    fetchClassmates();
+      setLoadingPeople(false);
+    })();
   }, [user, profile, scope]);
 
-  // Open DM on classmate card click
-  async function openDm(classmate: any) {
-    setActivePeer(classmate);
-    onChatOpen?.(true);
-    try {
-      const { data, error } = await supabase.rpc("create_dm", { other_user_id: classmate.id });
-      if (error) {
-        console.error(error);
-        alert("Error opening DM: " + error.message + "\n\nMake sure to run the create_dm SQL RPC function in your Supabase SQL Editor before testing.");
-        onChatOpen?.(false);
-        setActivePeer(null);
-      } else {
-        setActiveDmId(data as string);
+  // ── Fetch request count (badge) ───────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", user.id).eq("status", "pending")
+      .then(({ count }) => setReqCount(count ?? 0));
+  }, [user]);
+
+  // ── Fetch requests when tab opens ────────────────────────
+  useEffect(() => {
+    if (subTab !== "requests" || !user) return;
+    setLoadingReqs(true);
+    supabase.from("follows")
+      .select("follower_id, created_at, profiles!follows_follower_id_fkey(id,name,username,college,avatar_url)")
+      .eq("following_id", user.id).eq("status", "pending")
+      .then(({ data }) => { setRequests(data ?? []); setLoadingReqs(false); });
+  }, [subTab, user]);
+
+  // ── Follow / unfollow ────────────────────────────────────
+  async function handleFollow(person: any) {
+    if (!user) return;
+    const cur = followStates[person.id] ?? "none";
+    if (cur === "none") {
+      const status = person.is_private ? "pending" : "accepted";
+      const { error } = await supabase.from("follows").insert({ follower_id: user.id, following_id: person.id, status });
+      if (!error) {
+        const next = person.is_private ? "pending" : "following";
+        setFollowStates(p => ({ ...p, [person.id]: next }));
+        if (!person.is_private) {
+          const { data } = await supabase.from("follows").select("status").eq("follower_id", person.id).eq("following_id", user.id).maybeSingle();
+          if (data?.status === "accepted") setFollowStates(p => ({ ...p, [person.id]: "mutual" }));
+        }
       }
-    } catch (err) {
-      console.error(err);
-      onChatOpen?.(false);
-      setActivePeer(null);
+    } else if (cur === "pending" || cur === "following" || cur === "mutual") {
+      const { error } = await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", person.id);
+      if (!error) setFollowStates(p => ({ ...p, [person.id]: "none" }));
     }
   }
 
-  // Load messages when activeDmId changes
+  // ── Accept / decline request ─────────────────────────────
+  async function acceptReq(followerId: string) {
+    await supabase.from("follows").update({ status: "accepted" }).eq("follower_id", followerId).eq("following_id", user!.id);
+    setRequests(p => p.filter((r: any) => r.follower_id !== followerId));
+    setReqCount(c => Math.max(0, c - 1));
+  }
+  async function declineReq(followerId: string) {
+    await supabase.from("follows").delete().eq("follower_id", followerId).eq("following_id", user!.id);
+    setRequests(p => p.filter((r: any) => r.follower_id !== followerId));
+    setReqCount(c => Math.max(0, c - 1));
+  }
+
+  // ── Open DM (mutuals only) ───────────────────────────────
+  async function openDm(person: any) {
+    setActivePeer(person);
+    onChatOpen?.(true);
+    const { data, error } = await supabase.rpc("create_dm", { other_user_id: person.id });
+    if (error) { console.error(error); onChatOpen?.(false); setActivePeer(null); }
+    else setActiveDmId(data as string);
+  }
+
+  // ── Load messages ────────────────────────────────────────
   useEffect(() => {
     if (!activeDmId) return;
     setMsgLoading(true);
-    supabase.from("messages").select("*").eq("group_id", activeDmId).order("created_at").then(({ data, error }) => {
-      if (error) {
-        console.error(error);
-      } else {
-        setMessages(data ?? []);
-      }
+    supabase.from("messages").select("*").eq("group_id", activeDmId).order("created_at").then(({ data }) => {
+      setMessages(data ?? []);
       setMsgLoading(false);
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     });
   }, [activeDmId]);
 
-  // Realtime subscription
+  // ── Realtime messages ────────────────────────────────────
   useEffect(() => {
     if (!activeDmId) return;
-    const channel = supabase
-      .channel(`dm-${activeDmId}`)
+    const ch = supabase.channel(`dm-${activeDmId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `group_id=eq.${activeDmId}` }, (payload) => {
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === payload.new.id)) return prev;
-          return [...prev, payload.new as any];
-        });
+        setMessages(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, payload.new as any]);
         setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
-      })
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
+      }).subscribe();
+    return () => { supabase.removeChannel(ch); };
   }, [activeDmId]);
 
-  // Send message
+  // ── Send message ─────────────────────────────────────────
   async function sendMsg() {
     if (!msgInput.trim() || !activeDmId || !user) return;
     const content = msgInput.trim();
     setMsgInput("");
-    
-    try {
-      const { data, error } = await supabase.from("messages").insert({
-        group_id: activeDmId,
-        sender_id: user.id,
-        content,
-        type: "text",
-      }).select();
-      
-      if (error) {
-        console.error(error);
-      } else if (data && data[0]) {
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === data[0].id)) return prev;
-          return [...prev, data[0]];
-        });
-        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
-      }
-    } catch (err) {
-      console.error(err);
+    const { data, error } = await supabase.from("messages").insert({ group_id: activeDmId, sender_id: user.id, content, type: "text" }).select();
+    if (!error && data?.[0]) {
+      setMessages(prev => prev.some(m => m.id === data[0].id) ? prev : [...prev, data[0]]);
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
     }
   }
 
-  if (loading) {
-    return (
-      <div className="px-5 pt-12 pb-28 min-h-screen no-scrollbar animate-fade-in">
-        <h2 className="text-xl font-bold text-ink mb-6">Classmates</h2>
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="bg-[#0c0c0e]/90 border border-white/[0.07] rounded-3xl p-4 flex items-center gap-4 animate-pulse"
-            >
-              <div className="w-12 h-12 rounded-full bg-white/10 shrink-0" />
-              <div className="flex-1 space-y-2">
-                <div className="h-4 bg-white/10 rounded w-1/3" />
-                <div className="h-3 bg-white/10 rounded w-1/2" />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
+  // ── Avatar helper ────────────────────────────────────────
+  function Avatar({ person, size = 12 }: { person: any; size?: number }) {
+    const initials = (person.name || "?").trim().split(/\s+/).map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+    const cls = `w-${size} h-${size} rounded-full flex items-center justify-center font-bold text-sm shrink-0`;
+    return person.avatar_url
+      ? <img src={person.avatar_url} alt={person.name} className={`${cls} object-cover border border-white/10`} />
+      : <div className={`${cls} bg-brand-500/20 text-brand-300 border border-brand-500/30`}>{initials}</div>;
   }
 
-  // Active DM Chat Screen View
+  // ── DM chat screen ───────────────────────────────────────
   if (activeDmId && activePeer) {
     return (
       <div className="flex flex-col h-screen max-h-screen bg-black text-white overflow-hidden">
-        {/* Chat Header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.07] shrink-0 bg-[#0c0c0e]/80 backdrop-blur-md sticky top-0 z-50">
-          <button
-            onClick={() => {
-              setActiveDmId(null);
-              setActivePeer(null);
-              onChatOpen?.(false);
-            }}
-            className="w-8 h-8 rounded-full bg-white/[0.05] hover:bg-white/10 active:scale-90 transition flex items-center justify-center shrink-0"
-          >
-            ←
-          </button>
+          <button onClick={() => { setActiveDmId(null); setActivePeer(null); onChatOpen?.(false); }}
+            className="w-8 h-8 rounded-full bg-white/[0.05] hover:bg-white/10 active:scale-90 transition flex items-center justify-center shrink-0">←</button>
           <div className="flex items-center gap-2.5 min-w-0">
-            {activePeer.avatar_url ? (
-              <img
-                src={activePeer.avatar_url}
-                alt={activePeer.name}
-                className="w-9 h-9 rounded-full object-cover border border-white/10 shrink-0"
-              />
-            ) : (
-              <div className="w-9 h-9 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30 flex items-center justify-center font-bold text-xs shrink-0">
-                {(activePeer.name || "").trim().split(/\s+/).map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
-              </div>
-            )}
+            <Avatar person={activePeer} size={9} />
             <div className="min-w-0">
               <div className="flex items-center gap-1">
                 <span className="font-bold text-ink text-sm truncate">{activePeer.name}</span>
-                {activePeer.verified && (
-                  <span className="inline-flex items-center justify-center w-3.5 h-3.5 bg-brand-500 text-white rounded-full p-0.5 text-[7px]" title="Verified">
-                    <CheckIcon className="w-2.5 h-2.5" />
-                  </span>
-                )}
+                {activePeer.verified && <span className="inline-flex items-center justify-center w-3.5 h-3.5 bg-brand-500 text-white rounded-full p-0.5 text-[7px]"><CheckIcon className="w-2.5 h-2.5" /></span>}
               </div>
-              {activePeer.username && (
-                <p className="text-[10px] text-brand-300 font-medium truncate">@{activePeer.username}</p>
-              )}
+              {activePeer.username && <p className="text-[10px] text-brand-300 font-medium truncate">@{activePeer.username}</p>}
             </div>
           </div>
         </div>
-
-        {/* Messages List Area */}
         <div className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-3.5 bg-[#000]">
           {msgLoading ? (
             <div className="flex flex-col items-center justify-center h-full space-y-2 opacity-50">
               <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-              <p className="text-xs font-medium text-ink-mute">Loading messages...</p>
+              <p className="text-xs text-ink-mute">Loading…</p>
             </div>
           ) : messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center opacity-60">
               <span className="text-3xl mb-2">👋</span>
               <p className="text-xs font-bold text-ink">No messages yet</p>
-              <p className="text-[10px] text-ink-mute mt-1">Start the conversation by sending a wave.</p>
+              <p className="text-[10px] text-ink-mute mt-1">Say hi!</p>
             </div>
-          ) : (
-            messages.map((m) => {
-              const isMine = m.sender_id === user?.id;
-              return (
-                <div key={m.id} className={`flex ${isMine ? "justify-end" : "justify-start"} mb-3 animate-fade-up`}>
-                  <div
-                    className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-xs md:text-sm ${
-                      isMine
-                        ? "bg-brand-500 text-white rounded-tr-none"
-                        : "bg-white/[0.08] text-ink rounded-tl-none border border-white/[0.05]"
-                    }`}
-                  >
-                    <p className="leading-relaxed break-words">{m.content}</p>
-                    <span className="text-[9px] text-white/50 block mt-1 text-right">
-                      {new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    </span>
-                  </div>
+          ) : messages.map((m) => {
+            const isMine = m.sender_id === user?.id;
+            return (
+              <div key={m.id} className={`flex ${isMine ? "justify-end" : "justify-start"} mb-3 animate-fade-up`}>
+                <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-xs md:text-sm ${isMine ? "bg-brand-500 text-white rounded-tr-none" : "bg-white/[0.08] text-ink rounded-tl-none border border-white/[0.05]"}`}>
+                  <p className="leading-relaxed break-words">{m.content}</p>
+                  <span className="text-[9px] text-white/50 block mt-1 text-right">{new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                 </div>
-              );
-            })
-          )}
+              </div>
+            );
+          })}
           <div ref={bottomRef} />
         </div>
-
-        {/* Message Input Form */}
         <div className="p-3 border-t border-white/[0.07] bg-[#0c0c0e]/80 backdrop-blur-md pb-28 shrink-0">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              sendMsg();
-            }}
-            className="flex gap-2 items-center"
-          >
-            <input
-              type="text"
-              placeholder="Type a message..."
-              value={msgInput}
-              onChange={(e) => setMsgInput(e.target.value)}
-              className="input flex-grow text-xs md:text-sm py-2.5"
-            />
-            <button
-              type="submit"
-              disabled={!msgInput.trim()}
-              className="btn-primary px-4 py-2.5 text-xs md:text-sm disabled:opacity-40"
-            >
-              Send
-            </button>
+          <form onSubmit={(e) => { e.preventDefault(); sendMsg(); }} className="flex gap-2 items-center">
+            <input type="text" placeholder="Type a message…" value={msgInput} onChange={(e) => setMsgInput(e.target.value)} className="input flex-grow text-xs md:text-sm py-2.5" />
+            <button type="submit" disabled={!msgInput.trim()} className="btn-primary px-4 py-2.5 text-xs disabled:opacity-40">Send</button>
           </form>
         </div>
       </div>
     );
   }
 
+  // ── Main screen ──────────────────────────────────────────
   return (
-    <div className="px-5 pt-12 pb-28 min-h-screen no-scrollbar animate-fade-in">
-      <h2 className="text-xl font-bold text-ink mb-4">Connect</h2>
+    <div className="pb-28 min-h-screen no-scrollbar animate-fade-in">
+      {/* Header */}
+      <div className="px-5 pt-12 pb-3 flex items-center justify-between">
+        <h2 className="text-xl font-bold text-ink">Connect</h2>
+      </div>
 
-      {/* Scope toggle */}
-      <div className="flex bg-white/[0.06] rounded-2xl p-1 mb-6">
-        {(["campus", "all"] as const).map((s) => (
-          <button
-            key={s}
-            onClick={() => setScope(s)}
-            className={`flex-1 py-2 text-sm font-semibold rounded-xl transition ${
-              scope === s
-                ? "bg-brand-500 text-white shadow"
-                : "text-ink-mute hover:text-ink"
-            }`}
-          >
-            {s === "campus" ? "My Campus" : "All Campuses"}
+      {/* Sub-tabs: People | Requests */}
+      <div className="flex border-b border-white/[0.07] px-5 mb-4">
+        {(["people", "requests"] as const).map((t) => (
+          <button key={t} onClick={() => setSubTab(t)}
+            className={`flex-1 py-2.5 text-sm font-semibold relative transition ${subTab === t ? "text-brand-400 border-b-2 border-brand-500" : "text-ink-mute"}`}>
+            {t === "people" ? "People" : (
+              <span className="flex items-center justify-center gap-1.5">
+                Requests
+                {reqCount > 0 && <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-brand-500 text-white text-[9px] font-bold">{reqCount}</span>}
+              </span>
+            )}
           </button>
         ))}
       </div>
 
-      {loading ? (
-        <div className="space-y-3">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-20 rounded-3xl bg-white/[0.04] animate-pulse" />
-          ))}
-        </div>
-      ) : classmates.length === 0 ? (
-        <div className="card p-8 text-center bg-[#0c0c0e]/90 border border-white/[0.07] rounded-3xl mt-4">
-          <p className="text-sm text-ink-mute">
-            {scope === "campus"
-              ? "No classmates found yet — share the app with your batchmates!"
-              : "No students found yet — be the first to invite friends!"}
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3.5">
-          {classmates.map((classmate) => {
-            const initials = classmate.name
-              .trim()
-              .split(/\s+/)
-              .map((n: string) => n[0])
-              .join("")
-              .slice(0, 2)
-              .toUpperCase();
+      {/* ── People tab ── */}
+      {subTab === "people" && (
+        <div className="px-5">
+          {/* Campus scope toggle */}
+          <div className="flex bg-white/[0.06] rounded-2xl p-1 mb-5">
+            {(["campus", "all"] as const).map((s) => (
+              <button key={s} onClick={() => setScope(s)}
+                className={`flex-1 py-2 text-sm font-semibold rounded-xl transition ${scope === s ? "bg-brand-500 text-white" : "text-ink-mute hover:text-ink"}`}>
+                {s === "campus" ? "My Campus" : "All Campuses"}
+              </button>
+            ))}
+          </div>
 
-            return (
-              <div
-                key={classmate.id}
-                onClick={() => openDm(classmate)}
-                className="bg-[#0c0c0e]/90 border border-white/[0.07] rounded-3xl p-4 flex items-center justify-between hover:border-white/15 cursor-pointer transition duration-200 active:scale-[0.99]"
-              >
-                <div className="flex items-center gap-4 min-w-0">
-                  {classmate.avatar_url ? (
-                    <img
-                      src={classmate.avatar_url}
-                      alt={classmate.name}
-                      className="w-12 h-12 rounded-full object-cover border border-white/10 shrink-0"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30 flex items-center justify-center font-bold text-sm shrink-0">
-                      {initials || "?"}
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="font-bold text-ink truncate text-sm md:text-base">{classmate.name}</span>
-                      {classmate.verified && (
-                        <span className="inline-flex items-center justify-center w-4 h-4 bg-brand-500 text-white rounded-full p-0.5 text-[8px]" title="Verified">
-                          <CheckIcon className="w-3.5 h-3.5" />
-                        </span>
+          {loadingPeople ? (
+            <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-20 rounded-3xl bg-white/[0.04] animate-pulse" />)}</div>
+          ) : people.length === 0 ? (
+            <div className="p-8 text-center bg-[#0c0c0e]/90 border border-white/[0.07] rounded-3xl">
+              <p className="text-sm text-ink-mute">{scope === "campus" ? "No one from your campus yet — share the app!" : "No students yet."}</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {people.map((person) => {
+                const state = followStates[person.id] ?? "none";
+                const fb = freeBusy[person.id];
+                return (
+                  <div key={person.id} className="bg-[#0c0c0e]/90 border border-white/[0.07] rounded-3xl p-4 flex items-center gap-3">
+                    <div className="relative shrink-0">
+                      <Avatar person={person} size={12} />
+                      {fb && (
+                        <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-black ${fb === "free" ? "bg-green-400" : "bg-white/30"}`} title={fb === "free" ? "Free now" : "In class"} />
                       )}
                     </div>
-                    {classmate.username && (
-                      <p className="text-xs text-brand-300 font-medium leading-none mt-1">
-                        @{classmate.username}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-ink text-sm truncate">{person.name}</span>
+                        {person.is_private && <span className="text-[10px] text-ink-mute">🔒</span>}
+                        {person.verified && <span className="inline-flex items-center justify-center w-3.5 h-3.5 bg-brand-500 text-white rounded-full text-[7px]"><CheckIcon className="w-2.5 h-2.5" /></span>}
+                      </div>
+                      {person.username && <p className="text-[11px] text-brand-300 font-medium leading-none mt-0.5">@{person.username}</p>}
+                      <p className="text-[11px] text-ink-mute mt-1 truncate">
+                        {person.course} · Y{person.year}
+                        {scope === "all" && person.college && ` · ${person.college}`}
+                        {fb === "free" && state === "mutual" && <span className="text-green-400 ml-1">· Free now</span>}
+                        {fb === "busy" && state === "mutual" && <span className="text-ink-mute ml-1">· In class</span>}
                       </p>
+                    </div>
+                    {/* Follow / Message button */}
+                    {state === "none" && (
+                      <button onClick={() => handleFollow(person)} className="shrink-0 px-3.5 py-1.5 rounded-xl bg-brand-500 text-white text-xs font-bold active:scale-95 transition">Follow</button>
                     )}
-                    <p className="text-[11px] md:text-xs text-ink-mute mt-1.5 truncate">
-                      {classmate.course} • Year {classmate.year}
-                      {scope === "all" && classmate.college && ` • ${classmate.college}`}
-                    </p>
+                    {state === "pending" && (
+                      <button onClick={() => handleFollow(person)} className="shrink-0 px-3.5 py-1.5 rounded-xl bg-white/[0.06] text-ink-mute text-xs font-bold border border-white/[0.1] active:scale-95 transition">Requested</button>
+                    )}
+                    {state === "following" && (
+                      <button onClick={() => handleFollow(person)} className="shrink-0 px-3.5 py-1.5 rounded-xl bg-white/[0.06] text-brand-400 text-xs font-bold border border-brand-500/30 active:scale-95 transition">Following</button>
+                    )}
+                    {state === "mutual" && (
+                      <button onClick={() => openDm(person)} className="shrink-0 px-3.5 py-1.5 rounded-xl bg-brand-500 text-white text-xs font-bold flex items-center gap-1 active:scale-95 transition">
+                        <span>💬</span> Message
+                      </button>
+                    )}
                   </div>
-                </div>
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Requests tab ── */}
+      {subTab === "requests" && (
+        <div className="px-5">
+          {loadingReqs ? (
+            <div className="space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-16 rounded-3xl bg-white/[0.04] animate-pulse" />)}</div>
+          ) : requests.length === 0 ? (
+            <div className="p-10 text-center">
+              <p className="text-3xl mb-3">✅</p>
+              <p className="text-sm text-ink-mute">No pending requests</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {requests.map((req: any) => {
+                const p = req.profiles;
+                return (
+                  <div key={req.follower_id} className="bg-[#0c0c0e]/90 border border-white/[0.07] rounded-3xl p-4 flex items-center gap-3">
+                    <Avatar person={p} size={10} />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-ink text-sm truncate">{p?.name}</p>
+                      <p className="text-[11px] text-ink-mute">{p?.username ? `@${p.username}` : p?.college}</p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button onClick={() => acceptReq(req.follower_id)} className="px-3 py-1.5 rounded-xl bg-brand-500 text-white text-xs font-bold active:scale-95 transition">Accept</button>
+                      <button onClick={() => declineReq(req.follower_id)} className="px-3 py-1.5 rounded-xl bg-white/[0.06] text-ink-mute text-xs border border-white/[0.1] active:scale-95 transition">✕</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>
