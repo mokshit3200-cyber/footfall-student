@@ -54,16 +54,8 @@ export default function Page() {
     );
   }
 
-  // ── Demo mode: use localStorage data (unchanged) ─────────
-  if (isDemo) {
-    if (!data.profile.onboarded) {
-      return (
-        <div className="md:max-w-md md:mx-auto">
-          <Onboarding onDone={() => {}} />
-        </div>
-      );
-    }
-  } else {
+  // ── Demo mode: skip onboarding, go straight to app ──────
+  if (!isDemo) {
     // ── Live mode: require auth ──────────────────────────────
     if (!user) {
       return (
