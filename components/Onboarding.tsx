@@ -172,6 +172,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
   // step 2 — attendance target
   const [target, setTarget] = useState(75);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   function addSubject() {
     const v = subjectInput.trim();
@@ -181,15 +182,24 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
   }
 
   async function finish() {
-    if (!user) return;
+    setSaveError("");
+    if (!user) {
+      setSaveError("Not signed in — please refresh and try again.");
+      return;
+    }
     setSaving(true);
     const yearNum = parseInt(year) || 1;
-    await supabase
+    const { error: profErr } = await supabase
       .from("profiles")
       .update({ college: college.trim(), course: course.trim(), year: yearNum })
       .eq("id", user.id);
+    if (profErr) {
+      setSaveError(`Profile save failed: ${profErr.message}`);
+      setSaving(false);
+      return;
+    }
     if (subjects.length > 0) {
-      await supabase.from("subjects").insert(
+      const { error: subErr } = await supabase.from("subjects").insert(
         subjects.map((name, i) => ({
           user_id: user.id,
           name,
@@ -197,6 +207,11 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
           target_pct: target,
         }))
       );
+      if (subErr) {
+        setSaveError(`Subjects save failed: ${subErr.message}`);
+        setSaving(false);
+        return;
+      }
     }
     setSaving(false);
     onDone();
@@ -323,6 +338,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
           <input type="range" min={50} max={90} step={5} value={target} onChange={(e) => setTarget(Number(e.target.value))} className="w-full accent-brand-500" />
           <div className="flex justify-between text-xs text-ink-mute mt-2"><span>50%</span><span>90%</span></div>
           <div className="mt-auto pt-6 space-y-3">
+            {saveError && <p className="text-red-400 text-sm text-center">{saveError}</p>}
             <button className="btn-primary w-full flex items-center justify-center gap-2" onClick={finish} disabled={saving}>
               {saving ? (
                 <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
