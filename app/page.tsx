@@ -36,6 +36,7 @@ export default function Page() {
   }, []);
 
   // After auth, check if user has subjects yet (determines onboarding state)
+  // Only run on login — NOT when onboardingDone toggles, to avoid race condition
   useEffect(() => {
     if (!user || isDemo) return;
     supabase
@@ -45,7 +46,7 @@ export default function Page() {
       .then(({ count }) => {
         setHasSubjects((count ?? 0) > 0);
       });
-  }, [user, isDemo, onboardingDone]);
+  }, [user, isDemo]);
 
   function changeTab(t: Tab) {
     playTick();
