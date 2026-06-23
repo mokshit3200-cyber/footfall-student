@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  overscroll-behavior-y: none;
+  background-color: #000000;
+  color: #f4f4f5;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: rgba(124, 58, 237, 0.4);
+  color: #ffffff;
+}
+
+/* Hide scrollbars but keep scrolling */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Custom premium scrollbar for other parts */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(124, 58, 237, 0.4);
+}
+
+/* Custom premium animations */
+@keyframes card-hover-glow {
+  0%, 100% { border-color: rgba(255, 255, 255, 0.08); }
+  50% { border-color: rgba(124, 58, 237, 0.25); }
+}
+
+@keyframes text-glow {
+  0%, 100% { opacity: 0.85; text-shadow: 0 0 4px rgba(124, 58, 237, 0); }
+  50% { opacity: 1; text-shadow: 0 0 8px rgba(124, 58, 237, 0.5); }
+}
+
+.animate-glow-text {
+  animation: text-glow 2.5s infinite ease-in-out;
+}
+
+@layer components {
+  .card {
+    @apply bg-[#0c0c0e]/90 border border-white/[0.07] rounded-3xl shadow-xl transition-all duration-300 backdrop-blur-md;
+  }
+  .card:hover {
+    border-color: rgba(124, 58, 237, 0.2);
+    box-shadow: 0 10px 30px -10px rgba(124, 58, 237, 0.06);
+    transform: translateY(-1px);
+  }
+  .brand-gradient {
+    background-image: linear-gradient(135deg, #7c3aed 0%, #9053f1 50%, #c026d3 100%);
+  }
+  .btn-primary {
+    @apply bg-brand-500 hover:bg-brand-600 text-white font-bold rounded-2xl px-5 py-3.5 active:scale-[0.97] transition-all duration-200 shadow-md shadow-brand-500/10 hover:shadow-brand-500/20 disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-ghost {
+    @apply border border-white/10 text-ink-soft hover:text-white font-semibold rounded-2xl px-5 py-3.5 active:scale-[0.97] hover:bg-white/[0.04] transition-all duration-200;
+  }
+  .input {
+    @apply w-full bg-white/[0.03] border border-white/[0.08] focus:border-brand-500/60 rounded-2xl px-[18px] py-3.5 text-[15px] text-ink outline-none focus:bg-white/[0.05] transition-all duration-200 shadow-inner;
+  }
+  .input::placeholder {
+    color: rgba(255, 255, 255, 0.25);
+  }
+  .pill {
+    @apply inline-flex items-center gap-1 text-[11px] font-bold px-3 py-1 rounded-full tracking-wide uppercase;
+  }
+}
+
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.animate-slide-in-right { animation: slide-in-right 0.25s ease-out; }

@@ -1,0 +1,18 @@
+{
+  "name": "Footfall Student",
+  "short_name": "Footfall",
+  "description": "Attendance, deadlines, grades, money — your campus, sorted.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
