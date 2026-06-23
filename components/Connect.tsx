@@ -194,6 +194,7 @@ function LiveConnect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (tab: any) => 
   const { user, profile } = useAuth();
   const [classmates, setClassmates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [scope, setScope] = useState<"campus" | "all">("campus");
 
   // DM State
   const [activeDmId, setActiveDmId] = useState<string | null>(null);
@@ -209,14 +210,15 @@ function LiveConnect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (tab: any) => 
         setLoading(false);
         return;
       }
+      setLoading(true);
       try {
-        const { data, error } = await supabase
+        let query = supabase
           .from("profiles")
           .select("id, name, username, course, year, avatar_url, bio, verified, college")
-          .eq("college", profile.college)
           .neq("id", user.id)
           .limit(50);
-        
+        if (scope === "campus") query = query.eq("college", profile.college);
+        const { data, error } = await query;
         if (error) {
           console.error(error);
         } else if (data) {
@@ -229,7 +231,7 @@ function LiveConnect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (tab: any) => 
       }
     }
     fetchClassmates();
-  }, [user, profile]);
+  }, [user, profile, scope]);
 
   // Open DM on classmate card click
   async function openDm(classmate: any) {
@@ -447,11 +449,37 @@ function LiveConnect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (tab: any) => 
 
   return (
     <div className="px-5 pt-12 pb-28 min-h-screen no-scrollbar animate-fade-in">
-      <h2 className="text-xl font-bold text-ink mb-6">Classmates</h2>
-      {classmates.length === 0 ? (
+      <h2 className="text-xl font-bold text-ink mb-4">Connect</h2>
+
+      {/* Scope toggle */}
+      <div className="flex bg-white/[0.06] rounded-2xl p-1 mb-6">
+        {(["campus", "all"] as const).map((s) => (
+          <button
+            key={s}
+            onClick={() => setScope(s)}
+            className={`flex-1 py-2 text-sm font-semibold rounded-xl transition ${
+              scope === s
+                ? "bg-brand-500 text-white shadow"
+                : "text-ink-mute hover:text-ink"
+            }`}
+          >
+            {s === "campus" ? "My Campus" : "All Campuses"}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="space-y-3">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-20 rounded-3xl bg-white/[0.04] animate-pulse" />
+          ))}
+        </div>
+      ) : classmates.length === 0 ? (
         <div className="card p-8 text-center bg-[#0c0c0e]/90 border border-white/[0.07] rounded-3xl mt-4">
           <p className="text-sm text-ink-mute">
-            No classmates found yet — share the app with your batchmates!
+            {scope === "campus"
+              ? "No classmates found yet — share the app with your batchmates!"
+              : "No students found yet — be the first to invite friends!"}
           </p>
         </div>
       ) : (
@@ -499,6 +527,7 @@ function LiveConnect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (tab: any) => 
                     )}
                     <p className="text-[11px] md:text-xs text-ink-mute mt-1.5 truncate">
                       {classmate.course} • Year {classmate.year}
+                      {scope === "all" && classmate.college && ` • ${classmate.college}`}
                     </p>
                   </div>
                 </div>
