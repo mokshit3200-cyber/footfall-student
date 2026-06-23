@@ -1,26 +1,24 @@
 export type AppMode = "demo" | "live";
 
 /**
- * Mode resolution:
- * 1. NEXT_PUBLIC_APP_MODE env var wins (set per Vercel project).
- * 2. Else, client-side hostname heuristic: *.vercel.app and localhost = demo,
- *    a real custom domain = live.
- * 3. SSR fallback = live.
+ * Mode resolution order:
+ * 1. ?mode=demo or ?mode=live in URL (easiest for sharing demo links)
+ * 2. NEXT_PUBLIC_APP_MODE env var (set per Vercel project)
+ * 3. SSR fallback = live
  *
- * DEMO  → seeded sample data, all features on, no login.
- * LIVE  → real use, Connect + Marketplace "coming soon", auth gate.
+ * DEMO → fake seeded data, all features visible, no login required
+ * LIVE → real Supabase auth + data
  */
 export function getMode(): AppMode {
+  if (typeof window !== "undefined") {
+    const param = new URLSearchParams(window.location.search).get("mode");
+    if (param === "demo") return "demo";
+    if (param === "live") return "live";
+  }
+
   const env = process.env.NEXT_PUBLIC_APP_MODE;
   if (env === "demo" || env === "live") return env;
 
-  if (typeof window !== "undefined") {
-    const h = window.location.hostname;
-    if (h.includes("vercel.app") || h === "localhost" || h === "127.0.0.1") {
-      return "demo";
-    }
-    return "live";
-  }
   return "live";
 }
 
