@@ -6,6 +6,28 @@ import { useAuth } from "@/lib/auth";
 import { SUBJECT_COLORS } from "@/lib/types";
 import { PlusIcon, XIcon, CheckIcon } from "./icons";
 
+const HYD_COLLEGES = [
+  "JNTU Hyderabad",
+  "Osmania University",
+  "University of Hyderabad",
+  "IIIT Hyderabad",
+  "IIT Hyderabad",
+  "BITS Pilani Hyderabad",
+  "NIT Warangal",
+  "CBIT (Chaitanya Bharathi)",
+  "Vasavi College of Engineering",
+  "VNR VJIET",
+  "MGIT",
+  "GRIET",
+  "Mahindra University",
+  "Woxsen University",
+  "Sreenidhi Institute (SNIST)",
+  "CVR College of Engineering",
+  "Malla Reddy Engineering College",
+  "CMR College of Engineering",
+  "Other",
+];
+
 const COURSES = [
   "B.Tech / B.E.", "BCA", "B.Sc", "B.Com", "BBA", "BA",
   "M.Tech / M.E.", "MCA", "M.Sc", "MBA", "MA", "Other",
@@ -18,7 +40,9 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
   const [step, setStep] = useState(0);
 
   // step 0 — college + course
-  const [college, setCollege] = useState("");
+  const [collegePick, setCollegePick] = useState(""); // selected from list
+  const [collegeCustom, setCollegeCustom] = useState(""); // typed when "Other"
+  const college = collegePick === "Other" ? collegeCustom : collegePick;
   const [course, setCourse] = useState("");
   const [year, setYear] = useState("");
 
@@ -93,14 +117,31 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
 
           <div className="space-y-4 flex-1">
             <div>
-              <label className="text-xs font-semibold text-ink-soft mb-1.5 block">College / University name</label>
-              <input
-                autoFocus
-                className="input"
-                placeholder="e.g. JNTU Hyderabad"
-                value={college}
-                onChange={(e) => setCollege(e.target.value)}
-              />
+              <label className="text-xs font-semibold text-ink-soft mb-1.5 block">College / University</label>
+              <div className="grid grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1 no-scrollbar">
+                {HYD_COLLEGES.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => { setCollegePick(c); setCollegeCustom(""); }}
+                    className={`py-2 px-3 rounded-xl text-xs font-semibold border text-left transition ${
+                      collegePick === c
+                        ? "bg-brand-500 text-white border-brand-500"
+                        : "bg-white/[0.04] text-ink-soft border-white/[0.08] active:scale-95"
+                    }`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+              {collegePick === "Other" && (
+                <input
+                  autoFocus
+                  className="input mt-2"
+                  placeholder="Type your college name"
+                  value={collegeCustom}
+                  onChange={(e) => setCollegeCustom(e.target.value)}
+                />
+              )}
             </div>
 
             <div>
@@ -145,7 +186,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
           <div className="pt-6 space-y-3">
             <button
               className="btn-primary w-full"
-              disabled={!college.trim() || !course}
+              disabled={!college.trim() || (collegePick === "Other" && !collegeCustom.trim()) || !course}
               onClick={() => setStep(1)}
             >
               Continue →

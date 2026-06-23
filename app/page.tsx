@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { supabase } from "@/lib/supabase";
 import { useStore } from "@/components/store";
 import { getMode } from "@/lib/config";
 import Onboarding from "@/components/Onboarding";
@@ -14,7 +13,6 @@ import Money from "@/components/Money";
 import Connect from "@/components/Connect";
 import Marketplace from "@/components/Marketplace";
 import MyCampus from "@/components/MyCampus";
-import ComingSoon from "@/components/ComingSoon";
 import Profile from "@/components/Profile";
 import Business from "@/components/Business";
 import RemindersEngine from "@/components/RemindersEngine";
@@ -22,31 +20,16 @@ import SupabaseSync from "@/components/SupabaseSync";
 import { playTick } from "@/components/ui";
 
 export default function Page() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, profile, refreshProfile } = useAuth();
   const { data, ready } = useStore();
   const [tab, setTab] = useState<Tab>("home");
   const [businessMode, setBusinessMode] = useState(false);
   const [inChat, setInChat] = useState(false);
   const [isDemo, setIsDemo] = useState(false);
-  const [hasSubjects, setHasSubjects] = useState<boolean | null>(null);
-  const [onboardingDone, setOnboardingDone] = useState(false);
 
   useEffect(() => {
     setIsDemo(getMode() === "demo");
   }, []);
-
-  // After auth, check if user has subjects yet (determines onboarding state)
-  // Only run on login — NOT when onboardingDone toggles, to avoid race condition
-  useEffect(() => {
-    if (!user || isDemo) return;
-    supabase
-      .from("subjects")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .then(({ count }) => {
-        setHasSubjects((count ?? 0) > 0);
-      });
-  }, [user, isDemo]);
 
   function changeTab(t: Tab) {
     playTick();
@@ -54,9 +37,12 @@ export default function Page() {
     setInChat(false);
   }
 
+  // Onboarding is complete once college is saved — persists across logins
+  const onboardingComplete = !!(profile?.college && profile.college.trim().length > 0);
+
   // ── Loading ──────────────────────────────────────────────
-  const stillLoading =
-    !isDemo && (authLoading || (user && hasSubjects === null));
+  // In live mode: wait for auth + profile to load
+  const stillLoading = !isDemo && (authLoading || (user && !profile));
 
   if (!ready || (stillLoading && !isDemo)) {
     return (
@@ -87,16 +73,11 @@ export default function Page() {
       );
     }
 
-    // ── Onboarding: user signed up but no subjects yet ───────
-    if (!hasSubjects) {
+    // ── Onboarding: college not set yet ──────────────────────
+    if (!onboardingComplete) {
       return (
         <div className="md:max-w-md md:mx-auto">
-          <Onboarding
-            onDone={() => {
-              setOnboardingDone((v) => !v);
-              setHasSubjects(true);
-            }}
-          />
+          <Onboarding onDone={() => refreshProfile()} />
         </div>
       );
     }

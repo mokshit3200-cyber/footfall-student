@@ -58,24 +58,19 @@ export async function dbLoadAll(
       d.profile.onboarded = true;
     }
 
-    const subs = subjectsRes.data;
-    if (subs && subs.length > 0) {
-      d.subjects = subs.map((s) => ({
-        id: s.id,
-        name: s.name,
-        color: s.color || "#7c3aed",
-      }));
-    }
+    // Always overwrite — even empty arrays clear demo data from the store
+    d.subjects = (subjectsRes.data ?? []).map((s) => ({
+      id: s.id,
+      name: s.name,
+      color: s.color || "#7c3aed",
+    }));
 
-    const recs = attendanceRes.data;
-    if (recs && recs.length > 0) {
-      d.attendance = recs.map((r) => ({
-        id: r.id,
-        subjectId: r.subject_id,
-        date: r.date as string,
-        status: r.present ? ("present" as const) : ("bunked" as const),
-      }));
-    }
+    d.attendance = (attendanceRes.data ?? []).map((r) => ({
+      id: r.id,
+      subjectId: r.subject_id,
+      date: r.date as string,
+      status: r.present ? ("present" as const) : ("bunked" as const),
+    }));
 
     const dls = deadlinesRes.data;
     if (dls && dls.length > 0) {
