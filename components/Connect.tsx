@@ -23,7 +23,8 @@ import {
   TagIcon,
   ClockIcon,
   BookmarkIcon,
-  ShareIcon
+  ShareIcon,
+  HandRaiseIcon
 } from "./icons";
 
 // ── Intents configuration ────────────────────────────────────────────────────
@@ -60,7 +61,11 @@ const DEMO_SIGNALS = [
     reach: "campus",
     expires_at: new Date(Date.now() + 7200000).toISOString(),
     created_at: new Date(Date.now()-7200000).toISOString(), 
-    profiles:{ name:"Arjun Sharma",  username:"arjun_s",  course:"B.Tech CSE", year:2, college:"IIIT Hyderabad",    verified:true,  is_private:false, avatar_url:null }
+    profiles:{ name:"Arjun Sharma",  username:"arjun_s",  course:"B.Tech CSE", year:2, college:"IIIT Hyderabad",    verified:true,  is_private:false, avatar_url:null },
+    signal_raises: [
+      { user_id: "dp2", profiles: { name: "Priya Nair", avatar_url: null } },
+      { user_id: "dp4", profiles: { name: "Sneha Rao", avatar_url: null } },
+    ]
   },
   { 
     id:"ds2", 
@@ -70,7 +75,10 @@ const DEMO_SIGNALS = [
     reach: "campus",
     expires_at: new Date(Date.now() + 10800000).toISOString(),
     created_at: new Date(Date.now()-1800000).toISOString(), 
-    profiles:{ name:"Priya Nair",    username:"priya.n",  course:"B.Tech ECE", year:3, college:"IIIT Hyderabad",    verified:false, is_private:true,  avatar_url:null }
+    profiles:{ name:"Priya Nair",    username:"priya.n",  course:"B.Tech ECE", year:3, college:"IIIT Hyderabad",    verified:false, is_private:true,  avatar_url:null },
+    signal_raises: [
+      { user_id: "dp1", profiles: { name: "Arjun Sharma", avatar_url: null } }
+    ]
   },
   { 
     id:"ds3", 
@@ -80,7 +88,11 @@ const DEMO_SIGNALS = [
     reach: "all",
     expires_at: new Date(Date.now() + 14400000).toISOString(),
     created_at: new Date(Date.now()-18000000).toISOString(),
-    profiles:{ name:"Rohan Mehta",   username:"rohanm",   course:"B.Com",      year:1, college:"Osmania University",verified:false, is_private:false, avatar_url:null }
+    profiles:{ name:"Rohan Mehta",   username:"rohanm",   course:"B.Com",      year:1, college:"Osmania University",verified:false, is_private:false, avatar_url:null },
+    signal_raises: [
+      { user_id: "dp4", profiles: { name: "Sneha Rao", avatar_url: null } },
+      { user_id: "dp5", profiles: { name: "Karan Patel", avatar_url: null } }
+    ]
   },
   { 
     id:"ds4", 
@@ -90,7 +102,10 @@ const DEMO_SIGNALS = [
     reach: "all",
     expires_at: new Date(Date.now() + 3600000).toISOString(),
     created_at: new Date(Date.now()-3600000).toISOString(), 
-    profiles:{ name:"Sneha Rao",     username:"sneha.r",  course:"MBA",        year:2, college:"BITS Pilani Hyd",  verified:true,  is_private:false, avatar_url:null }
+    profiles:{ name:"Sneha Rao",     username:"sneha.r",  course:"MBA",        year:2, college:"BITS Pilani Hyd",  verified:true,  is_private:false, avatar_url:null },
+    signal_raises: [
+      { user_id: "dp2", profiles: { name: "Priya Nair", avatar_url: null } }
+    ]
   },
   { 
     id:"ds5", 
@@ -100,7 +115,8 @@ const DEMO_SIGNALS = [
     reach: "campus",
     expires_at: new Date(Date.now() + 5400000).toISOString(),
     created_at: new Date(Date.now()-900000).toISOString(),  
-    profiles:{ name:"Karan Patel",   username:"karanp",   course:"B.Tech Mech",year:3, college:"IIIT Hyderabad",   verified:false, is_private:false, avatar_url:null }
+    profiles:{ name:"Karan Patel",   username:"karanp",   course:"B.Tech Mech",year:3, college:"IIIT Hyderabad",   verified:false, is_private:false, avatar_url:null },
+    signal_raises: []
   },
   { 
     id:"ds6", 
@@ -110,7 +126,11 @@ const DEMO_SIGNALS = [
     reach: "all",
     expires_at: new Date(Date.now() + 21600000).toISOString(),
     created_at: new Date(Date.now()-5400000).toISOString(), 
-    profiles:{ name:"Divya Krishna", username:"divyak",   course:"BCA",        year:2, college:"Osmania University",verified:false, is_private:false, avatar_url:null }
+    profiles:{ name:"Divya Krishna", username:"divyak",   course:"BCA",        year:2, college:"Osmania University",verified:false, is_private:false, avatar_url:null },
+    signal_raises: [
+      { user_id: "dp1", profiles: { name: "Arjun Sharma", avatar_url: null } },
+      { user_id: "dp2", profiles: { name: "Priya Nair", avatar_url: null } }
+    ]
   },
 ];
 const DEMO_FOLLOW_STATES: Record<string,string> = { dp1:"mutual", dp2:"pending", dp3:"following", dp4:"none", dp5:"none", dp6:"none" };
@@ -199,6 +219,67 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
   // Profile sheet
   const [viewProfile, setViewProfile] = useState<any | null>(null);
 
+  // Bookmarks
+  const [bookmarkedSignals, setBookmarkedSignals] = useState<Set<string>>(new Set());
+
+  // ── Helper functions for signal cards ───────────────────
+  function getCountdown(expiresAt: string) {
+    const diff = new Date(expiresAt).getTime() - Date.now();
+    if (diff <= 0) return null;
+    const m = Math.floor(diff / 60000);
+    if (m < 60) return `${m}m left`;
+    const h = Math.floor(m / 60);
+    return `${h}h left`;
+  }
+
+  function getPrimaryLabel(intent: string, hasRaised: boolean) {
+    if (hasRaised) return "You're in ✓";
+    switch (intent) {
+      case "free":
+      case "looking":
+      case "event":
+        return "I'm in";
+      case "study":
+        return "Join";
+      case "help":
+        return "Help out";
+      case "sell":
+        return "I'm interested";
+      default:
+        return "Connect";
+    }
+  }
+
+  async function toggleBookmark(sigId: string) {
+    const next = new Set(bookmarkedSignals);
+    if (next.has(sigId)) {
+      next.delete(sigId);
+      setBookmarkedSignals(next);
+      if (!demo && user) {
+        await supabase.from("signal_saves").delete().eq("signal_id", sigId).eq("user_id", user.id);
+      }
+    } else {
+      next.add(sigId);
+      setBookmarkedSignals(next);
+      if (!demo && user) {
+        await supabase.from("signal_saves").insert({ signal_id: sigId, user_id: user.id });
+      }
+    }
+  }
+
+  function handleShare(sig: any) {
+    if (navigator.share) {
+      navigator.share({
+        title: `Footfall Signal from ${sig.profiles?.name || "Student"}`,
+        text: `Check out this signal on Footfall: "${sig.content}"`,
+        url: window.location.href
+      }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(`Check out this signal on Footfall: "${sig.content}"`);
+      alert("Signal description copied to clipboard!");
+    }
+  }
+
   // Lock reach selector to campus if free intent is selected
   useEffect(() => {
     if (broadcastIntent === "free") {
@@ -225,9 +306,9 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
 
   async function loadFeed() {
     setFeedLoading(true);
-    const [feedRes, mySignalRes] = await Promise.all([
+    const [feedRes, mySignalRes, savesRes] = await Promise.all([
       supabase.from("signals")
-        .select("*, profiles!signals_user_id_fkey(name,username,course,year,college,verified,is_private,avatar_url)")
+        .select("*, profiles!signals_user_id_fkey(name,username,course,year,college,verified,is_private,avatar_url), signal_raises(user_id, profiles(name,avatar_url))")
         .gt("expires_at", new Date().toISOString())
         .neq("user_id", user!.id)
         .order("created_at", { ascending: false })
@@ -237,6 +318,9 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
         .eq("user_id", user!.id)
         .gt("expires_at", new Date().toISOString())
         .maybeSingle(),
+      supabase.from("signal_saves")
+        .select("signal_id")
+        .eq("user_id", user!.id)
     ]);
 
     let data = feedRes.data ?? [];
@@ -290,6 +374,13 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
       setMySignalReach("campus");
       setMySignalExpiresAt(null);
     }
+
+    if (savesRes.data) {
+      setBookmarkedSignals(new Set(savesRes.data.map((s: any) => s.signal_id)));
+    } else {
+      setBookmarkedSignals(new Set());
+    }
+
     setFeedLoading(false);
   }
 
@@ -469,34 +560,104 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
   }
 
   // ── DM ──────────────────────────────────────────────────
-  async function openDm(person: any) {
-    if (demo) { alert("Sign up to message for real!"); return; }
-    setActivePeer(person); onChatOpen?.(true);
+  async function openDm(person: any, seedContent?: string, signalId?: string) {
+    setActivePeer(person); 
+    onChatOpen?.(true);
+    
+    if (demo) {
+      const fakeGroupId = `dg-fake-${person.id}`;
+      setActiveDmId(fakeGroupId);
+      
+      const initialMsgs = [];
+      if (seedContent) {
+        initialMsgs.push({
+          id: `seed-${Date.now()}`,
+          sender_id: user?.id || "me",
+          content: seedContent,
+          created_at: new Date().toISOString()
+        });
+      }
+      setMessages(initialMsgs);
+      setMsgLoading(false);
+      return;
+    }
+    
+    setMsgLoading(true);
     const { data, error } = await supabase.rpc("create_dm", { other_user_id: person.id });
-    if (error) { onChatOpen?.(false); setActivePeer(null); }
-    else setActiveDmId(data as string);
+    if (error) { 
+      onChatOpen?.(false); 
+      setActivePeer(null); 
+      setMsgLoading(false);
+    } else {
+      const groupId = data as string;
+      
+      if (seedContent) {
+        const isMutual = followStates[person.id] === 'mutual';
+        const requestStatus = isMutual ? 'accepted' : 'pending';
+        
+        await Promise.all([
+          supabase.from("groups").update({
+            request_status: requestStatus,
+            requested_by: user!.id,
+            origin_signal_id: signalId
+          }).eq("id", groupId),
+          supabase.from("messages").insert({
+            group_id: groupId,
+            sender_id: user!.id,
+            content: seedContent,
+            type: 'text'
+          })
+        ]);
+      }
+      setActiveDmId(groupId);
+    }
   }
 
   useEffect(() => {
-    if (!activeDmId) return;
+    if (!activeDmId || demo) return;
     setMsgLoading(true);
     supabase.from("messages").select("*").eq("group_id", activeDmId).order("created_at")
       .then(({ data }) => { setMessages(data ?? []); setMsgLoading(false); setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100); });
-  }, [activeDmId]);
+  }, [activeDmId, demo]);
 
   useEffect(() => {
-    if (!activeDmId) return;
+    if (!activeDmId || demo) return;
     const ch = supabase.channel(`dm-${activeDmId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `group_id=eq.${activeDmId}` }, (payload) => {
         setMessages(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, payload.new as any]);
         setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
       }).subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [activeDmId]);
+  }, [activeDmId, demo]);
 
   async function sendMsg() {
-    if (!msgInput.trim() || !activeDmId || !user) return;
-    const content = msgInput.trim(); setMsgInput("");
+    if (!msgInput.trim() || !activeDmId) return;
+    const content = msgInput.trim(); 
+    setMsgInput("");
+    
+    if (demo) {
+      const fakeMsg = {
+        id: `m-fake-${Date.now()}`,
+        sender_id: user?.id || "me",
+        content,
+        created_at: new Date().toISOString()
+      };
+      setMessages(prev => [...prev, fakeMsg]);
+      
+      // Simulated reply after 1.5 seconds
+      setTimeout(() => {
+        const replyMsg = {
+          id: `m-fake-reply-${Date.now()}`,
+          sender_id: activePeer.id,
+          content: `Hey! Let's connect about that. 👍`,
+          created_at: new Date().toISOString()
+        };
+        setMessages(prev => [...prev, replyMsg]);
+      }, 1500);
+      return;
+    }
+    
+    if (!user) return;
     const { data } = await supabase.from("messages").insert({ group_id: activeDmId, sender_id: user.id, content, type: "text" }).select();
     if (data?.[0]) setMessages(prev => prev.some(m => m.id === data[0].id) ? prev : [...prev, data[0]]);
   }
@@ -804,6 +965,13 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
                   {signals.map((sig: any) => {
                     const p = sig.profiles ?? sig;
                     const isCampus = p.college === profile?.college || (demo && ["IIIT Hyderabad"].includes(p.college));
+                    const intentInfo = INTENTS.find(i => i.id === sig.intent) || INTENTS[0];
+                    const CardIcon = intentInfo.icon;
+                    const responders = sig.signal_raises || [];
+                    const hasRaised = responders.some((r: any) => r.user_id === (user?.id || "me"));
+                    const isBookmarked = bookmarkedSignals.has(sig.id);
+                    const countdown = sig.expires_at ? getCountdown(sig.expires_at) : null;
+
                     return (
                       <div key={sig.id} onClick={() => setViewProfile(sig)}
                         className={`rounded-3xl border p-5 cursor-pointer transition-all active:scale-[0.98] ${
@@ -811,31 +979,142 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
                             ? "bg-brand-500/[0.04] border-brand-500/15 hover:border-brand-500/25"
                             : "bg-[#0c0c0e]/90 border-white/[0.07] hover:border-white/12"
                         }`}>
-                        <div className="flex items-start gap-3.5">
-                          <div className="relative shrink-0">
-                            <Avatar person={p} size={10} />
-                            {isCampus && (
-                              <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-brand-500 rounded-full border-2 border-black flex items-center justify-center">
-                                <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 mb-1">
-                              <span className="font-bold text-ink text-sm truncate">{p.name}</span>
-                              {p.verified && <span className="inline-flex items-center justify-center w-3.5 h-3.5 bg-brand-500 text-white rounded-full text-[7px]"><CheckIcon className="w-2.5 h-2.5" /></span>}
-                              {isCampus && <span className="text-[9px] font-bold text-brand-400 bg-brand-500/15 px-2 py-0.5 rounded-full select-none">MY CAMPUS</span>}
+                        
+                        {/* Top Metadata & Countdown */}
+                        <div className="flex items-start justify-between mb-3.5">
+                          <div className="flex items-center gap-3">
+                            <div className="relative shrink-0">
+                              <Avatar person={p} size={10} />
+                              <div className="absolute inset-0 rounded-full border-2" style={{ borderColor: intentInfo.color }} />
+                              {isCampus && (
+                                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-brand-500 rounded-full border border-black flex items-center justify-center">
+                                  <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                                </span>
+                              )}
                             </div>
-                            <p className={`text-sm font-semibold mb-2 leading-relaxed ${isCampus ? "text-ink" : "text-ink-soft"}`}>"{sig.content}"</p>
-                            <div className="flex items-center justify-between text-[11px] text-ink-mute">
-                              <p>{p.course} · Y{p.year}</p>
-                              <p>{timeAgo(sig.created_at)} ago</p>
+                            
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-ink text-sm truncate">{p.name}</span>
+                                {p.verified && (
+                                  <span className="inline-flex items-center justify-center w-3.5 h-3.5 bg-brand-500 text-white rounded-full text-[7px]">
+                                    <CheckIcon className="w-2.5 h-2.5" />
+                                  </span>
+                                )}
+                                {scope === "all" && p.college && (
+                                  <span className="text-[9px] font-semibold bg-white/[0.06] text-ink-soft px-2 py-0.5 rounded-full border border-white/[0.05] truncate max-w-[120px]">
+                                    {p.college}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-ink-mute mt-0.5 truncate">
+                                {p.course} · Y{p.year} {scope === "campus" ? "" : `· ${p.college}`}
+                              </p>
                             </div>
                           </div>
-                          <div onClick={e => e.stopPropagation()} className="shrink-0 select-none">
-                            <FollowBtn personId={sig.user_id} isPrivate={p.is_private} />
-                          </div>
+
+                          {countdown && (
+                            <div className="flex items-center gap-1 text-ink-mute text-[10px] font-medium select-none bg-white/[0.04] px-2 py-0.5 rounded-lg border border-white/[0.05]">
+                              <ClockIcon className="w-3.5 h-3.5 opacity-60" />
+                              <span>{countdown}</span>
+                            </div>
+                          )}
                         </div>
+
+                        {/* Intent chip & Signal Note */}
+                        <div className="mb-4">
+                          <div className="mb-2 select-none">
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 border" style={{ borderColor: `${intentInfo.color}30`, color: intentInfo.color, backgroundColor: `${intentInfo.color}10` }}>
+                              <CardIcon className="w-3 h-3" />
+                              <span>{intentInfo.label}</span>
+                            </span>
+                          </div>
+                          <p className="text-sm font-semibold text-ink leading-relaxed break-words">
+                            "{sig.content}"
+                          </p>
+                        </div>
+
+                        {/* Social Proof Responders */}
+                        {responders.length > 0 && (
+                          <div className="flex items-center gap-2 mb-4 select-none bg-white/[0.02] border border-white/[0.05] p-2 rounded-2xl">
+                            <div className="flex -space-x-1.5">
+                              {responders.slice(0, 3).map((r: any, idx: number) => {
+                                const initials = (r.profiles?.name || "?").trim().split(/\s+/).map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+                                return (
+                                  <div key={idx} className="w-5 h-5 rounded-full border border-[#141416] overflow-hidden bg-brand-500/20 flex items-center justify-center text-[7px] font-bold text-white shrink-0">
+                                    {r.profiles?.avatar_url ? (
+                                      <img src={r.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                      <span>{initials}</span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <p className="text-[10px] text-brand-300 font-medium">
+                              {responders.length === 1 ? `${responders[0].profiles?.name || "Someone"} is in` :
+                               `${responders[0].profiles?.name || "Someone"} +${responders.length - 1} are in`}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Actions Row */}
+                        <div onClick={e => e.stopPropagation()} className="flex items-center gap-2.5 mt-1 select-none">
+                          <button
+                            onClick={async () => {
+                              const seedMsg = `✋ raised a hand on signal: "${sig.content}"`;
+                              if (!hasRaised) {
+                                const myRaise = {
+                                  user_id: user?.id || "me",
+                                  profiles: {
+                                    name: profile?.name || "Me",
+                                    avatar_url: profile?.avatar_url || null
+                                  }
+                                };
+                                setSignals(prev => prev.map(s => {
+                                  if (s.id === sig.id) {
+                                    return { ...s, signal_raises: [...(s.signal_raises || []), myRaise] };
+                                  }
+                                  return s;
+                                }));
+                                
+                                if (!demo && user) {
+                                  await supabase.from("signal_raises").insert({ signal_id: sig.id, user_id: user.id });
+                                }
+                              }
+                              openDm(p, seedMsg, sig.id);
+                            }}
+                            className={`flex-1 h-10 rounded-xl text-xs font-bold transition-all duration-200 active:scale-95 flex items-center justify-center gap-1.5 ${
+                              hasRaised
+                                ? "bg-white/[0.08] text-brand-300 border border-brand-500/30"
+                                : "bg-brand-500 hover:bg-brand-600 text-white shadow-md shadow-brand-500/10"
+                            }`}
+                          >
+                            <HandRaiseIcon className="w-4 h-4" />
+                            <span>{getPrimaryLabel(sig.intent, hasRaised)}</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleShare(sig)}
+                            className="h-10 px-3.5 rounded-xl bg-white/[0.04] text-ink-soft hover:text-white hover:bg-white/10 active:scale-95 transition-all flex items-center justify-center border border-white/[0.06]"
+                            title="Share"
+                          >
+                            <ShareIcon className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            onClick={() => toggleBookmark(sig.id)}
+                            className={`h-10 px-3.5 rounded-xl transition-all active:scale-95 flex items-center justify-center border ${
+                              isBookmarked
+                                ? "bg-brand-500/10 text-brand-400 border-brand-500/30"
+                                : "bg-white/[0.04] text-ink-soft hover:text-white hover:bg-white/10 border-white/[0.06]"
+                            }`}
+                            title="Save"
+                          >
+                            <BookmarkIcon className={`w-4 h-4 ${isBookmarked ? "fill-brand-400" : ""}`} />
+                          </button>
+                        </div>
+
                       </div>
                     );
                   })}
