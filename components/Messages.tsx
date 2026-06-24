@@ -1252,15 +1252,15 @@ export default function Messages({
           )}
 
           {/* Input bar */}
-          <div className="p-3.5 border-t border-white/[0.07] bg-[#0c0c0e]/95 pb-28 shrink-0">
+          <div className="px-3.5 pt-2.5 border-t border-white/[0.07] bg-[#0c0c0e]/95 shrink-0 pb-[max(0.625rem,env(safe-area-inset-bottom))]">
             <div className="flex gap-2.5 items-center">
               {/* Attachment */}
-              <button className="w-9 h-9 rounded-full bg-white/[0.04] hover:bg-white/10 flex items-center justify-center shrink-0 text-ink-soft active:scale-95 transition">
+              <button className="w-10 h-10 rounded-full bg-white/[0.04] hover:bg-white/10 flex items-center justify-center shrink-0 text-ink-soft active:scale-95 transition">
                 <PaperclipIcon className="w-5 h-5" />
               </button>
 
               {/* Text bar */}
-              <div className="flex-1 bg-[#1a1a1a] rounded-2xl px-4 py-1.5 flex items-center gap-2">
+              <div className="flex-1 bg-[#1a1a1a] rounded-full px-4 min-h-[40px] flex items-center gap-2">
                 <textarea
                   placeholder="Message…"
                   rows={1}
@@ -1272,13 +1272,13 @@ export default function Messages({
                       handleSend();
                     }
                   }}
-                  className="bg-transparent text-sm text-white placeholder-white/40 focus:outline-none flex-grow resize-none max-h-24 py-1.5 align-middle"
+                  className="bg-transparent text-sm text-white placeholder-white/40 focus:outline-none flex-grow resize-none max-h-24 py-2 leading-snug"
                 />
 
                 {msgInput.trim() && (
                   <button
                     onClick={handleSend}
-                    className="w-8 h-8 rounded-full bg-brand-500 hover:bg-brand-600 flex items-center justify-center shrink-0 active:scale-95 transition text-white"
+                    className="w-8 h-8 rounded-full bg-brand-500 hover:bg-brand-600 flex items-center justify-center shrink-0 active:scale-95 transition text-white -mr-1.5"
                   >
                     <SendIcon className="w-4 h-4" />
                   </button>
