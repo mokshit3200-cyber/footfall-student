@@ -4,7 +4,18 @@ import { useState, useEffect, useRef, useCallback } from "react"; // frequency
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { isDemo } from "@/lib/config";
-import { CheckIcon } from "./icons";
+import {
+  CheckIcon,
+  ArrowLeftIcon,
+  ChatIcon,
+  LockIcon,
+  SearchIcon,
+  XIcon,
+  SignalIcon,
+  CampusIcon,
+  GlobeIcon,
+  SendIcon
+} from "./icons";
 
 // ── Demo data ────────────────────────────────────────────────────────────────
 const DEMO_SIGNALS = [
@@ -302,25 +313,26 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
     const state = followStates[personId] ?? "none";
     if (state === "mutual") return (
       <button onClick={() => openDm({ id: personId })}
-        className="shrink-0 px-3 py-1.5 rounded-xl bg-brand-500 text-white text-[11px] font-bold flex items-center gap-1 active:scale-95 transition">
-        💬 Message
+        className="shrink-0 h-8 px-3 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-[11px] font-bold inline-flex items-center justify-center gap-1.5 active:scale-95 transition-all">
+        <ChatIcon className="w-3.5 h-3.5" />
+        <span>Message</span>
       </button>
     );
     if (state === "following") return (
       <button onClick={() => handleFollow(personId, isPrivate)}
-        className="shrink-0 px-3 py-1.5 rounded-xl bg-white/[0.06] text-brand-400 text-[11px] font-bold border border-brand-500/30 active:scale-95 transition">
+        className="shrink-0 h-8 px-3 rounded-xl bg-white/[0.04] text-brand-300 text-[11px] font-bold border border-brand-500/20 hover:border-brand-500/30 active:scale-95 transition-all">
         Following
       </button>
     );
     if (state === "pending") return (
       <button onClick={() => handleFollow(personId, isPrivate)}
-        className="shrink-0 px-3 py-1.5 rounded-xl bg-white/[0.06] text-ink-mute text-[11px] font-bold border border-white/[0.1] active:scale-95 transition">
+        className="shrink-0 h-8 px-3 rounded-xl bg-white/[0.04] text-ink-mute text-[11px] font-bold border border-white/[0.06] active:scale-95 transition-all">
         Requested
       </button>
     );
     return (
       <button onClick={() => handleFollow(personId, isPrivate)}
-        className="shrink-0 px-3 py-1.5 rounded-xl bg-brand-500 text-white text-[11px] font-bold active:scale-95 transition">
+        className="shrink-0 h-8 px-3.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-[11px] font-bold active:scale-95 transition-all">
         Follow
       </button>
     );
@@ -330,9 +342,11 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
   if (activeDmId && activePeer) {
     return (
       <div className="flex flex-col h-screen max-h-screen bg-black text-white overflow-hidden">
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.07] shrink-0 bg-[#0c0c0e]/80 backdrop-blur-md">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.07] shrink-0 bg-[#0c0c0e]/95 backdrop-blur-md sticky top-0 z-10">
           <button onClick={() => { setActiveDmId(null); setActivePeer(null); onChatOpen?.(false); }}
-            className="w-8 h-8 rounded-full bg-white/[0.05] hover:bg-white/10 active:scale-90 transition flex items-center justify-center shrink-0">←</button>
+            className="w-10 h-10 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-95 transition flex items-center justify-center shrink-0 text-white">
+            <ArrowLeftIcon className="w-5 h-5" />
+          </button>
           <Avatar person={activePeer} size={9} />
           <div className="min-w-0">
             <div className="flex items-center gap-1">
@@ -344,7 +358,13 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
         </div>
         <div className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-3 bg-black">
           {msgLoading ? <div className="flex items-center justify-center h-full opacity-40"><div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>
-            : messages.length === 0 ? <div className="flex flex-col items-center justify-center h-full text-center opacity-50"><span className="text-4xl mb-2">📡</span><p className="text-sm font-bold text-ink">On the same frequency</p><p className="text-xs text-ink-mute mt-1">Say something</p></div>
+            : messages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center opacity-60">
+                <SignalIcon className="w-12 h-12 text-white/10 mb-3 animate-pulse" />
+                <p className="text-xs font-bold text-ink">On the same frequency</p>
+                <p className="text-[10px] text-ink-mute mt-1">Start the conversation by typing below.</p>
+              </div>
+            )
             : messages.map(m => {
               const mine = m.sender_id === user?.id;
               return <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
@@ -356,10 +376,14 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
             })}
           <div ref={bottomRef} />
         </div>
-        <div className="p-3 border-t border-white/[0.07] bg-[#0c0c0e]/80 pb-28 shrink-0">
-          <form onSubmit={e => { e.preventDefault(); sendMsg(); }} className="flex gap-2">
-            <input type="text" placeholder="Type a message…" value={msgInput} onChange={e => setMsgInput(e.target.value)} className="input flex-1 text-sm py-2.5" />
-            <button type="submit" disabled={!msgInput.trim()} className="btn-primary px-4 disabled:opacity-40">Send</button>
+        <div className="px-4 pt-2.5 border-t border-white/[0.07] bg-[#0c0c0e]/95 shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <form onSubmit={e => { e.preventDefault(); sendMsg(); }} className="flex gap-2.5 items-center">
+            <div className="flex-1 bg-[#1a1a1a] rounded-full px-4 min-h-[40px] flex items-center">
+              <input type="text" placeholder="Message…" value={msgInput} onChange={e => setMsgInput(e.target.value)} className="bg-transparent text-sm text-white placeholder-white/40 focus:outline-none flex-grow py-2.5" />
+            </div>
+            <button type="submit" disabled={!msgInput.trim()} className="w-10 h-10 rounded-full bg-brand-500 hover:bg-brand-600 disabled:opacity-40 active:scale-95 transition flex items-center justify-center text-white shrink-0">
+              <SendIcon className="w-4 h-4" />
+            </button>
           </form>
         </div>
       </div>
@@ -375,8 +399,10 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
     const profileData = p.profiles ?? p;
     return (
       <div className="min-h-screen bg-black animate-fade-in pb-28">
-        <div className="flex items-center gap-3 px-5 pt-12 pb-4 border-b border-white/[0.07]">
-          <button onClick={() => setViewProfile(null)} className="w-8 h-8 rounded-full bg-white/[0.05] flex items-center justify-center text-ink shrink-0">←</button>
+        <div className="flex items-center gap-3 px-5 pt-12 pb-4 border-b border-white/[0.07] bg-[#0c0c0e]/95 backdrop-blur-md sticky top-0 z-10">
+          <button onClick={() => setViewProfile(null)} className="w-10 h-10 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-95 transition flex items-center justify-center text-white shrink-0">
+            <ArrowLeftIcon className="w-5 h-5" />
+          </button>
           <span className="font-bold text-ink">Profile</span>
         </div>
         <div className="px-5 pt-6">
@@ -386,7 +412,7 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
               <div className="flex items-center gap-1.5">
                 <h2 className="text-lg font-bold text-ink">{profileData.name}</h2>
                 {(profileData.verified) && <span className="inline-flex items-center justify-center w-4 h-4 bg-brand-500 text-white rounded-full text-[8px]"><CheckIcon className="w-3 h-3" /></span>}
-                {(profileData.is_private) && <span className="text-xs text-ink-mute">🔒</span>}
+                {profileData.is_private && <LockIcon className="w-3.5 h-3.5 text-ink-mute shrink-0" />}
               </div>
               {profileData.username && <p className="text-sm text-brand-300 font-medium">@{profileData.username}</p>}
               <p className="text-xs text-ink-mute mt-1">{profileData.course} · Y{profileData.year} · {profileData.college}</p>
@@ -394,27 +420,31 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
           </div>
           {/* Current signal */}
           {p.content && (
-            <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl px-4 py-3 mb-5 flex items-start gap-3">
-              <span className="text-brand-400 mt-0.5">📡</span>
-              <div>
-                <p className="text-xs text-ink-mute mb-1 font-semibold uppercase tracking-wider">Broadcasting</p>
-                <p className="text-sm text-ink">"{p.content}"</p>
-                <p className="text-[10px] text-ink-mute mt-1">{timeAgo(p.created_at)}</p>
+            <div className="bg-brand-500/[0.03] border border-brand-500/10 rounded-3xl p-5 mb-5 flex items-start gap-3.5">
+              <SignalIcon className="w-5 h-5 text-brand-400 shrink-0 mt-0.5 animate-pulse" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider mb-1">Broadcasting</p>
+                <p className="text-sm text-ink font-semibold leading-relaxed">"{p.content}"</p>
+                <p className="text-[10px] text-ink-mute mt-1.5">{timeAgo(p.created_at)} ago</p>
               </div>
             </div>
           )}
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             {state === "mutual" ? (
               <button onClick={() => { setViewProfile(null); openDm(profileData); }}
-                className="flex-1 btn-primary flex items-center justify-center gap-2">💬 Message</button>
+                className="flex-1 h-12 rounded-2xl bg-brand-500 hover:bg-brand-600 active:scale-95 transition text-white text-sm font-bold flex items-center justify-center gap-2">
+                <ChatIcon className="w-4 h-4" />
+                <span>Message</span>
+              </button>
             ) : (
               <button onClick={() => handleFollow(personId, isPrivate)}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition active:scale-[0.98] ${
-                  state === "none" ? "btn-primary" :
-                  state === "pending" ? "bg-white/[0.06] text-ink-mute border border-white/[0.1]" :
-                  "bg-white/[0.06] text-brand-400 border border-brand-500/30"
+                className={`flex-1 h-12 rounded-2xl text-sm font-bold transition active:scale-95 flex items-center justify-center gap-2 ${
+                  state === "none" ? "bg-brand-500 hover:bg-brand-600 text-white" :
+                  state === "pending" ? "bg-white/[0.06] text-ink-mute border border-white/[0.08]" :
+                  "bg-white/[0.06] text-brand-300 border border-brand-500/20"
                 }`}>
-                {state === "none" ? "Follow" : state === "pending" ? "Requested" : "Following"}
+                <span>{state === "none" ? "Follow" : state === "pending" ? "Requested" : "Following"}</span>
+                {state === "following" && <CheckIcon className="w-4 h-4 text-brand-300" />}
               </button>
             )}
           </div>
@@ -432,17 +462,21 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
       <div className="px-5 pt-12 pb-4">
         <div className="flex items-center gap-3">
           <div className="relative flex-1">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-mute text-sm">🔍</span>
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40">
+              <SearchIcon className="w-4 h-4" />
+            </span>
             <input
               ref={searchRef}
               type="text"
               placeholder="Search people..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="input w-full pl-9 py-2.5 text-sm"
+              className="input w-full pl-10 pr-10 py-3 text-sm rounded-2xl bg-[#1a1a1a] border border-white/[0.05] text-white focus:outline-none focus:border-brand-500/50 transition-colors"
             />
             {search && (
-              <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-mute text-xs">✕</button>
+              <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-white/60 hover:text-white active:scale-90 transition shrink-0">
+                <XIcon className="w-3.5 h-3.5" />
+              </button>
             )}
           </div>
         </div>
@@ -458,18 +492,20 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
           <div className="space-y-2.5">
             {searchResults.map((p: any) => (
               <div key={p.id} onClick={() => setViewProfile(p)}
-                className="bg-[#0c0c0e]/90 border border-white/[0.07] rounded-2xl px-4 py-3 flex items-center gap-3 cursor-pointer hover:border-white/15 active:scale-[0.99] transition">
+                className="bg-[#0c0c0e]/90 border border-white/[0.07] rounded-3xl p-5 flex items-center gap-3.5 cursor-pointer hover:border-white/12 active:scale-[0.98] transition-all">
                 <Avatar person={p} size={10} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span className="font-bold text-ink text-sm truncate">{p.name}</span>
                     {p.verified && <span className="inline-flex items-center justify-center w-3.5 h-3.5 bg-brand-500 text-white rounded-full text-[7px]"><CheckIcon className="w-2.5 h-2.5" /></span>}
-                    {p.is_private && <span className="text-[10px] text-ink-mute">🔒</span>}
+                    {p.is_private && <LockIcon className="w-3.5 h-3.5 text-ink-mute shrink-0" />}
                   </div>
                   {p.username && <p className="text-[11px] text-brand-300 font-medium">@{p.username}</p>}
-                  <p className="text-[11px] text-ink-mute truncate">{p.course} · Y{p.year} · {p.college}</p>
+                  <p className="text-[11px] text-ink-mute truncate mt-0.5">{p.course} · Y{p.year} · {p.college}</p>
                 </div>
-                <FollowBtn personId={p.id} isPrivate={p.is_private} />
+                <div onClick={e => e.stopPropagation()} className="shrink-0 select-none">
+                  <FollowBtn personId={p.id} isPrivate={p.is_private} />
+                </div>
               </div>
             ))}
           </div>
@@ -477,13 +513,18 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
       ) : (
         <>
           {/* ── Sub-tabs ── */}
-          <div className="flex border-b border-white/[0.07] px-5 mb-4">
+          <div className="flex border-b border-white/[0.07] px-5 mb-5 select-none">
             {(["frequency", "requests"] as const).map(t => (
               <button key={t} onClick={() => setSubTab(t)}
-                className={`flex-1 py-2.5 text-sm font-semibold transition ${subTab === t ? "text-brand-400 border-b-2 border-brand-500" : "text-ink-mute"}`}>
-                {t === "frequency" ? "📡 Frequency" : (
-                  <span className="flex items-center justify-center gap-1.5">
-                    Requests
+                className={`flex-1 py-3 text-sm font-semibold transition-all active:scale-[0.98] flex items-center justify-center gap-2 ${subTab === t ? "text-brand-400 border-b-2 border-brand-500 font-bold" : "text-ink-mute"}`}>
+                {t === "frequency" ? (
+                  <>
+                    <SignalIcon className="w-4 h-4" />
+                    <span>Frequency</span>
+                  </>
+                ) : (
+                  <span className="flex items-center gap-1.5">
+                    <span>Requests</span>
                     {reqCount > 0 && <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-brand-500 text-white text-[9px] font-bold">{reqCount}</span>}
                   </span>
                 )}
@@ -498,11 +539,11 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
               {/* My signal */}
               {!broadcasting ? (
                 <button onClick={() => { setBroadcastInput(mySignal ?? ""); setBroadcasting(true); }}
-                  className={`w-full mb-5 rounded-2xl border px-4 py-3.5 text-left transition active:scale-[0.99] ${
-                    mySignal ? "bg-brand-500/10 border-brand-500/30" : "bg-white/[0.04] border-white/[0.08] border-dashed"
+                  className={`w-full mb-5 rounded-3xl border p-5 text-left transition-all active:scale-[0.98] ${
+                    mySignal ? "bg-brand-500/[0.04] border-brand-500/20 hover:border-brand-500/30" : "bg-white/[0.02] border-white/[0.07] border-dashed hover:border-white/12"
                   }`}>
-                  <div className="flex items-center gap-2.5">
-                    <span className={`text-lg ${mySignal ? "animate-pulse" : "opacity-40"}`}>📡</span>
+                  <div className="flex items-center gap-3">
+                    <SignalIcon className={`w-5 h-5 shrink-0 ${mySignal ? "text-brand-400 animate-pulse" : "text-ink-mute opacity-40"}`} />
                     <div className="flex-1 min-w-0">
                       {mySignal ? (
                         <>
@@ -510,49 +551,69 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
                           <p className="text-sm text-ink font-semibold truncate">"{mySignal}"</p>
                         </>
                       ) : (
-                        <p className="text-sm text-ink-mute">What are you broadcasting right now?</p>
+                        <p className="text-sm text-ink-soft">What are you broadcasting right now?</p>
                       )}
                     </div>
                     {mySignal && (
                       <button onClick={e => { e.stopPropagation(); clearSignal(); }}
-                        className="text-ink-mute text-xs hover:text-red-400 transition shrink-0">✕</button>
+                        className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/10 active:scale-90 transition flex items-center justify-center text-ink-soft hover:text-red-400 shrink-0">
+                        <XIcon className="w-3.5 h-3.5" />
+                      </button>
                     )}
                   </div>
                 </button>
               ) : (
-                <div className="mb-5 rounded-2xl border border-brand-500/40 bg-brand-500/10 p-4">
-                  <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider mb-2">📡 Set your signal</p>
+                <div className="mb-5 rounded-3xl border border-brand-500/20 bg-brand-500/[0.03] p-5 animate-fade-in">
+                  <div className="flex items-center gap-2 mb-3 select-none">
+                    <SignalIcon className="w-4 h-4 text-brand-400 animate-pulse" />
+                    <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider">Set your signal</p>
+                  </div>
                   <input autoFocus maxLength={80} value={broadcastInput} onChange={e => setBroadcastInput(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && broadcastSignal()}
-                    className="input w-full text-sm mb-3" placeholder='"DBMS grind rn 📚"' />
-                  <div className="flex gap-2">
+                    className="input w-full text-sm mb-4 rounded-xl bg-[#1a1a1a] border border-white/[0.06] focus:border-brand-500/50" placeholder='"DBMS grind rn 📚"' />
+                  <div className="flex gap-3">
                     <button onClick={broadcastSignal} disabled={saving || !broadcastInput.trim()}
-                      className="flex-1 btn-primary text-sm py-2 disabled:opacity-40">
-                      {saving ? "Broadcasting…" : "Broadcast 📡"}
+                      className="flex-1 h-10 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-40 active:scale-95 transition text-white text-xs font-bold flex items-center justify-center gap-1.5">
+                      {saving ? "Broadcasting…" : (
+                        <>
+                          <span>Broadcast</span>
+                          <SignalIcon className="w-3.5 h-3.5" />
+                        </>
+                      )}
                     </button>
-                    <button onClick={() => setBroadcasting(false)} className="px-4 py-2 rounded-xl bg-white/[0.06] text-ink-mute text-sm">Cancel</button>
+                    <button onClick={() => setBroadcasting(false)} className="px-4 h-10 rounded-xl bg-white/[0.06] text-ink-soft hover:bg-white/10 active:scale-95 transition text-xs font-bold">Cancel</button>
                   </div>
                 </div>
               )}
 
               {/* Campus toggle */}
-              <div className="flex bg-white/[0.06] rounded-2xl p-1 mb-5">
+              <div className="flex bg-white/[0.04] border border-white/[0.05] rounded-2xl p-1 mb-5 select-none">
                 {(["campus", "all"] as const).map(s => (
                   <button key={s} onClick={() => setScope(s)}
-                    className={`flex-1 py-2 text-xs font-bold rounded-xl transition ${scope === s ? "bg-brand-500 text-white" : "text-ink-mute"}`}>
-                    {s === "campus" ? "🏫 My Campus" : "🌍 All Campuses"}
+                    className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 ${scope === s ? "bg-brand-500 text-white shadow-md" : "text-ink-soft hover:bg-white/[0.02]"}`}>
+                    {s === "campus" ? (
+                      <>
+                        <CampusIcon className="w-3.5 h-3.5" />
+                        <span>My Campus</span>
+                      </>
+                    ) : (
+                      <>
+                        <GlobeIcon className="w-3.5 h-3.5" />
+                        <span>All Campuses</span>
+                      </>
+                    )}
                   </button>
                 ))}
               </div>
 
               {/* Feed */}
               {feedLoading ? (
-                <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-24 rounded-2xl bg-white/[0.03] animate-pulse" />)}</div>
+                <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-24 rounded-3xl bg-white/[0.03] animate-pulse" />)}</div>
               ) : signals.length === 0 ? (
-                <div className="text-center py-12">
-                  <p className="text-3xl mb-3">📡</p>
+                <div className="text-center py-16 flex flex-col items-center select-none opacity-60">
+                  <SignalIcon className="w-12 h-12 text-white/10 mb-4" />
                   <p className="text-sm font-bold text-ink mb-1">No signals yet</p>
-                  <p className="text-xs text-ink-mute">{scope === "campus" ? "Be the first to broadcast from your campus" : "No one is broadcasting right now"}</p>
+                  <p className="text-xs text-ink-mute max-w-[200px] mx-auto leading-normal">{scope === "campus" ? "Be the first to broadcast from your campus" : "No one is broadcasting right now"}</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -561,12 +622,12 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
                     const isCampus = p.college === profile?.college || (demo && ["IIIT Hyderabad"].includes(p.college));
                     return (
                       <div key={sig.id} onClick={() => setViewProfile(sig)}
-                        className={`rounded-2xl border p-4 cursor-pointer transition active:scale-[0.99] ${
+                        className={`rounded-3xl border p-5 cursor-pointer transition-all active:scale-[0.98] ${
                           isCampus
-                            ? "bg-brand-500/[0.07] border-brand-500/20 hover:border-brand-500/35"
-                            : "bg-[#0c0c0e]/80 border-white/[0.07] hover:border-white/15"
+                            ? "bg-brand-500/[0.04] border-brand-500/15 hover:border-brand-500/25"
+                            : "bg-[#0c0c0e]/90 border-white/[0.07] hover:border-white/12"
                         }`}>
-                        <div className="flex items-start gap-3">
+                        <div className="flex items-start gap-3.5">
                           <div className="relative shrink-0">
                             <Avatar person={p} size={10} />
                             {isCampus && (
@@ -576,18 +637,18 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 mb-0.5">
+                            <div className="flex items-center gap-1.5 mb-1">
                               <span className="font-bold text-ink text-sm truncate">{p.name}</span>
                               {p.verified && <span className="inline-flex items-center justify-center w-3.5 h-3.5 bg-brand-500 text-white rounded-full text-[7px]"><CheckIcon className="w-2.5 h-2.5" /></span>}
-                              {isCampus && <span className="text-[9px] font-bold text-brand-400 bg-brand-500/15 px-1.5 py-0.5 rounded-full">MY CAMPUS</span>}
+                              {isCampus && <span className="text-[9px] font-bold text-brand-400 bg-brand-500/15 px-2 py-0.5 rounded-full select-none">MY CAMPUS</span>}
                             </div>
-                            <p className={`text-sm font-semibold mb-1.5 ${isCampus ? "text-ink" : "text-ink-soft"}`}>"{sig.content}"</p>
-                            <div className="flex items-center justify-between">
-                              <p className="text-[11px] text-ink-mute">{p.course} · Y{p.year}</p>
-                              <p className="text-[11px] text-ink-mute">{timeAgo(sig.created_at)}</p>
+                            <p className={`text-sm font-semibold mb-2 leading-relaxed ${isCampus ? "text-ink" : "text-ink-soft"}`}>"{sig.content}"</p>
+                            <div className="flex items-center justify-between text-[11px] text-ink-mute">
+                              <p>{p.course} · Y{p.year}</p>
+                              <p>{timeAgo(sig.created_at)} ago</p>
                             </div>
                           </div>
-                          <div onClick={e => e.stopPropagation()}>
+                          <div onClick={e => e.stopPropagation()} className="shrink-0 select-none">
                             <FollowBtn personId={sig.user_id} isPrivate={p.is_private} />
                           </div>
                         </div>
@@ -603,26 +664,31 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
           {subTab === "requests" && (
             <div className="px-5">
               {reqLoading ? (
-                <div className="space-y-3">{[...Array(2)].map((_, i) => <div key={i} className="h-16 rounded-2xl bg-white/[0.04] animate-pulse" />)}</div>
+                <div className="space-y-3">{[...Array(2)].map((_, i) => <div key={i} className="h-16 rounded-3xl bg-white/[0.04] animate-pulse" />)}</div>
               ) : requests.length === 0 ? (
-                <div className="text-center py-14">
-                  <p className="text-3xl mb-3">✅</p>
-                  <p className="text-sm text-ink-mute">No pending requests</p>
+                <div className="text-center py-20 flex flex-col items-center select-none opacity-60">
+                  <div className="w-12 h-12 bg-white/[0.04] border border-white/[0.08] rounded-full flex items-center justify-center mb-4">
+                    <CheckIcon className="w-6 h-6 text-brand-300" />
+                  </div>
+                  <p className="text-xs font-bold text-ink">No pending requests</p>
+                  <p className="text-[10px] text-ink-mute mt-1">You are all caught up!</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {requests.map((req: any) => {
                     const p = req.profiles;
                     return (
-                      <div key={req.follower_id} className="bg-[#0c0c0e]/90 border border-white/[0.07] rounded-2xl p-4 flex items-center gap-3">
+                      <div key={req.follower_id} className="bg-[#0c0c0e]/90 border border-white/[0.07] rounded-3xl p-5 flex items-center gap-3.5">
                         <Avatar person={p} size={10} />
                         <div className="flex-1 min-w-0">
                           <p className="font-bold text-ink text-sm truncate">{p?.name}</p>
-                          <p className="text-[11px] text-ink-mute">{p?.username ? `@${p.username}` : p?.college}</p>
+                          <p className="text-[11px] text-ink-mute mt-0.5">{p?.username ? `@${p.username}` : p?.college}</p>
                         </div>
-                        <div className="flex gap-2 shrink-0">
-                          <button onClick={() => acceptReq(req.follower_id)} className="px-3 py-1.5 rounded-xl bg-brand-500 text-white text-xs font-bold active:scale-95 transition">Accept</button>
-                          <button onClick={() => declineReq(req.follower_id)} className="px-3 py-1.5 rounded-xl bg-white/[0.06] text-ink-mute text-xs border border-white/[0.1] active:scale-95 transition">✕</button>
+                        <div className="flex gap-2.5 shrink-0 select-none">
+                          <button onClick={() => acceptReq(req.follower_id)} className="h-9 px-4 rounded-xl bg-brand-500 hover:bg-brand-600 active:scale-95 transition text-white text-xs font-bold flex items-center justify-center">Accept</button>
+                          <button onClick={() => declineReq(req.follower_id)} className="w-9 h-9 rounded-xl bg-white/[0.06] hover:bg-white/10 active:scale-95 transition text-ink-soft hover:text-red-400 border border-white/[0.08] flex items-center justify-center shrink-0">
+                            <XIcon className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
                     );

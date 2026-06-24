@@ -363,3 +363,11 @@ export const GraduationIcon = ({ className }: P) => (
     <path d="M6.5 10.5V15c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5v-4.5M21.5 8.5v5" />
   </svg>
 );
+
+export const GlobeIcon = ({ className }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke={C} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M3.5 12h17M12 3.5a15.3 15.3 0 0 1 0 17 15.3 15.3 0 0 1 0-17Z" />
+  </svg>
+);
+
