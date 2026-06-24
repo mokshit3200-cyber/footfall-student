@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react"; // frequency
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"; // frequency
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { isDemo } from "@/lib/config";
@@ -19,7 +19,9 @@ import {
   ClockIcon,
   BookmarkIcon,
   ShareIcon,
-  HandRaiseIcon
+  HandRaiseIcon,
+  BuildingIcon,
+  SparklesIcon
 } from "./icons";
 
 // Helper to compute expires_at timestamp
@@ -156,9 +158,6 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
   const { user, profile } = useAuth();
   const demo = isDemo();
 
-  // Tabs
-  const [subTab, setSubTab] = useState<"frequency" | "requests">("frequency");
-
   // Search
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -188,11 +187,6 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
   // Follow states
   const [followStates, setFollowStates] = useState<Record<string, string>>(demo ? DEMO_FOLLOW_STATES : {});
 
-  // Requests
-  const [requests, setRequests] = useState<any[]>([]);
-  const [reqLoading, setReqLoading] = useState(false);
-  const [reqCount, setReqCount] = useState(demo ? DEMO_REQUESTS.length : 0);
-
   // DM
   const [activeDmId, setActiveDmId] = useState<string | null>(null);
   const [activePeer, setActivePeer] = useState<any | null>(null);
@@ -206,6 +200,112 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
 
   // Bookmarks
   const [bookmarkedSignals, setBookmarkedSignals] = useState<Set<string>>(new Set());
+  const [activeFilter, setActiveFilter] = useState<string>("all");
+  const [shareSignal, setShareSignal] = useState<any | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2200);
+  }
+
+  // Countdown ticker
+  const [ticker, setTicker] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTicker(prev => prev + 1);
+    }, 15000); // every 15 seconds
+    return () => clearInterval(interval);
+  }, []);
+
+  // Share sheet search & friends
+  const [shareSearch, setShareSearch] = useState("");
+  const [friendsList, setFriendsList] = useState<any[]>([]);
+  const [shareFriendsLoading, setShareFriendsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!shareSignal) return;
+    setShareSearch("");
+    if (demo) {
+      setFriendsList(DEMO_SEARCH_PEOPLE as any[]);
+      return;
+    }
+    if (!user) return;
+    
+    const userId = user.id;
+    async function loadFriends() {
+      setShareFriendsLoading(true);
+      try {
+        const [{ data: outgoing }, { data: incoming }] = await Promise.all([
+          supabase.from("follows")
+            .select("following:profiles!follows_following_id_fkey(id,name,username,avatar_url,college,course,year,verified)")
+            .eq("follower_id", userId)
+            .eq("status", "accepted"),
+          supabase.from("follows")
+            .select("follower:profiles!follows_follower_id_fkey(id,name,username,avatar_url,college,course,year,verified)")
+            .eq("following_id", userId)
+            .eq("status", "accepted")
+        ]);
+        const friendsMap = new Map();
+        (outgoing ?? []).forEach((f: any) => { if (f.following) friendsMap.set(f.following.id, f.following); });
+        (incoming ?? []).forEach((f: any) => { if (f.follower) friendsMap.set(f.follower.id, f.follower); });
+        setFriendsList(Array.from(friendsMap.values()));
+      } catch (err) {
+        console.error("Error loading friends:", err);
+      } finally {
+        setShareFriendsLoading(false);
+      }
+    }
+    loadFriends();
+  }, [shareSignal, user, demo]);
+
+  const filteredFriends = useMemo(() => {
+    const q = shareSearch.trim().toLowerCase();
+    if (!q) return friendsList;
+    return friendsList.filter(f => f.name.toLowerCase().includes(q) || (f.username || "").toLowerCase().includes(q));
+  }, [friendsList, shareSearch]);
+
+  const overlapBanner = useMemo(() => {
+    if (scope !== "campus" || !mySignalIntent) return null;
+    const campusSignals = signals.filter((s: any) => {
+      const p = s.profiles ?? s;
+      const isCampus = p.college === profile?.college || (demo && ["IIIT Hyderabad"].includes(p.college));
+      return isCampus && s.user_id !== (user?.id || "me");
+    });
+    const sameIntentSignals = campusSignals.filter((s: any) => s.intent === mySignalIntent);
+    const count = sameIntentSignals.length;
+    if (count > 0) {
+      const label = INTENTS.find(i => i.id === mySignalIntent)?.label?.toLowerCase() || "broadcasting";
+      return (
+        <div className="bg-brand-500/[0.05] border border-brand-500/20 rounded-3xl p-4 mb-5 flex items-center gap-3 select-none animate-fade-in">
+          <span className="relative flex h-2 w-2 shrink-0">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-500"></span>
+          </span>
+          <p className="text-xs text-brand-300 font-medium leading-normal">
+            You're {label} right now — <span className="text-white font-bold">{count} other{count > 1 ? 's' : ''}</span> {count > 1 ? 'are' : 'is'} too!
+          </p>
+        </div>
+      );
+    }
+    return null;
+  }, [scope, mySignalIntent, signals, profile, user, demo]);
+
+  const crossCampusBanner = useMemo(() => {
+    if (scope !== "all") return null;
+    const lookingSignals = signals.filter((s: any) => s.reach === "all" && s.intent === "looking");
+    const count = lookingSignals.length;
+    if (count > 0) {
+      return (
+        <div className="bg-purple-500/[0.05] border border-purple-500/20 rounded-3xl p-4 mb-5 flex items-center gap-3 select-none animate-fade-in">
+          <SparklesIcon className="w-4 h-4 text-purple-400 shrink-0" />
+          <p className="text-xs text-purple-300 font-medium leading-normal">
+            <span className="text-white font-bold">{count} classmate{count > 1 ? 's' : ''}</span> {count > 1 ? 'are' : 'is'} looking for teammates/opportunities across campuses.
+          </p>
+        </div>
+      );
+    }
+    return null;
+  }, [scope, signals]);
 
   // ── Helper functions for signal cards ───────────────────
   function getCountdown(expiresAt: string) {
@@ -253,15 +353,85 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
   }
 
   function handleShare(sig: any) {
-    if (navigator.share) {
-      navigator.share({
-        title: `Footfall Signal from ${sig.profiles?.name || "Student"}`,
-        text: `Check out this signal on Footfall: "${sig.content}"`,
-        url: window.location.href
-      }).catch(() => {});
+    setShareSignal(sig);
+  }
+
+  async function handleSelectFriend(friend: any) {
+    if (!shareSignal) return;
+    const intentLabel = INTENTS.find(i => i.id === shareSignal.intent)?.label || "Signal";
+    const shareText = `Thought of you — ${shareSignal.profiles?.name || "Someone"} is ${intentLabel}: '${shareSignal.content}'`;
+    
+    if (demo) {
+      // For Arjun it's dg1, for Priya it's dg3, otherwise fake
+      const groupId = friend.id === "dp1" ? "dg1" : friend.id === "dp2" ? "dg3" : `dg-fake-${friend.id}`;
+      
+      // 1. Write to localStorage demo_messages_{groupId}
+      const savedMsgs = JSON.parse(localStorage.getItem(`demo_messages_${groupId}`) || "[]");
+      const newMsg = {
+        id: `share-${Date.now()}`,
+        sender_id: "me",
+        content: shareText,
+        created_at: new Date().toISOString()
+      };
+      const updatedMsgs = [...savedMsgs, newMsg];
+      localStorage.setItem(`demo_messages_${groupId}`, JSON.stringify(updatedMsgs));
+      
+      // 2. Update/create group conversation in demo_groups
+      const localGroups = JSON.parse(localStorage.getItem("demo_groups") || "[]");
+      const existingIdx = localGroups.findIndex((g: any) => g.group_id === groupId);
+      
+      if (existingIdx !== -1) {
+        localGroups[existingIdx].last_message = shareText;
+        localGroups[existingIdx].last_at = new Date().toISOString();
+      } else {
+        const newConvo = {
+          group_id: groupId,
+          type: "dm" as const,
+          peer: {
+            id: friend.id,
+            name: friend.name,
+            username: friend.username,
+            avatar_url: friend.avatar_url || null,
+            college: friend.college || "IIIT Hyderabad",
+            course: friend.course || "B.Tech",
+            year: friend.year || 2,
+            verified: friend.verified || false
+          },
+          last_message: shareText,
+          last_at: new Date().toISOString(),
+          unread: 0,
+          request_status: "accepted" as const
+        };
+        localGroups.unshift(newConvo);
+      }
+      localStorage.setItem("demo_groups", JSON.stringify(localGroups));
+      
+      setShareSignal(null);
+      showToast(`Shared with ${friend.name.split(" ")[0]}`);
     } else {
-      navigator.clipboard.writeText(`Check out this signal on Footfall: "${sig.content}"`);
-      alert("Signal description copied to clipboard!");
+      // Live mode
+      try {
+        const { data: groupId, error } = await supabase.rpc("create_dm", { other_user_id: friend.id });
+        if (error) throw error;
+        
+        await supabase.from("messages").insert({
+          group_id: groupId,
+          sender_id: user!.id,
+          content: shareText,
+          type: 'text'
+        });
+        
+        await supabase.from("groups").update({
+          last_message: shareText,
+          last_at: new Date().toISOString()
+        }).eq("id", groupId);
+        
+        setShareSignal(null);
+        showToast(`Shared with ${friend.name.split(" ")[0]}`);
+      } catch (err) {
+        console.error("Error sharing signal:", err);
+        showToast("Couldn't share — try again");
+      }
     }
   }
 
@@ -514,34 +684,6 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
       await supabase.from("follows").delete().eq("follower_id", user.id).eq("following_id", personId);
       setFollowStates(p => ({ ...p, [personId]: "none" }));
     }
-  }
-
-  // ── Requests ────────────────────────────────────────────
-  useEffect(() => {
-    if (subTab !== "requests") return;
-    if (demo) { setRequests(DEMO_REQUESTS as any[]); return; }
-    if (!user) return;
-    setReqLoading(true);
-    supabase.from("follows").select("follower_id,created_at,profiles!follows_follower_id_fkey(id,name,username,college,avatar_url)")
-      .eq("following_id", user.id).eq("status", "pending")
-      .then(({ data }) => { setRequests(data ?? []); setReqLoading(false); });
-  }, [subTab, user, demo]);
-
-  useEffect(() => {
-    if (demo || !user) return;
-    supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", user.id).eq("status", "pending")
-      .then(({ count }) => setReqCount(count ?? 0));
-  }, [user, demo]);
-
-  async function acceptReq(followerId: string) {
-    if (!demo) await supabase.from("follows").update({ status: "accepted" }).eq("follower_id", followerId).eq("following_id", user!.id);
-    setRequests(p => p.filter((r: any) => r.follower_id !== followerId));
-    setReqCount(c => Math.max(0, c - 1));
-  }
-  async function declineReq(followerId: string) {
-    if (!demo) await supabase.from("follows").delete().eq("follower_id", followerId).eq("following_id", user!.id);
-    setRequests(p => p.filter((r: any) => r.follower_id !== followerId));
-    setReqCount(c => Math.max(0, c - 1));
   }
 
   // ── DM ──────────────────────────────────────────────────
@@ -868,6 +1010,37 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
     );
   }
 
+  const visibleSignals = useMemo(() => {
+    let list = [...signals];
+    
+    // Filter out expired signals
+    list = list.filter((sig: any) => !sig.expires_at || new Date(sig.expires_at).getTime() > Date.now());
+
+    // 1. Filter by scope
+    if (scope === "campus") {
+      if (demo) {
+        list = list.filter((s: any) => {
+          const p = s.profiles ?? s;
+          return p.college === "IIIT Hyderabad";
+        });
+      } else {
+        list = list.filter((s: any) => {
+          const p = s.profiles ?? s;
+          return p.college === profile?.college;
+        });
+      }
+    } else {
+      list = list.filter((s: any) => s.reach === "all");
+    }
+    
+    // 2. Filter by intent category tabs
+    if (activeFilter !== "all") {
+      list = list.filter((s: any) => s.intent === activeFilter);
+    }
+    
+    return list;
+  }, [signals, scope, activeFilter, profile, demo, ticker]);
+
   const showingSearch = search.trim().length > 0;
 
   return (
@@ -926,302 +1099,415 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
           </div>
         </div>
       ) : (
-        <>
-          {/* ── Sub-tabs ── */}
-          <div className="flex border-b border-white/[0.07] px-5 mb-5 select-none">
-            {(["frequency", "requests"] as const).map(t => (
-              <button key={t} onClick={() => setSubTab(t)}
-                className={`flex-1 py-3 text-sm font-semibold transition-all active:scale-[0.98] flex items-center justify-center gap-2 ${subTab === t ? "text-brand-400 border-b-2 border-brand-500 font-bold" : "text-ink-mute"}`}>
-                {t === "frequency" ? (
+        <div className="px-5 animate-fade-in">
+          {/* My signal */}
+          <button onClick={() => {
+            setBroadcastInput(mySignal ?? "");
+            setBroadcastIntent(mySignalIntent ?? "free");
+            setBroadcastReach(mySignalReach ?? "campus");
+            setBroadcastDuration("4h");
+            setBroadcasting(true);
+          }}
+            className={`w-full mb-5 rounded-3xl border p-5 text-left transition-all active:scale-[0.98] ${
+              mySignal
+                ? "bg-brand-500/[0.04] border-brand-500/20 hover:border-brand-500/35"
+                : "bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04]"
+            }`}>
+            <div className="flex items-center gap-4">
+              <div className="relative w-12 h-12 rounded-full flex items-center justify-center shrink-0">
+                <div className="w-full h-full rounded-full bg-white/[0.05] border border-white/[0.12] flex items-center justify-center overflow-hidden">
+                  {profile?.avatar_url ? (
+                    <img src={profile.avatar_url} alt="Me" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-base font-bold text-brand-300">
+                      {profile?.name?.[0]?.toUpperCase() || "?"}
+                    </span>
+                  )}
+                </div>
+                {mySignal && (
+                  <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-brand-500 rounded-full border border-black flex items-center justify-center">
+                    <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                  </span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                {mySignal ? (
                   <>
-                    <SignalIcon className="w-4 h-4" />
-                    <span>Frequency</span>
+                    <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                      <span className="font-bold text-ink text-sm">Your Signal</span>
+                      {mySignalReach === "all" && (
+                        <span className="text-[8px] font-extrabold bg-purple-500/15 text-purple-400 px-1.5 py-0.5 rounded-full border border-purple-500/20 select-none">ALL CAMPUSES</span>
+                      )}
+                      {mySignalIntent && (
+                        <span className="text-[9px] font-bold px-2 py-0.2 rounded-full border" style={{ borderColor: `${(INTENTS.find(i => i.id === mySignalIntent))?.color}30`, color: (INTENTS.find(i => i.id === mySignalIntent))?.color, backgroundColor: `${(INTENTS.find(i => i.id === mySignalIntent))?.color}10` }}>
+                          {(INTENTS.find(i => i.id === mySignalIntent))?.label}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-ink font-semibold truncate">"{mySignal}"</p>
                   </>
                 ) : (
-                  <span className="flex items-center gap-1.5">
-                    <span>Requests</span>
-                    {reqCount > 0 && <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-brand-500 text-white text-[9px] font-bold">{reqCount}</span>}
-                  </span>
+                  <p className="text-sm text-ink-soft font-semibold">What is your signal right now?</p>
+                )}
+              </div>
+              {mySignal && (
+                <button onClick={e => { e.stopPropagation(); clearSignal(); }}
+                  className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/10 active:scale-90 transition flex items-center justify-center text-ink-soft hover:text-red-400 shrink-0">
+                  <XIcon className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </button>
+
+          {/* Campus toggle */}
+          <div className="flex bg-white/[0.04] border border-white/[0.05] rounded-2xl p-1 mb-5 select-none">
+            {(["campus", "all"] as const).map(s => (
+              <button key={s} onClick={() => {
+                setScope(s);
+                setActiveFilter("all");
+              }}
+                className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 ${scope === s ? "bg-brand-500 text-white shadow-md" : "text-ink-soft hover:bg-white/[0.02]"}`}>
+                {s === "campus" ? (
+                  <>
+                    <CampusIcon className="w-3.5 h-3.5" />
+                    <span>My Campus</span>
+                  </>
+                ) : (
+                  <>
+                    <GlobeIcon className="w-3.5 h-3.5" />
+                    <span>All Campuses</span>
+                  </>
                 )}
               </button>
             ))}
           </div>
 
-          {/* ── Frequency tab ── */}
-          {subTab === "frequency" && (
-            <div className="px-5">
+          {/* Overlap & Cross-Campus banners */}
+          {overlapBanner}
+          {crossCampusBanner}
 
-              {/* My signal */}
-              <button onClick={() => {
-                setBroadcastInput(mySignal ?? "");
-                setBroadcastIntent(mySignalIntent ?? "free");
-                setBroadcastReach(mySignalReach ?? "campus");
-                setBroadcastDuration("4h");
-                setBroadcasting(true);
-              }}
-                className={`w-full mb-5 rounded-3xl border p-5 text-left transition-all active:scale-[0.98] ${
-                  mySignal ? "bg-brand-500/[0.04] border-brand-500/20 hover:border-brand-500/30" : "bg-white/[0.02] border-white/[0.07] border-dashed hover:border-white/12"
-                }`}>
-                <div className="flex items-center gap-3">
-                  <span style={mySignal && mySignalIntent ? { color: INTENTS.find(i => i.id === mySignalIntent)?.color } : {}}>
-                    <SignalIcon className={`w-5 h-5 shrink-0 ${mySignal ? "animate-pulse" : "text-ink-mute opacity-40"}`} />
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    {mySignal ? (
-                      <>
-                        <div className="flex items-center gap-1.5 mb-0.5">
-                          <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: INTENTS.find(i => i.id === mySignalIntent)?.color || "#10b981" }}>
-                            Broadcasting · {INTENTS.find(i => i.id === mySignalIntent)?.label || "Signal"}
-                          </p>
-                          {mySignalReach === "all" && (
-                            <span className="text-[8px] font-extrabold bg-purple-500/15 text-purple-400 px-1.5 py-0.2 rounded-full border border-purple-500/20 select-none">ALL CAMPUSES</span>
+          {/* Category Filter Tabs */}
+          <div className="flex gap-2 overflow-x-auto pb-4 mb-4 no-scrollbar select-none">
+            {(scope === "campus"
+              ? [
+                  { id: "all", label: "All" },
+                  { id: "free", label: "Free" },
+                  { id: "study", label: "Study" },
+                  { id: "help", label: "Help" },
+                  { id: "looking", label: "Looking" },
+                  { id: "event", label: "Event" },
+                  { id: "sell", label: "Sell" }
+                ]
+              : [
+                  { id: "all", label: "All" },
+                  { id: "help", label: "Help" },
+                  { id: "looking", label: "Looking" },
+                  { id: "event", label: "Event" },
+                  { id: "sell", label: "Sell" }
+                ]
+            ).map(filter => {
+              const active = activeFilter === filter.id;
+              return (
+                <button
+                  key={filter.id}
+                  onClick={() => setActiveFilter(filter.id)}
+                  className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all duration-200 active:scale-95 ${
+                    active
+                      ? "bg-brand-500 text-white shadow-md shadow-brand-500/10"
+                      : "bg-white/[0.04] text-ink-soft hover:bg-white/[0.06] border border-white/[0.05]"
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Feed */}
+          {feedLoading ? (
+            <div className="space-y-3">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-28 rounded-3xl bg-white/[0.03] animate-pulse border border-white/[0.05] flex items-center p-5 gap-3.5">
+                  <div className="w-10 h-10 rounded-full bg-white/[0.04] shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 w-1/3 bg-white/[0.04] rounded" />
+                    <div className="h-4 w-3/4 bg-white/[0.04] rounded" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : visibleSignals.length === 0 ? (
+            <div className="text-center py-16 flex flex-col items-center select-none opacity-60">
+              <SignalIcon className="w-12 h-12 text-white/10 mb-4 animate-pulse" />
+              <p className="text-sm font-bold text-ink mb-1">No signals yet</p>
+              <p className="text-xs text-ink-mute max-w-[200px] mx-auto leading-normal">
+                {scope === "campus" 
+                  ? "Be the first to broadcast from your campus" 
+                  : "No one is broadcasting right now"}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {visibleSignals.map((sig: any) => {
+                const p = sig.profiles ?? sig;
+                const isCampus = p.college === profile?.college || (demo && ["IIIT Hyderabad"].includes(p.college));
+                const intentInfo = INTENTS.find(i => i.id === sig.intent) || INTENTS[0];
+                const CardIcon = intentInfo.icon;
+                const responders = sig.signal_raises || [];
+                const hasRaised = responders.some((r: any) => r.user_id === (user?.id || "me"));
+                const isBookmarked = bookmarkedSignals.has(sig.id);
+                const countdown = sig.expires_at ? getCountdown(sig.expires_at) : null;
+
+                return (
+                  <div key={sig.id} onClick={() => setViewProfile(sig)}
+                    className={`rounded-3xl border p-5 cursor-pointer transition-all active:scale-[0.98] ${
+                      isCampus
+                        ? "bg-brand-500/[0.04] border-brand-500/15 hover:border-brand-500/25"
+                        : "bg-[#0c0c0e]/90 border-white/[0.07] hover:border-white/12 animate-fade-in"
+                    }`}>
+                    
+                    {/* Top Metadata & Countdown */}
+                    <div className="flex items-start justify-between mb-3.5">
+                      <div className="flex items-center gap-3">
+                        <div className="relative shrink-0">
+                          <Avatar person={p} size={10} />
+                          <div className="absolute inset-0 rounded-full border-2" style={{ borderColor: intentInfo.color }} />
+                          {isCampus && (
+                            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-brand-500 rounded-full border border-black flex items-center justify-center">
+                              <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                            </span>
                           )}
                         </div>
-                        <p className="text-sm text-ink font-semibold truncate">"{mySignal}"</p>
-                      </>
-                    ) : (
-                      <p className="text-sm text-ink-soft">What are you broadcasting right now?</p>
-                    )}
-                  </div>
-                  {mySignal && (
-                    <button onClick={e => { e.stopPropagation(); clearSignal(); }}
-                      className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/10 active:scale-90 transition flex items-center justify-center text-ink-soft hover:text-red-400 shrink-0">
-                      <XIcon className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              </button>
-
-              {/* Campus toggle */}
-              <div className="flex bg-white/[0.04] border border-white/[0.05] rounded-2xl p-1 mb-5 select-none">
-                {(["campus", "all"] as const).map(s => (
-                  <button key={s} onClick={() => setScope(s)}
-                    className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 ${scope === s ? "bg-brand-500 text-white shadow-md" : "text-ink-soft hover:bg-white/[0.02]"}`}>
-                    {s === "campus" ? (
-                      <>
-                        <CampusIcon className="w-3.5 h-3.5" />
-                        <span>My Campus</span>
-                      </>
-                    ) : (
-                      <>
-                        <GlobeIcon className="w-3.5 h-3.5" />
-                        <span>All Campuses</span>
-                      </>
-                    )}
-                  </button>
-                ))}
-              </div>
-
-              {/* Feed */}
-              {feedLoading ? (
-                <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-24 rounded-3xl bg-white/[0.03] animate-pulse" />)}</div>
-              ) : signals.length === 0 ? (
-                <div className="text-center py-16 flex flex-col items-center select-none opacity-60">
-                  <SignalIcon className="w-12 h-12 text-white/10 mb-4" />
-                  <p className="text-sm font-bold text-ink mb-1">No signals yet</p>
-                  <p className="text-xs text-ink-mute max-w-[200px] mx-auto leading-normal">{scope === "campus" ? "Be the first to broadcast from your campus" : "No one is broadcasting right now"}</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {signals.map((sig: any) => {
-                    const p = sig.profiles ?? sig;
-                    const isCampus = p.college === profile?.college || (demo && ["IIIT Hyderabad"].includes(p.college));
-                    const intentInfo = INTENTS.find(i => i.id === sig.intent) || INTENTS[0];
-                    const CardIcon = intentInfo.icon;
-                    const responders = sig.signal_raises || [];
-                    const hasRaised = responders.some((r: any) => r.user_id === (user?.id || "me"));
-                    const isBookmarked = bookmarkedSignals.has(sig.id);
-                    const countdown = sig.expires_at ? getCountdown(sig.expires_at) : null;
-
-                    return (
-                      <div key={sig.id} onClick={() => setViewProfile(sig)}
-                        className={`rounded-3xl border p-5 cursor-pointer transition-all active:scale-[0.98] ${
-                          isCampus
-                            ? "bg-brand-500/[0.04] border-brand-500/15 hover:border-brand-500/25"
-                            : "bg-[#0c0c0e]/90 border-white/[0.07] hover:border-white/12"
-                        }`}>
                         
-                        {/* Top Metadata & Countdown */}
-                        <div className="flex items-start justify-between mb-3.5">
-                          <div className="flex items-center gap-3">
-                            <div className="relative shrink-0">
-                              <Avatar person={p} size={10} />
-                              <div className="absolute inset-0 rounded-full border-2" style={{ borderColor: intentInfo.color }} />
-                              {isCampus && (
-                                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-brand-500 rounded-full border border-black flex items-center justify-center">
-                                  <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
-                                </span>
-                              )}
-                            </div>
-                            
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-bold text-ink text-sm truncate">{p.name}</span>
-                                {p.verified && (
-                                  <span className="inline-flex items-center justify-center w-3.5 h-3.5 bg-brand-500 text-white rounded-full text-[7px]">
-                                    <CheckIcon className="w-2.5 h-2.5" />
-                                  </span>
-                                )}
-                                {scope === "all" && p.college && (
-                                  <span className="text-[9px] font-semibold bg-white/[0.06] text-ink-soft px-2 py-0.5 rounded-full border border-white/[0.05] truncate max-w-[120px]">
-                                    {p.college}
-                                  </span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-ink text-sm truncate">{p.name}</span>
+                            {p.verified && (
+                              <span className="inline-flex items-center justify-center w-3.5 h-3.5 bg-brand-500 text-white rounded-full text-[7px]">
+                                <CheckIcon className="w-2.5 h-2.5" />
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-ink-mute mt-0.5 truncate">
+                            {p.course} · Y{p.year} {scope === "campus" ? "" : `· ${p.college}`}
+                          </p>
+                        </div>
+                      </div>
+
+                      {countdown && (
+                        <div className="flex items-center gap-1 text-ink-mute text-[10px] font-medium select-none bg-white/[0.04] px-2 py-0.5 rounded-lg border border-white/[0.05]">
+                          <ClockIcon className="w-3.5 h-3.5 opacity-60" />
+                          <span>{countdown}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Intent chip & Signal Note */}
+                    <div className="mb-4">
+                      <div className="mb-2 select-none flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 border" style={{ borderColor: `${intentInfo.color}30`, color: intentInfo.color, backgroundColor: `${intentInfo.color}10` }}>
+                          <CardIcon className="w-3 h-3" />
+                          <span>{intentInfo.label}</span>
+                        </span>
+                        {scope === "all" && p.college && (
+                          <span className="text-[9px] font-bold bg-white/[0.06] text-ink-soft px-2 py-0.5 rounded-full border border-white/[0.05] inline-flex items-center gap-1 truncate max-w-[150px]">
+                            <BuildingIcon className="w-2.5 h-2.5 opacity-60" />
+                            <span>{p.college}</span>
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm font-semibold text-ink leading-relaxed break-words">
+                        "{sig.content}"
+                      </p>
+                    </div>
+
+                    {/* Social Proof Responders */}
+                    {responders.length > 0 && (
+                      <div className="flex items-center gap-2 mb-4 select-none bg-white/[0.02] border border-white/[0.05] p-2 rounded-2xl">
+                        <div className="flex -space-x-1.5">
+                          {responders.slice(0, 3).map((r: any, idx: number) => {
+                            const initials = (r.profiles?.name || "?").trim().split(/\s+/).map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+                            return (
+                              <div key={idx} className="w-5 h-5 rounded-full border border-[#141416] overflow-hidden bg-brand-500/20 flex items-center justify-center text-[7px] font-bold text-white shrink-0">
+                                {r.profiles?.avatar_url ? (
+                                  <img src={r.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  <span>{initials}</span>
                                 )}
                               </div>
-                              <p className="text-[11px] text-ink-mute mt-0.5 truncate">
-                                {p.course} · Y{p.year} {scope === "campus" ? "" : `· ${p.college}`}
-                              </p>
-                            </div>
-                          </div>
+                            );
+                          })}
+                        </div>
+                        <p className="text-[10px] text-brand-300 font-medium">
+                          {responders.length === 1 ? `${responders[0].profiles?.name || "Someone"} is in` :
+                           `${responders[0].profiles?.name || "Someone"} +${responders.length - 1} are in`}
+                        </p>
+                      </div>
+                    )}
 
-                          {countdown && (
-                            <div className="flex items-center gap-1 text-ink-mute text-[10px] font-medium select-none bg-white/[0.04] px-2 py-0.5 rounded-lg border border-white/[0.05]">
-                              <ClockIcon className="w-3.5 h-3.5 opacity-60" />
-                              <span>{countdown}</span>
-                            </div>
+                    {/* Actions Row */}
+                    <div onClick={e => e.stopPropagation()} className="flex items-center gap-2.5 mt-1 select-none">
+                      <button
+                        onClick={async () => {
+                          const seedMsg = `✋ raised a hand on signal: "${sig.content}"`;
+                          if (!hasRaised) {
+                            const myRaise = {
+                              user_id: user?.id || "me",
+                              profiles: {
+                                name: profile?.name || "Me",
+                                avatar_url: profile?.avatar_url || null
+                              }
+                            };
+                            setSignals(prev => prev.map(s => {
+                              if (s.id === sig.id) {
+                                return { ...s, signal_raises: [...(s.signal_raises || []), myRaise] };
+                              }
+                              return s;
+                            }));
+                            
+                            if (!demo && user) {
+                              await supabase.from("signal_raises").insert({ signal_id: sig.id, user_id: user.id });
+                            }
+                          }
+                          openDm(p, seedMsg, sig.id);
+                        }}
+                        className={`flex-1 h-10 rounded-xl text-xs font-bold transition-all duration-200 active:scale-95 flex items-center justify-center gap-1.5 ${
+                          hasRaised
+                            ? "bg-white/[0.08] text-brand-300 border border-brand-500/30"
+                            : "bg-brand-500 hover:bg-brand-600 text-white shadow-md shadow-brand-500/10"
+                        }`}
+                      >
+                        <HandRaiseIcon className="w-4 h-4" />
+                        <span>{getPrimaryLabel(sig.intent, hasRaised)}</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleShare(sig)}
+                        className="h-10 px-3.5 rounded-xl bg-white/[0.04] text-ink-soft hover:text-white hover:bg-white/10 active:scale-95 transition-all flex items-center justify-center border border-white/[0.06]"
+                        title="Share"
+                      >
+                        <ShareIcon className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        onClick={() => toggleBookmark(sig.id)}
+                        className={`h-10 px-3.5 rounded-xl transition-all active:scale-95 flex items-center justify-center border ${
+                          isBookmarked
+                            ? "bg-brand-500/10 text-brand-400 border-brand-500/30"
+                            : "bg-white/[0.04] text-ink-soft hover:text-white hover:bg-white/10 border-white/[0.06]"
+                        }`}
+                        title="Save"
+                      >
+                        <BookmarkIcon className={`w-4 h-4 ${isBookmarked ? "fill-brand-400" : ""}`} />
+                      </button>
+                    </div>
+
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Share bottom sheet ── */}
+      {shareSignal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity animate-fade-in flex items-end">
+          <div className="absolute inset-0" onClick={() => setShareSignal(null)} />
+          <div className="relative w-full bg-[#0c0c0e] rounded-t-[32px] border-t border-white/[0.08] p-5 pb-8 max-h-[80vh] overflow-y-auto z-10 animate-slide-up flex flex-col">
+            <div className="flex items-center justify-between mb-4 border-b border-white/[0.05] pb-3 select-none">
+              <h2 className="font-bold text-base text-ink flex items-center gap-2">
+                <ShareIcon className="w-5 h-5 text-brand-400" />
+                <span>Share Signal</span>
+              </h2>
+              <button
+                onClick={() => setShareSignal(null)}
+                className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-95 transition flex items-center justify-center text-ink-soft hover:text-white"
+              >
+                <XIcon className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Search Input */}
+            <div className="relative mb-4">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40">
+                <SearchIcon className="w-4 h-4" />
+              </span>
+              <input
+                type="text"
+                placeholder="Search friends..."
+                value={shareSearch}
+                onChange={e => setShareSearch(e.target.value)}
+                className="input w-full pl-10 pr-4 py-2.5 text-xs rounded-xl bg-[#161618] border border-white/[0.08] text-white focus:outline-none focus:border-brand-500/50 transition-colors"
+              />
+            </div>
+
+            {/* Friends list */}
+            <div className="flex-1 overflow-y-auto max-h-[40vh] space-y-2 mb-4 pr-1 no-scrollbar">
+              {shareFriendsLoading ? (
+                <div className="text-center py-6 text-xs text-ink-mute">Loading friends...</div>
+              ) : filteredFriends.length === 0 ? (
+                <div className="text-center py-6 text-xs text-ink-mute">No friends found</div>
+              ) : (
+                filteredFriends.map((friend: any) => {
+                  const initials = (friend.name || "?").trim().split(/\s+/).map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+                  return (
+                    <div
+                      key={friend.id}
+                      onClick={() => handleSelectFriend(friend)}
+                      className="p-3 bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.05] hover:border-white/10 rounded-2xl flex items-center justify-between gap-3 cursor-pointer active:scale-[0.98] transition-all"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden border border-white/[0.08]">
+                          {friend.avatar_url ? (
+                            <img src={friend.avatar_url} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <span>{initials}</span>
                           )}
                         </div>
-
-                        {/* Intent chip & Signal Note */}
-                        <div className="mb-4">
-                          <div className="mb-2 select-none">
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 border" style={{ borderColor: `${intentInfo.color}30`, color: intentInfo.color, backgroundColor: `${intentInfo.color}10` }}>
-                              <CardIcon className="w-3 h-3" />
-                              <span>{intentInfo.label}</span>
-                            </span>
-                          </div>
-                          <p className="text-sm font-semibold text-ink leading-relaxed break-words">
-                            "{sig.content}"
-                          </p>
-                        </div>
-
-                        {/* Social Proof Responders */}
-                        {responders.length > 0 && (
-                          <div className="flex items-center gap-2 mb-4 select-none bg-white/[0.02] border border-white/[0.05] p-2 rounded-2xl">
-                            <div className="flex -space-x-1.5">
-                              {responders.slice(0, 3).map((r: any, idx: number) => {
-                                const initials = (r.profiles?.name || "?").trim().split(/\s+/).map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
-                                return (
-                                  <div key={idx} className="w-5 h-5 rounded-full border border-[#141416] overflow-hidden bg-brand-500/20 flex items-center justify-center text-[7px] font-bold text-white shrink-0">
-                                    {r.profiles?.avatar_url ? (
-                                      <img src={r.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
-                                    ) : (
-                                      <span>{initials}</span>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            <p className="text-[10px] text-brand-300 font-medium">
-                              {responders.length === 1 ? `${responders[0].profiles?.name || "Someone"} is in` :
-                               `${responders[0].profiles?.name || "Someone"} +${responders.length - 1} are in`}
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Actions Row */}
-                        <div onClick={e => e.stopPropagation()} className="flex items-center gap-2.5 mt-1 select-none">
-                          <button
-                            onClick={async () => {
-                              const seedMsg = `✋ raised a hand on signal: "${sig.content}"`;
-                              if (!hasRaised) {
-                                const myRaise = {
-                                  user_id: user?.id || "me",
-                                  profiles: {
-                                    name: profile?.name || "Me",
-                                    avatar_url: profile?.avatar_url || null
-                                  }
-                                };
-                                setSignals(prev => prev.map(s => {
-                                  if (s.id === sig.id) {
-                                    return { ...s, signal_raises: [...(s.signal_raises || []), myRaise] };
-                                  }
-                                  return s;
-                                }));
-                                
-                                if (!demo && user) {
-                                  await supabase.from("signal_raises").insert({ signal_id: sig.id, user_id: user.id });
-                                }
-                              }
-                              openDm(p, seedMsg, sig.id);
-                            }}
-                            className={`flex-1 h-10 rounded-xl text-xs font-bold transition-all duration-200 active:scale-95 flex items-center justify-center gap-1.5 ${
-                              hasRaised
-                                ? "bg-white/[0.08] text-brand-300 border border-brand-500/30"
-                                : "bg-brand-500 hover:bg-brand-600 text-white shadow-md shadow-brand-500/10"
-                            }`}
-                          >
-                            <HandRaiseIcon className="w-4 h-4" />
-                            <span>{getPrimaryLabel(sig.intent, hasRaised)}</span>
-                          </button>
-
-                          <button
-                            onClick={() => handleShare(sig)}
-                            className="h-10 px-3.5 rounded-xl bg-white/[0.04] text-ink-soft hover:text-white hover:bg-white/10 active:scale-95 transition-all flex items-center justify-center border border-white/[0.06]"
-                            title="Share"
-                          >
-                            <ShareIcon className="w-4 h-4" />
-                          </button>
-
-                          <button
-                            onClick={() => toggleBookmark(sig.id)}
-                            className={`h-10 px-3.5 rounded-xl transition-all active:scale-95 flex items-center justify-center border ${
-                              isBookmarked
-                                ? "bg-brand-500/10 text-brand-400 border-brand-500/30"
-                                : "bg-white/[0.04] text-ink-soft hover:text-white hover:bg-white/10 border-white/[0.06]"
-                            }`}
-                            title="Save"
-                          >
-                            <BookmarkIcon className={`w-4 h-4 ${isBookmarked ? "fill-brand-400" : ""}`} />
-                          </button>
-                        </div>
-
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── Requests tab ── */}
-          {subTab === "requests" && (
-            <div className="px-5">
-              {reqLoading ? (
-                <div className="space-y-3">{[...Array(2)].map((_, i) => <div key={i} className="h-16 rounded-3xl bg-white/[0.04] animate-pulse" />)}</div>
-              ) : requests.length === 0 ? (
-                <div className="text-center py-20 flex flex-col items-center select-none opacity-60">
-                  <div className="w-12 h-12 bg-white/[0.04] border border-white/[0.08] rounded-full flex items-center justify-center mb-4">
-                    <CheckIcon className="w-6 h-6 text-brand-300" />
-                  </div>
-                  <p className="text-xs font-bold text-ink">No pending requests</p>
-                  <p className="text-[10px] text-ink-mute mt-1">You are all caught up!</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {requests.map((req: any) => {
-                    const p = req.profiles;
-                    return (
-                      <div key={req.follower_id} className="bg-[#0c0c0e]/90 border border-white/[0.07] rounded-3xl p-5 flex items-center gap-3.5">
-                        <Avatar person={p} size={10} />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-ink text-sm truncate">{p?.name}</p>
-                          <p className="text-[11px] text-ink-mute mt-0.5">{p?.username ? `@${p.username}` : p?.college}</p>
-                        </div>
-                        <div className="flex gap-2.5 shrink-0 select-none">
-                          <button onClick={() => acceptReq(req.follower_id)} className="h-9 px-4 rounded-xl bg-brand-500 hover:bg-brand-600 active:scale-95 transition text-white text-xs font-bold flex items-center justify-center">Accept</button>
-                          <button onClick={() => declineReq(req.follower_id)} className="w-9 h-9 rounded-xl bg-white/[0.06] hover:bg-white/10 active:scale-95 transition text-ink-soft hover:text-red-400 border border-white/[0.08] flex items-center justify-center shrink-0">
-                            <XIcon className="w-4 h-4" />
-                          </button>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-ink truncate">{friend.name}</p>
+                          <p className="text-[10px] text-ink-soft truncate font-semibold">@{friend.username || "student"}</p>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
+                      <span className="text-[10px] text-brand-400 font-bold bg-brand-500/[0.08] px-2 py-0.5 rounded border border-brand-500/10 shrink-0">Send</span>
+                    </div>
+                  );
+                })
               )}
             </div>
-          )}
-        </>
+
+            {/* Fallback Native / Clipboard Share */}
+            <button
+              onClick={() => {
+                if (navigator.share) {
+                  navigator.share({
+                    title: `Footfall Signal from ${shareSignal.profiles?.name || "Student"}`,
+                    text: `Check out this signal on Footfall: "${shareSignal.content}"`,
+                    url: window.location.href
+                  }).catch(() => {});
+                } else {
+                  navigator.clipboard.writeText(`Check out this signal on Footfall: "${shareSignal.content}"`);
+                  setShareSignal(null);
+                  showToast("Link copied");
+                }
+              }}
+              className="w-full h-11 rounded-2xl bg-white/[0.04] hover:bg-white/10 active:scale-95 transition-all text-xs font-bold border border-white/[0.06] flex items-center justify-center gap-2"
+            >
+              <span>More Options / Copy Link</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Toast ── */}
+      {toast && (
+        <div className="fixed inset-x-0 bottom-24 z-[60] flex justify-center px-4 pointer-events-none animate-fade-up">
+          <div className="bg-[#1e1e1e] border border-white/10 text-ink text-xs font-semibold rounded-full px-4 py-2.5 shadow-lg flex items-center gap-2">
+            <CheckIcon className="w-4 h-4 text-brand-400" />
+            {toast}
+          </div>
+        </div>
       )}
 
       {/* ── Broadcast Composer Sheet (Bottom Sheet) ── */}

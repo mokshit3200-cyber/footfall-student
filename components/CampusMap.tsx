@@ -502,7 +502,7 @@ export default function CampusMap() {
       {/* 3. WALKING TIMES VIEW */}
       {activeTab === "times" && (
         <div className="space-y-4">
-          <div className="bg-brand-500/10 border border-brand-500/20 rounded-2xl p-4.5">
+          <div className="bg-brand-500/10 border border-brand-500/20 rounded-2xl p-[18px]">
             <h4 className="text-xs font-black text-brand-200 uppercase tracking-wider flex items-center gap-1">
               <span>⏱️</span> Campus Transit Matrix
             </h4>

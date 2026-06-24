@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { useStore } from "./store";
 import { useAuth } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
 import { dbSaveAttendance, dbSaveTimetableSlot, dbDeleteTimetableSlot, dbSaveTimetableBulk } from "@/lib/dbActions";
 import { isDemo } from "@/lib/config";
 import {
@@ -67,6 +68,56 @@ export default function Home({ onSwitchTab }: { onSwitchTab?: (tab: any) => void
   const [pullStart, setPullStart] = useState<number | null>(null);
   const [pullOffset, setPullOffset] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
+
+  const demo = isDemo();
+  const [followRequests, setFollowRequests] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (demo) {
+      setFollowRequests([
+        { follower_id:"dr1", profiles:{ id:"dr1", name:"Vikram Singh",  username:"vikrams", college:"IIT Hyderabad",  avatar_url:null }},
+        { follower_id:"dr2", profiles:{ id:"dr2", name:"Ananya Reddy",  username:"ananya_r",college:"KL University",   avatar_url:null }},
+      ]);
+      return;
+    }
+    if (!user) return;
+    supabase
+      .from("follows")
+      .select("id, status, follower_id, follower:profiles!follows_follower_id_fkey(id, name, username, avatar_url, college, course, year)")
+      .eq("following_id", user.id)
+      .eq("status", "pending")
+      .then(({ data }) => {
+        const mapped = (data ?? []).map((item: any) => ({
+          follower_id: item.follower_id,
+          profiles: item.follower || { id: item.follower_id, name: "Student", username: "student", college: "Campus", avatar_url: null }
+        }));
+        setFollowRequests(mapped);
+      });
+  }, [user, demo]);
+
+  async function handleAcceptFollow(followerId: string) {
+    playTick();
+    if (!demo && user) {
+      await supabase
+        .from("follows")
+        .update({ status: "accepted" })
+        .eq("follower_id", followerId)
+        .eq("following_id", user.id);
+    }
+    setFollowRequests((prev) => prev.filter((r) => r.follower_id !== followerId));
+  }
+
+  async function handleDeclineFollow(followerId: string) {
+    playTick();
+    if (!demo && user) {
+      await supabase
+        .from("follows")
+        .delete()
+        .eq("follower_id", followerId)
+        .eq("following_id", user.id);
+    }
+    setFollowRequests((prev) => prev.filter((r) => r.follower_id !== followerId));
+  }
 
   function handleTouchStart(e: React.TouchEvent) {
     if (window.scrollY === 0 && !isSyncing) {
@@ -278,8 +329,9 @@ export default function Home({ onSwitchTab }: { onSwitchTab?: (tab: any) => void
   const sc = statusColor(overall.status);
 
   const unreadCount = useMemo(() => {
-    return (data.notifications || []).filter((n) => !n.read).length;
-  }, [data.notifications]);
+    const notifsCount = (data.notifications || []).filter((n) => !n.read).length;
+    return notifsCount + followRequests.length;
+  }, [data.notifications, followRequests]);
 
   return (
     <div 
@@ -677,6 +729,9 @@ export default function Home({ onSwitchTab }: { onSwitchTab?: (tab: any) => void
         onClose={() => setSheet(null)}
         onSwitchTab={onSwitchTab}
         setHomeSheet={setSheet}
+        followRequests={followRequests}
+        onAcceptFollow={handleAcceptFollow}
+        onDeclineFollow={handleDeclineFollow}
       />
 
       {/* attendance detail overlay */}
@@ -834,11 +889,17 @@ function NotificationsSheet({
   onClose,
   onSwitchTab,
   setHomeSheet,
+  followRequests = [],
+  onAcceptFollow,
+  onDeclineFollow,
 }: {
   open: boolean;
   onClose: () => void;
   onSwitchTab?: (tab: any) => void;
   setHomeSheet: (s: SheetKind) => void;
+  followRequests?: any[];
+  onAcceptFollow?: (followerId: string) => void;
+  onDeclineFollow?: (followerId: string) => void;
 }) {
   const { data, update } = useStore();
   const list = useMemo(() => {
@@ -887,6 +948,47 @@ function NotificationsSheet({
 
   return (
     <Sheet open={open} onClose={onClose} title="Notifications">
+      {/* Follow Requests */}
+      {followRequests.length > 0 && (
+        <div className="mb-5 space-y-2 border-b border-white/[0.08] pb-4">
+          <h3 className="text-[10px] font-bold text-brand-400 uppercase tracking-wider block mb-2 px-1">Follow Requests</h3>
+          {followRequests.map((req) => {
+            const initials = (req.profiles.name || "?").trim().split(/\s+/).map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+            return (
+              <div key={req.follower_id} className="p-3 bg-brand-500/[0.04] border border-brand-500/20 rounded-2xl flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden border border-white/[0.08]">
+                    {req.profiles.avatar_url ? (
+                      <img src={req.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <span>{initials}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-ink truncate">{req.profiles.name}</p>
+                    <p className="text-[10px] text-ink-soft truncate font-semibold">requested to follow you</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0 select-none">
+                  <button
+                    onClick={() => onAcceptFollow?.(req.follower_id)}
+                    className="h-8 px-3 rounded-lg bg-brand-500 hover:bg-brand-600 active:scale-95 transition text-white text-[11px] font-bold flex items-center justify-center"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={() => onDeclineFollow?.(req.follower_id)}
+                    className="h-8 px-3 rounded-lg bg-white/[0.06] hover:bg-white/10 active:scale-95 transition text-ink-soft hover:text-red-400 border border-white/[0.08] flex items-center justify-center text-[11px] font-bold"
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <div className="flex justify-between items-center mb-4">
         <span className="text-xs text-ink-mute">
           {list.filter((n) => !n.read).length} unread
