@@ -1038,7 +1038,16 @@ export default function Messages({
           messages={messages}
           onBack={() => setChatInfoOpen(false)}
           onSwitchTab={onSwitchTab}
-          onCreateGroup={() => { setChatInfoOpen(false); /* open compose */ }}
+          onViewProfile={(p) => {
+            setChatInfoOpen(false);
+            setProfileUser(p);
+            setProfileSheetOpen(true);
+          }}
+          onCreateGroup={() => {
+            setChatInfoOpen(false);
+            if (activePeer) setSelectedPeople([activePeer]);
+            setComposeOpen(true);
+          }}
         />
       )}
 
@@ -1488,6 +1497,7 @@ function ChatInfoScreen({
   messages,
   onBack,
   onSwitchTab,
+  onViewProfile,
   onCreateGroup,
 }: {
   peer: any;
@@ -1495,6 +1505,7 @@ function ChatInfoScreen({
   messages: Message[];
   onBack: () => void;
   onSwitchTab?: (tab: string) => void;
+  onViewProfile: (peer: any) => void;
   onCreateGroup: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<"media" | "links" | "files">("media");
@@ -1579,9 +1590,9 @@ function ChatInfoScreen({
         </div>
 
         {/* 4 Action icon buttons row */}
-        <div className="flex justify-around px-6 py-2 border-y border-white/[0.06] mb-2">
+        <div className="flex justify-around px-2 py-2 border-y border-white/[0.06] mb-2">
           {[
-            { icon: "👤", label: "Profile", action: () => onSwitchTab?.("profile") },
+            { icon: "👤", label: "Profile", action: () => { if (peer) onViewProfile(peer); } },
             { icon: "🔍", label: "Search", action: () => {} },
             { icon: muted ? "🔕" : "🔔", label: muted ? "Unmute" : "Mute", action: () => setMuted(v => !v) },
             { icon: "⋯", label: "Options", action: () => {} },
@@ -1589,7 +1600,7 @@ function ChatInfoScreen({
             <button
               key={label}
               onClick={action}
-              className="flex flex-col items-center gap-1.5 py-3 px-4 rounded-2xl hover:bg-white/[0.04] active:scale-95 transition select-none"
+              className="flex-1 flex flex-col items-center gap-1.5 py-3 rounded-2xl hover:bg-white/[0.04] active:scale-95 transition select-none"
             >
               <span className="text-xl leading-none">{icon}</span>
               <span className="text-[10px] font-semibold text-ink-mute">{label}</span>
