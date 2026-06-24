@@ -4,7 +4,37 @@ import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { isDemo } from "@/lib/config";
-import { CheckIcon } from "./icons";
+import {
+  CheckIcon,
+  EditIcon,
+  SignalIcon,
+  UserIcon,
+  SearchIcon,
+  BellOffIcon,
+  BellIcon,
+  LockIcon,
+  PaletteIcon,
+  ClockIcon,
+  SmileIcon,
+  UsersIcon,
+  ImageIcon,
+  LinkIcon,
+  FileIcon,
+  BanIcon,
+  AlertIcon,
+  ShieldIcon,
+  XIcon,
+  ArrowLeftIcon,
+  ChatIcon,
+  DotsIcon,
+  SendIcon,
+  PinIcon,
+  ChevronRight,
+  PlusIcon,
+  PaperclipIcon,
+  TrashIcon,
+  MailIcon
+} from "./icons";
 
 // ── TYPES & INTERFACES ────────────────────────────────────────────────────────
 interface Peer {
@@ -251,9 +281,9 @@ function SignalEditorSheet({
           <h2 className="font-bold text-base text-ink">Your signal</h2>
           <button
             onClick={onClose}
-            className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white active:scale-90 transition"
+            className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-95 transition flex items-center justify-center text-white"
           >
-            ✕
+            <XIcon className="w-4 h-4" />
           </button>
         </div>
 
@@ -292,7 +322,7 @@ function SignalEditorSheet({
               >
                 <span className={`w-3 h-3 rounded-full ${s.dot} shrink-0`} style={{ boxShadow: active ? `0 0 0 3px ${s.ring}33` : undefined }} />
                 <span className={`text-xs font-semibold ${active ? "text-ink" : "text-ink-soft"}`}>{s.label}</span>
-                {active && <span className="ml-auto text-brand-300 text-xs font-bold">✓</span>}
+                {active && <CheckIcon className="w-4 h-4 ml-auto text-brand-300 shrink-0" />}
               </button>
             );
           })}
@@ -820,9 +850,7 @@ export default function Messages({
               onClick={() => setComposeOpen(true)}
               className="w-9 h-9 rounded-full bg-white/[0.05] hover:bg-white/10 flex items-center justify-center transition active:scale-95 shrink-0"
             >
-              <svg className="w-5 h-5 text-ink" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-              </svg>
+              <EditIcon className="w-5 h-5 text-ink" />
             </button>
           </div>
 
@@ -850,7 +878,9 @@ export default function Messages({
                         </span>
                       )}
                     </div>
-                    <span className="absolute bottom-0 right-0 w-4 h-4 bg-brand-500 rounded-full border-2 border-black flex items-center justify-center text-[10px] text-white font-extrabold">+</span>
+                    <span className="absolute bottom-0 right-0 w-4 h-4 bg-brand-500 rounded-full border-2 border-black flex items-center justify-center text-white">
+                      <PlusIcon className="w-2.5 h-2.5" />
+                    </span>
                   </button>
                   {/* Status label */}
                   <span className={`text-[10px] font-semibold text-center leading-tight ${meStatus ? meStatus.text : "text-ink-mute"}`}>
@@ -907,9 +937,7 @@ export default function Messages({
           {/* Search bar */}
           <div className="relative mb-5 mt-2">
             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40">
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
-              </svg>
+              <SearchIcon className="w-4 h-4" />
             </span>
             <input
               type="text"
@@ -928,9 +956,7 @@ export default function Messages({
           ) : filteredConvos.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center flex-grow opacity-60">
               <div className="w-12 h-12 bg-white/[0.04] border border-white/[0.08] rounded-full flex items-center justify-center mb-3">
-                <svg className="w-6 h-6 text-brand-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" />
-                </svg>
+                <ChatIcon className="w-6 h-6 text-brand-300" />
               </div>
               <h3 className="font-bold text-sm text-ink mb-1">Your Messages</h3>
               <p className="text-xs text-ink-mute mb-4 max-w-[200px]">Send a message to a friend on campus.</p>
@@ -1049,7 +1075,7 @@ export default function Messages({
                 }}
                 className="w-9 h-9 rounded-full bg-white/[0.05] hover:bg-white/10 active:scale-90 transition flex items-center justify-center shrink-0 text-white"
               >
-                ←
+                <ArrowLeftIcon className="w-5 h-5" />
               </button>
 
               <div
@@ -1106,7 +1132,7 @@ export default function Messages({
                 onClick={() => { if (activeDmId) setChatInfoOpen(true); }}
                 className="w-9 h-9 rounded-full bg-white/[0.04] hover:bg-white/10 active:scale-95 transition flex items-center justify-center"
               >
-                ⋮
+                <DotsIcon className="w-5 h-5 text-ink-soft hover:text-ink transition-colors" />
               </button>
             </div>
           </div>
@@ -1119,7 +1145,7 @@ export default function Messages({
             {disappearingMode !== "off" && (
               <div className="w-full flex justify-center py-2 shrink-0">
                 <span className="bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1.5 animate-fade-in select-none">
-                  <span>⏰</span>
+                  <ClockIcon className="w-3.5 h-3.5" />
                   <span>Disappearing messages: {disappearingMode === "24h" ? "24 hours" : disappearingMode === "7d" ? "7 days" : "90 days"}</span>
                 </span>
               </div>
@@ -1132,7 +1158,7 @@ export default function Messages({
               </div>
             ) : messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center opacity-60">
-                <span className="text-3xl mb-2">👋</span>
+                <ChatIcon className="w-12 h-12 text-white/10 mb-3" />
                 <p className="text-xs font-bold text-ink">No messages yet</p>
                 <p className="text-[10px] text-ink-mute mt-1">Start chatting by typing a message below.</p>
               </div>
@@ -1218,9 +1244,9 @@ export default function Messages({
               </div>
               <button
                 onClick={() => setReplyToMsg(null)}
-                className="w-5 h-5 bg-white/10 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 active:scale-90 transition shrink-0"
               >
-                ✕
+                <XIcon className="w-3 h-3" />
               </button>
             </div>
           )}
@@ -1230,9 +1256,7 @@ export default function Messages({
             <div className="flex gap-2.5 items-center">
               {/* Attachment */}
               <button className="w-9 h-9 rounded-full bg-white/[0.04] hover:bg-white/10 flex items-center justify-center shrink-0 text-ink-soft active:scale-95 transition">
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                </svg>
+                <PaperclipIcon className="w-5 h-5" />
               </button>
 
               {/* Text bar */}
@@ -1254,11 +1278,9 @@ export default function Messages({
                 {msgInput.trim() && (
                   <button
                     onClick={handleSend}
-                    className="w-7 h-7 rounded-full bg-brand-500 hover:bg-brand-600 flex items-center justify-center shrink-0 active:scale-95 transition"
+                    className="w-8 h-8 rounded-full bg-brand-500 hover:bg-brand-600 flex items-center justify-center shrink-0 active:scale-95 transition text-white"
                   >
-                    <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
-                    </svg>
+                    <SendIcon className="w-4 h-4" />
                   </button>
                 )}
               </div>
@@ -1348,9 +1370,9 @@ export default function Messages({
               <h2 className="font-bold text-base text-ink">New Message</h2>
               <button
                 onClick={() => setComposeOpen(false)}
-                className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white"
+                className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-95 transition flex items-center justify-center text-white"
               >
-                ✕
+                <XIcon className="w-4 h-4" />
               </button>
             </div>
 
@@ -1363,9 +1385,9 @@ export default function Messages({
                     <button
                       type="button"
                       onClick={() => setSelectedPeople(prev => prev.filter(x => x.id !== p.id))}
-                      className="text-[9px] hover:text-white font-bold"
+                      className="hover:text-white transition flex items-center justify-center"
                     >
-                      ✕
+                      <XIcon className="w-2.5 h-2.5" />
                     </button>
                   </span>
                 ))}
@@ -1412,10 +1434,10 @@ export default function Messages({
                     </div>
                     
                     {/* Checkbox */}
-                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition ${
+                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition shrink-0 ${
                       checked ? "bg-brand-500 border-brand-500 text-white" : "border-white/20"
                     }`}>
-                      {checked && <span className="text-[10px] font-bold">✓</span>}
+                      {checked && <CheckIcon className="w-3.5 h-3.5 text-white" />}
                     </div>
                   </div>
                 );
@@ -1464,41 +1486,45 @@ export default function Messages({
           <div className="absolute bottom-0 inset-x-0 bg-[#0c0c0e] rounded-t-[32px] border-t border-white/[0.08] p-5 max-h-[85vh] z-10">
             <div className="flex items-center justify-between mb-4 border-b border-white/[0.05] pb-3">
               <h2 className="font-bold text-base text-ink">Options</h2>
-<button
+              <button
                 onClick={() => setActionsConvo(null)}
-                className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white"
+                className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-95 transition flex items-center justify-center text-white"
               >
-                ✕
+                <XIcon className="w-4 h-4" />
               </button>
             </div>
             
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <button
                 onClick={() => setActionsConvo(null)}
-                className="w-full text-left py-3.5 px-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-sm font-bold block"
+                className="w-full inline-flex items-center gap-3 py-3.5 px-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] active:scale-[0.98] transition text-sm font-bold text-ink text-left"
               >
-                📌 Pin Conversation
+                <PinIcon className="w-4 h-4 text-ink-soft" />
+                Pin Conversation
               </button>
               <button
                 onClick={() => setActionsConvo(null)}
-                className="w-full text-left py-3.5 px-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-sm font-bold block"
+                className="w-full inline-flex items-center gap-3 py-3.5 px-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] active:scale-[0.98] transition text-sm font-bold text-ink text-left"
               >
-                🔕 Mute Notifications
+                <BellOffIcon className="w-4 h-4 text-ink-soft" />
+                Mute Notifications
               </button>
               <button
                 onClick={() => setActionsConvo(null)}
-                className="w-full text-left py-3.5 px-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-sm font-bold block"
+                className="w-full inline-flex items-center gap-3 py-3.5 px-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] active:scale-[0.98] transition text-sm font-bold text-ink text-left"
               >
-                ✉️ Mark as Unread
+                <MailIcon className="w-4 h-4 text-ink-soft" />
+                Mark as Unread
               </button>
               <button
                 onClick={() => {
                   setConvos(prev => prev.filter(c => c.group_id !== actionsConvo.group_id));
                   setActionsConvo(null);
                 }}
-                className="w-full text-left py-3.5 px-4 rounded-xl hover:bg-red-500/10 active:bg-red-500/20 transition text-sm font-bold text-red-400 block"
+                className="w-full inline-flex items-center gap-3 py-3.5 px-4 rounded-xl hover:bg-red-500/10 active:bg-red-500/20 active:scale-[0.98] transition text-sm font-bold text-red-400 text-left"
               >
-                🗑️ Delete Conversation
+                <TrashIcon className="w-4 h-4 text-red-400" />
+                Delete Conversation
               </button>
             </div>
           </div>
@@ -1639,9 +1665,9 @@ function SwipeMessageBubble({
           ))}
           <button
             onClick={() => setShowReactionsMenu(false)}
-            className="text-xs font-bold text-white/50 pl-1.5 hover:text-white"
+            className="flex items-center justify-center hover:text-white transition shrink-0 pl-1"
           >
-            ✕
+            <XIcon className="w-3 h-3 text-white/50 hover:text-white" />
           </button>
         </div>
       )}
@@ -1689,7 +1715,7 @@ function SwipeMessageBubble({
         {/* Timestamp */}
         <span className="text-[9.5px] text-white/50 block mt-1 text-right select-none flex items-center justify-end gap-1">
           {disappearingMode && disappearingMode !== "off" && (
-            <span className="text-[8.5px] opacity-95 shrink-0" title="Disappearing message">⏳</span>
+            <ClockIcon className="w-3 h-3 opacity-60 text-white shrink-0" />
           )}
           <span>
             {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -1819,7 +1845,7 @@ function ChatInfoScreen({
           onClick={onBack}
           className="w-9 h-9 rounded-full bg-white/[0.05] hover:bg-white/10 active:scale-90 transition flex items-center justify-center shrink-0 text-white"
         >
-          ←
+          <ArrowLeftIcon className="w-5 h-5" />
         </button>
         <span className="font-bold text-sm text-ink">Chat Info</span>
       </div>
@@ -1865,7 +1891,7 @@ function ChatInfoScreen({
           )}
           {!isGroup && peer?.signal && (
             <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-500/10 border border-brand-500/20 text-[11px] text-brand-300 font-semibold">
-              <span>📡</span>
+              <SignalIcon className="w-3.5 h-3.5 text-brand-300" />
               <span>{peer.signal}</span>
             </div>
           )}
@@ -1874,17 +1900,17 @@ function ChatInfoScreen({
         {/* 4 Action icon buttons row */}
         <div className="flex justify-around px-2 py-2 border-y border-white/[0.06] mb-2 select-none">
           {[
-            { icon: "👤", label: "Profile", action: () => { if (peer) onViewProfile(peer); } },
-            { icon: "🔍", label: "Search", action: () => showToast("Search features coming soon") },
-            { icon: muted ? "🔕" : "🔔", label: muted ? "Unmute" : "Mute", action: () => { setMuted(v => !v); showToast(muted ? "Unmuted notifications" : "Muted notifications"); } },
-            { icon: "🔒", label: "Privacy", action: () => setPrivacyOpen(true) },
-          ].map(({ icon, label, action }) => (
+            { icon: <UserIcon className="w-5 h-5" />, label: "Profile", action: () => { if (peer) onViewProfile(peer); } },
+            { icon: <SearchIcon className="w-5 h-5" />, label: "Search", action: () => showToast("Search features coming soon") },
+            { icon: muted ? <BellOffIcon className="w-5 h-5" /> : <BellIcon className="w-5 h-5" />, label: muted ? "Unmute" : "Mute", action: () => { setMuted(v => !v); showToast(muted ? "Unmuted notifications" : "Muted notifications"); } },
+            { icon: <LockIcon className="w-5 h-5" />, label: "Privacy", action: () => setPrivacyOpen(true) },
+          ].map(({ icon, label, action }, idx) => (
             <button
-              key={label}
+              key={idx}
               onClick={action}
-              className="flex-1 flex flex-col items-center gap-1.5 py-3 rounded-2xl hover:bg-white/[0.04] active:scale-95 transition"
+              className="flex-1 flex flex-col items-center gap-1.5 py-3 rounded-2xl hover:bg-white/[0.04] active:scale-95 transition text-ink-mute hover:text-white"
             >
-              <span className="text-xl leading-none">{icon}</span>
+              <span className="flex items-center justify-center h-5">{icon}</span>
               <span className="text-[10px] font-semibold text-ink-mute">{label}</span>
             </button>
           ))}
@@ -1897,8 +1923,8 @@ function ChatInfoScreen({
             onClick={() => setThemePickerOpen(true)}
             className="w-full flex items-center gap-3.5 px-3 py-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-left"
           >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-base shrink-0">
-              🎨
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shrink-0">
+              <PaletteIcon className="w-5 h-5 text-white" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-ink">Theme</p>
@@ -1912,14 +1938,14 @@ function ChatInfoScreen({
             onClick={() => setDisappearingPickerOpen(true)}
             className="w-full flex items-center gap-3.5 px-3 py-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-left"
           >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-base shrink-0">
-              ⏰
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shrink-0">
+              <ClockIcon className="w-5 h-5 text-white" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-ink">Disappearing messages</p>
               <p className="text-[11px] text-ink-mute">{disappearingLabel}</p>
             </div>
-            <span className="text-ink-mute text-xs">›</span>
+            <ChevronRight className="w-4 h-4 text-ink-mute shrink-0" />
           </button>
 
           {/* Privacy and safety */}
@@ -1927,13 +1953,13 @@ function ChatInfoScreen({
             onClick={() => setPrivacyOpen(true)}
             className="w-full flex items-center gap-3.5 px-3 py-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-left"
           >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center text-base shrink-0">
-              🔒
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center shrink-0">
+              <LockIcon className="w-5 h-5 text-white" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-ink">Privacy and safety</p>
             </div>
-            <span className="text-ink-mute text-xs">›</span>
+            <ChevronRight className="w-4 h-4 text-ink-mute shrink-0" />
           </button>
 
           {/* Nicknames */}
@@ -1941,13 +1967,13 @@ function ChatInfoScreen({
             onClick={() => setNicknamesOpen(true)}
             className="w-full flex items-center gap-3.5 px-3 py-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-left"
           >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-500 to-brand-500 flex items-center justify-center text-base shrink-0">
-              😄
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-500 to-brand-500 flex items-center justify-center shrink-0">
+              <SmileIcon className="w-5 h-5 text-white" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-ink">Nicknames</p>
             </div>
-            <span className="text-ink-mute text-xs">›</span>
+            <ChevronRight className="w-4 h-4 text-ink-mute shrink-0" />
           </button>
 
           {/* Create a group chat */}
@@ -1955,13 +1981,13 @@ function ChatInfoScreen({
             onClick={() => { onBack(); onCreateGroup(); }}
             className="w-full flex items-center gap-3.5 px-3 py-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-left"
           >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-600 to-brand-500 flex items-center justify-center text-base shrink-0">
-              👥
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-600 to-brand-500 flex items-center justify-center shrink-0">
+              <UsersIcon className="w-5 h-5 text-white" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-ink">Create a group chat</p>
             </div>
-            <span className="text-ink-mute text-xs">›</span>
+            <ChevronRight className="w-4 h-4 text-ink-mute shrink-0" />
           </button>
         </div>
 
@@ -1985,14 +2011,14 @@ function ChatInfoScreen({
             mediaCount > 0 ? (
               <div className="grid grid-cols-3 gap-1.5">
                 {[...Array(mediaCount)].map((_, i) => (
-                  <div key={i} className="aspect-square rounded-lg bg-white/[0.05] border border-white/[0.06] flex items-center justify-center text-lg text-white/10">
-                    🖼️
+                  <div key={i} className="aspect-square rounded-lg bg-white/[0.05] border border-white/[0.06] flex items-center justify-center text-white/20">
+                    <ImageIcon className="w-5 h-5" />
                   </div>
                 ))}
               </div>
             ) : (
               <div className="flex flex-col items-center py-10 opacity-50 select-none">
-                <span className="text-3xl mb-2">🖼️</span>
+                <ImageIcon className="w-12 h-12 text-white/10 mb-3" />
                 <p className="text-xs text-ink-mute">No photos or videos yet</p>
               </div>
             )
@@ -2009,7 +2035,7 @@ function ChatInfoScreen({
                     rel="noopener noreferrer"
                     className="flex items-center gap-2.5 p-3 rounded-xl bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.05] transition text-xs font-semibold"
                   >
-                    <span className="text-lg">🔗</span>
+                    <LinkIcon className="w-5 h-5 text-ink-mute shrink-0" />
                     <div className="min-w-0 flex-1">
                       <p className="text-ink truncate font-bold">{link.domain}</p>
                       <p className="text-brand-300 truncate text-[10px] mt-0.5">{link.url}</p>
@@ -2018,7 +2044,7 @@ function ChatInfoScreen({
                 ))
               ) : (
                 <div className="flex flex-col items-center py-10 opacity-50 select-none">
-                  <span className="text-3xl mb-2">🔗</span>
+                  <LinkIcon className="w-12 h-12 text-white/10 mb-3" />
                   <p className="text-xs text-ink-mute">No links shared yet</p>
                 </div>
               )}
@@ -2027,7 +2053,7 @@ function ChatInfoScreen({
 
           {activeTab === "files" && (
             <div className="flex flex-col items-center py-10 opacity-50 select-none">
-              <span className="text-3xl mb-2">📎</span>
+              <FileIcon className="w-12 h-12 text-white/10 mb-3" />
               <p className="text-xs text-ink-mute">No files shared yet</p>
             </div>
           )}
@@ -2037,15 +2063,17 @@ function ChatInfoScreen({
         <div className="mt-8 px-4 pb-4 space-y-0.5 select-none">
           <button
             onClick={() => setBlockConfirmOpen(true)}
-            className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-bold text-red-400 hover:bg-red-500/[0.06] active:bg-red-500/10 transition"
+            className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-bold text-red-400 hover:bg-red-500/[0.06] active:bg-red-500/10 transition inline-flex items-center gap-2"
           >
-            🚫 Block {isGroup ? "Group" : displayName?.split(" ")[0]}
+            <BanIcon className="w-4 h-4 text-red-400" />
+            Block {isGroup ? "Group" : displayName?.split(" ")[0]}
           </button>
           <button
             onClick={() => setReportSheetOpen(true)}
-            className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-bold text-red-400 hover:bg-red-500/[0.06] active:bg-red-500/10 transition"
+            className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-bold text-red-400 hover:bg-red-500/[0.06] active:bg-red-500/10 transition inline-flex items-center gap-2"
           >
-            ⚠️ Report
+            <AlertIcon className="w-4 h-4 text-red-400" />
+            Report
           </button>
         </div>
       </div>
@@ -2054,7 +2082,7 @@ function ChatInfoScreen({
       {toastMessage && (
         <div className="fixed bottom-6 inset-x-5 z-[70] flex justify-center pointer-events-none">
           <div className="bg-[#1a1a1a] border border-white/10 text-white rounded-full px-5 py-2.5 text-xs font-semibold shadow-2xl animate-fade-in flex items-center gap-2">
-            <span>🛡️</span>
+            <ShieldIcon className="w-4 h-4 text-white" />
             <span>{toastMessage}</span>
           </div>
         </div>
@@ -2157,9 +2185,9 @@ function ChatInfoScreen({
               <h3 className="font-bold text-base text-ink">Report Reason</h3>
               <button
                 onClick={() => setReportSheetOpen(false)}
-                className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white"
+                className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-95 transition flex items-center justify-center text-white"
               >
-                ✕
+                <XIcon className="w-4 h-4" />
               </button>
             </div>
             
@@ -2205,9 +2233,9 @@ function ThemePickerSheet({
           <h2 className="font-bold text-base text-ink">Chat Theme</h2>
           <button
             onClick={onClose}
-            className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white"
+            className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-95 transition flex items-center justify-center text-white"
           >
-            ✕
+            <XIcon className="w-4 h-4" />
           </button>
         </div>
 
@@ -2266,9 +2294,9 @@ function DisappearingPickerSheet({
           <h2 className="font-bold text-base text-ink">Disappearing Messages</h2>
           <button
             onClick={onClose}
-            className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white"
+            className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-95 transition flex items-center justify-center text-white"
           >
-            ✕
+            <XIcon className="w-4 h-4" />
           </button>
         </div>
 
@@ -2294,7 +2322,7 @@ function DisappearingPickerSheet({
                 <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
                   isSelected ? "border-brand-500 text-brand-300 bg-brand-500/20" : "border-white/20"
                 }`}>
-                  {isSelected && <span className="text-[8px] font-extrabold">✓</span>}
+                  {isSelected && <CheckIcon className="w-2.5 h-2.5 text-brand-300" />}
                 </div>
               </button>
             );
@@ -2372,9 +2400,9 @@ function NicknamesSheet({
           <button
             type="button"
             onClick={onClose}
-            className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white"
+            className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-95 transition flex items-center justify-center text-white"
           >
-            ✕
+            <XIcon className="w-4 h-4" />
           </button>
         </div>
 
@@ -2507,7 +2535,7 @@ function PrivacySubScreen({
           onClick={onBack}
           className="w-9 h-9 rounded-full bg-white/[0.05] hover:bg-white/10 active:scale-90 transition flex items-center justify-center shrink-0 text-white"
         >
-          ←
+          <ArrowLeftIcon className="w-5 h-5" />
         </button>
         <span className="font-bold text-sm text-ink">Privacy and safety</span>
       </div>
@@ -2585,15 +2613,17 @@ function PrivacySubScreen({
         <div className="space-y-3 pt-4 select-none">
           <button
             onClick={onBlock}
-            className="w-full py-4 text-center text-sm font-bold text-red-400 bg-red-500/10 border border-red-500/20 rounded-2xl hover:bg-red-500/15 active:scale-95 transition"
+            className="w-full py-4 text-center text-sm font-bold text-red-400 bg-red-500/10 border border-red-500/20 rounded-2xl hover:bg-red-500/15 active:scale-95 transition inline-flex items-center justify-center gap-2"
           >
-            🚫 Block {isGroup ? "Group" : peerName}
+            <BanIcon className="w-4 h-4 text-red-400" />
+            Block {isGroup ? "Group" : peerName}
           </button>
           <button
             onClick={() => setReportSheetOpen(true)}
-            className="w-full py-4 text-center text-sm font-bold text-white/80 bg-white/[0.05] border border-white/[0.08] rounded-2xl hover:bg-white/[0.08] active:scale-95 transition"
+            className="w-full py-4 text-center text-sm font-bold text-white/80 bg-white/[0.05] border border-white/[0.08] rounded-2xl hover:bg-white/[0.08] active:scale-95 transition inline-flex items-center justify-center gap-2"
           >
-            ⚠️ Report Chat
+            <AlertIcon className="w-4 h-4 text-white/80" />
+            Report Chat
           </button>
         </div>
       </div>
@@ -2602,7 +2632,7 @@ function PrivacySubScreen({
       {toastMessage && (
         <div className="fixed bottom-6 inset-x-5 z-[60] flex justify-center pointer-events-none">
           <div className="bg-[#1a1a1a] border border-white/10 text-white rounded-full px-5 py-2.5 text-xs font-semibold shadow-2xl animate-fade-in flex items-center gap-2">
-            <span>🛡️</span>
+            <ShieldIcon className="w-4 h-4 text-white" />
             <span>{toastMessage}</span>
           </div>
         </div>
@@ -2617,9 +2647,9 @@ function PrivacySubScreen({
               <h3 className="font-bold text-base text-ink">Report Reason</h3>
               <button
                 onClick={() => setReportSheetOpen(false)}
-                className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white"
+                className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-95 transition flex items-center justify-center text-white"
               >
-                ✕
+                <XIcon className="w-4 h-4" />
               </button>
             </div>
             
@@ -2752,7 +2782,7 @@ function DraggableProfileSheet({
           {peer.signal && (
             <div className="flex justify-center">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-brand-500/10 border border-brand-500/20 text-[11px] text-brand-300 font-semibold animate-fade-in">
-                <span>📡</span>
+                <SignalIcon className="w-3.5 h-3.5 text-brand-300" />
                 <span>{peer.signal}</span>
               </div>
             </div>
@@ -2782,9 +2812,10 @@ function DraggableProfileSheet({
                 <button
                   type="button"
                   onClick={() => onStartChat(peer)}
-                  className="flex-grow py-2.5 font-bold rounded-xl bg-brand-500 hover:bg-brand-600 text-white transition active:scale-95"
+                  className="flex-grow py-2.5 font-bold rounded-xl bg-brand-500 hover:bg-brand-600 text-white transition active:scale-95 inline-flex items-center justify-center gap-1.5"
                 >
-                  💬 Message
+                  <ChatIcon className="w-4 h-4" />
+                  Message
                 </button>
                 <button
                   type="button"
@@ -2797,9 +2828,10 @@ function DraggableProfileSheet({
               <>
                 <button
                   type="button"
-                  className="flex-grow py-2.5 font-bold rounded-xl bg-white/[0.05] border border-white/[0.08] hover:bg-white/[0.08] text-brand-300 border-brand-500/30 transition"
+                  className="flex-grow py-2.5 font-bold rounded-xl bg-white/[0.05] border border-white/[0.08] hover:bg-white/[0.08] text-brand-300 border-brand-500/30 transition inline-flex items-center justify-center gap-1.5"
                 >
-                  Following ✓
+                  Following
+                  <CheckIcon className="w-3.5 h-3.5 text-brand-300" />
                 </button>
                 <button
                   type="button"
@@ -2840,8 +2872,8 @@ function DraggableProfileSheet({
             {activeTab === "media" && (
               <div className="grid grid-cols-3 gap-2">
                 {[...Array(3)].map((_, i) => (
-                  <div key={i} className="aspect-square rounded-xl bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.06] transition flex items-center justify-center text-lg text-white/20">
-                    🖼️
+                  <div key={i} className="aspect-square rounded-xl bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.06] transition flex items-center justify-center text-white/20">
+                    <ImageIcon className="w-5 h-5" />
                   </div>
                 ))}
               </div>
@@ -2853,18 +2885,18 @@ function DraggableProfileSheet({
                   href="https://github.com"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-2.5 p-3 rounded-xl bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.05] transition text-xs font-semibold"
+                  className="flex items-center gap-2.5 p-3 rounded-xl bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.05] transition text-xs font-semibold text-ink-soft hover:text-white"
                 >
-                  <span>🐙</span>
+                  <LinkIcon className="w-4 h-4 text-ink-mute" />
                   <span>GitHub Profile</span>
                 </a>
                 <a
                   href="https://linkedin.com"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-2.5 p-3 rounded-xl bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.05] transition text-xs font-semibold"
+                  className="flex items-center gap-2.5 p-3 rounded-xl bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.05] transition text-xs font-semibold text-ink-soft hover:text-white"
                 >
-                  <span>💼</span>
+                  <LinkIcon className="w-4 h-4 text-ink-mute" />
                   <span>LinkedIn Profile</span>
                 </a>
               </div>
