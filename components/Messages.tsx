@@ -1181,7 +1181,7 @@ export default function Messages({
                   const { replyQuote, cleanContent } = parseMessageContent(m.content);
 
                   return (
-                    <div key={m.id} className="flex flex-col w-full">
+                    <div key={m.id} className={`flex flex-col w-full ${mine ? "items-end" : "items-start"}`}>
                       {/* 5 min Gap Time Divider */}
                       {showTimeDivider && (
                         <div className="w-full flex justify-center py-2.5 my-2">
@@ -1192,7 +1192,7 @@ export default function Messages({
                       )}
 
                       {/* Message Bubble Cluster container */}
-                      <div className={`flex items-end gap-2.5 ${mine ? "justify-end ml-auto" : "justify-start mr-auto"} max-w-[85%] relative`}>
+                      <div className="flex items-end gap-2.5 max-w-[80%] relative">
                         {/* Member Stack Header label */}
                         {!mine && isFirstInCluster && !activePeer && (
                           <span className="absolute -top-3.5 left-10 text-[9px] text-brand-300 font-bold leading-none select-none">
@@ -1642,7 +1642,7 @@ function SwipeMessageBubble({
   }
 
   return (
-    <div className="relative w-full flex flex-col">
+    <div className="relative flex flex-col min-w-0">
       {/* Reactions floating overlay row */}
       {showReactionsMenu && (
         <div
@@ -1685,10 +1685,10 @@ function SwipeMessageBubble({
           transform: `translateX(${dragX}px)`,
           transition: dragX === 0 ? "transform 0.2s ease-out" : "none",
         }}
-        className={`relative group max-w-[85%] rounded-2xl px-4 py-2.5 text-xs md:text-sm ${
+        className={`relative group max-w-full w-fit rounded-2xl px-4 py-2.5 text-xs md:text-sm ${
           mine
-            ? `${themeBgClass || "bg-brand-500"} text-white rounded-tr-none ml-auto`
-            : "bg-[#1e1e1e] border border-white/[0.06] text-ink rounded-tl-none mr-auto"
+            ? `${themeBgClass || "bg-brand-500"} text-white rounded-tr-none`
+            : "bg-[#1e1e1e] border border-white/[0.06] text-ink rounded-tl-none"
         }`}
       >
         {/* Swipe Reply curved arrow */}
@@ -1713,7 +1713,7 @@ function SwipeMessageBubble({
         <p className="leading-relaxed break-words">{renderContent(msg.content)}</p>
 
         {/* Timestamp */}
-        <span className="text-[9.5px] text-white/50 block mt-1 text-right select-none flex items-center justify-end gap-1">
+        <span className="text-[9.5px] text-white/50 mt-1 text-right select-none flex items-center justify-end gap-1 whitespace-nowrap">
           {disappearingMode && disappearingMode !== "off" && (
             <ClockIcon className="w-3 h-3 opacity-60 text-white shrink-0" />
           )}
