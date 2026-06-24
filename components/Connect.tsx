@@ -358,7 +358,7 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
 
   async function handleSelectFriend(friend: any) {
     if (!shareSignal) return;
-    const intentLabel = INTENTS.find(i => i.id === shareSignal.intent)?.label || "Signal";
+    const intentLabel = INTENTS.find(i => i.id === shareSignal.intent)?.label || "Vibe";
     const shareText = `Thought of you — ${shareSignal.profiles?.name || "Someone"} is ${intentLabel}: '${shareSignal.content}'`;
     
     if (demo) {
@@ -1048,6 +1048,10 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
 
       {/* ── Header ── */}
       <div className="px-5 pt-12 pb-4">
+        <div className="flex items-center gap-2 mb-4">
+          <SignalIcon className="w-6 h-6 text-brand-400" />
+          <h1 className="text-2xl font-bold text-ink tracking-tight">Frequency</h1>
+        </div>
         <div className="flex items-center gap-3">
           <div className="relative flex-1">
             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40">
@@ -1134,7 +1138,7 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
                 {mySignal ? (
                   <>
                     <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
-                      <span className="font-bold text-ink text-sm">Your Signal</span>
+                      <span className="font-bold text-ink text-sm">Your vibe</span>
                       {mySignalReach === "all" && (
                         <span className="text-[8px] font-extrabold bg-purple-500/15 text-purple-400 px-1.5 py-0.5 rounded-full border border-purple-500/20 select-none">ALL CAMPUSES</span>
                       )}
@@ -1147,7 +1151,7 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
                     <p className="text-sm text-ink font-semibold truncate">"{mySignal}"</p>
                   </>
                 ) : (
-                  <p className="text-sm text-ink-soft font-semibold">What is your signal right now?</p>
+                  <p className="text-sm text-ink-soft font-semibold">What's your vibe right now?</p>
                 )}
               </div>
               {mySignal && (
@@ -1243,7 +1247,7 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
               <p className="text-xs text-ink-mute max-w-[200px] mx-auto leading-normal">
                 {scope === "campus" 
                   ? "Be the first to broadcast from your campus" 
-                  : "No one is broadcasting right now"}
+                  : "No one's sharing a vibe right now"}
               </p>
             </div>
           ) : (
@@ -1349,7 +1353,7 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
                     <div onClick={e => e.stopPropagation()} className="flex items-center gap-2.5 mt-1 select-none">
                       <button
                         onClick={async () => {
-                          const seedMsg = `✋ raised a hand on signal: "${sig.content}"`;
+                          const seedMsg = `✋ raised a hand on your vibe: "${sig.content}"`;
                           if (!hasRaised) {
                             const myRaise = {
                               user_id: user?.id || "me",
@@ -1418,7 +1422,7 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
             <div className="flex items-center justify-between mb-4 border-b border-white/[0.05] pb-3 select-none">
               <h2 className="font-bold text-base text-ink flex items-center gap-2">
                 <ShareIcon className="w-5 h-5 text-brand-400" />
-                <span>Share Signal</span>
+                <span>Share vibe</span>
               </h2>
               <button
                 onClick={() => setShareSignal(null)}
@@ -1482,8 +1486,8 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
               onClick={() => {
                 if (navigator.share) {
                   navigator.share({
-                    title: `Footfall Signal from ${shareSignal.profiles?.name || "Student"}`,
-                    text: `Check out this signal on Footfall: "${shareSignal.content}"`,
+                    title: `Footfall vibe from ${shareSignal.profiles?.name || "Student"}`,
+                    text: `Check out this vibe on Footfall: "${shareSignal.content}"`,
                     url: window.location.href
                   }).catch(() => {});
                 } else {
@@ -1518,7 +1522,7 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
             <div className="flex items-center justify-between mb-5 border-b border-white/[0.05] pb-3 select-none">
               <h2 className="font-bold text-base text-ink flex items-center gap-2">
                 <SignalIcon className="w-5 h-5 text-brand-400 animate-pulse" />
-                <span>What's your signal?</span>
+                <span>What's your vibe?</span>
               </h2>
               <button
                 onClick={() => setBroadcasting(false)}
@@ -1564,7 +1568,7 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
                           </span>
                         </div>
                         <p className="text-sm font-semibold text-ink leading-relaxed break-words">
-                          {broadcastInput.trim() ? `"${broadcastInput}"` : '"What is your signal right now?"'}
+                          {broadcastInput.trim() ? `"${broadcastInput}"` : `"What's your vibe right now?"`}
                         </p>
                         <div className="flex items-center justify-between text-[11px] text-ink-mute mt-2">
                           <p>{profile?.course || "Student"} · Y{profile?.year || 1}</p>
@@ -1583,7 +1587,7 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
             {/* Note input */}
             <div className="mb-4">
               <div className="flex justify-between items-center mb-1.5">
-                <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide">Signal Note</label>
+                <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide">Your vibe</label>
                 <span className={`text-[10px] ${broadcastInput.length >= 80 ? "text-red-400 font-bold" : "text-ink-mute"}`}>
                   {broadcastInput.length}/80
                 </span>
@@ -1717,7 +1721,7 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
               >
                 {saving ? "Broadcasting…" : (
                   <>
-                    <span>Broadcast Signal</span>
+                    <span>Broadcast vibe</span>
                     <SignalIcon className="w-4 h-4" />
                   </>
                 )}

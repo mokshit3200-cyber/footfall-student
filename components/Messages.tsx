@@ -313,7 +313,7 @@ function SignalEditorSheet({
         <div className="flex items-center justify-between mb-5 border-b border-white/[0.05] pb-3 select-none">
           <h2 className="font-bold text-base text-ink flex items-center gap-2">
             <SignalIcon className="w-5 h-5 text-brand-400 animate-pulse" />
-            <span>What's your signal?</span>
+            <span>What's your vibe?</span>
           </h2>
           <button
             onClick={onClose}
@@ -359,7 +359,7 @@ function SignalEditorSheet({
                       </span>
                     </div>
                     <p className="text-sm font-semibold text-ink leading-relaxed break-words">
-                      {broadcastInput.trim() ? `"${broadcastInput}"` : '"What is your signal right now?"'}
+                      {broadcastInput.trim() ? `"${broadcastInput}"` : `"What's your vibe right now?"`}
                     </p>
                     <div className="flex items-center justify-between text-[11px] text-ink-mute mt-2">
                       <p>{profile?.course || "Student"} · Y{profile?.year || 1}</p>
@@ -378,7 +378,7 @@ function SignalEditorSheet({
         {/* Note input */}
         <div className="mb-4">
           <div className="flex justify-between items-center mb-1.5">
-            <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide">Signal Note</label>
+            <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide">Your vibe</label>
             <span className={`text-[10px] ${broadcastInput.length >= 80 ? "text-red-400 font-bold" : "text-ink-mute"}`}>
               {broadcastInput.length}/80
             </span>
@@ -514,7 +514,7 @@ function SignalEditorSheet({
           >
             {saving ? "Broadcasting…" : (
               <>
-                <span>Broadcast Signal</span>
+                <span>Broadcast vibe</span>
                 <SignalIcon className="w-4 h-4" />
               </>
             )}
@@ -617,7 +617,7 @@ export default function Messages({
               course: "MBA",
               year: 2
             },
-            last_message: "✋ raised a hand on signal: 'selling keychron k2'",
+            last_message: "✋ raised a hand on vibe: 'selling keychron k2'",
             last_at: new Date(Date.now() - 600000).toISOString(),
             unread: 1,
             request_status: "pending",
@@ -1306,7 +1306,7 @@ export default function Messages({
               return (
                 <div className="flex flex-col items-center gap-1.5 shrink-0 w-[76px]">
                   {/* Note bubble */}
-                  <NoteBubble text={mySignal} placeholder="Set a note" />
+                  <NoteBubble text={mySignal} placeholder="Set a vibe" />
                   {/* Avatar */}
                   <button
                     onClick={() => {
@@ -1594,7 +1594,7 @@ export default function Messages({
                     {c.origin_signal_note && (
                       <div className="bg-white/[0.03] border border-white/[0.05] rounded-2xl p-3.5 text-xs text-ink leading-relaxed">
                         <span className="text-brand-300 font-bold block mb-1">
-                          ✋ responding to your signal:
+                          ✋ responding to your vibe:
                         </span>
                         <span className="italic text-ink-soft">
                           "{c.origin_signal_note}"
