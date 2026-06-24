@@ -31,10 +31,59 @@ export default function Page() {
     setIsDemo(getMode() === "demo");
   }, []);
 
+  // Synchronize state from URL parameters on boot and popstate navigation
+  useEffect(() => {
+    function syncFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      const urlTab = params.get("tab") as Tab | "business" | null;
+      
+      if (urlTab) {
+        if (urlTab === "business") {
+          setBusinessMode(true);
+        } else {
+          setBusinessMode(false);
+          setTab(urlTab);
+        }
+      } else {
+        setTab("home");
+        setBusinessMode(false);
+      }
+
+      // Check if we are inside a chat view (inChat needs to be set to hide navbar)
+      const chat = params.get("chat");
+      setInChat(!!chat);
+    }
+
+    syncFromUrl();
+    window.addEventListener("popstate", syncFromUrl);
+    return () => window.removeEventListener("popstate", syncFromUrl);
+  }, []);
+
   function changeTab(t: Tab) {
     playTick();
     setTab(t);
     setInChat(false);
+    
+    // Update URL query parameters
+    const params = new URLSearchParams(window.location.search);
+    params.set("tab", t);
+    params.delete("chat"); // close active chat on tab switch
+    params.delete("item"); // close active item on tab switch
+    window.history.pushState(null, "", `${window.location.pathname}?${params.toString()}`);
+  }
+
+  function handleOpenBusiness() {
+    setBusinessMode(true);
+    const params = new URLSearchParams(window.location.search);
+    params.set("tab", "business");
+    window.history.pushState(null, "", `${window.location.pathname}?${params.toString()}`);
+  }
+
+  function handleCloseBusiness() {
+    setBusinessMode(false);
+    const params = new URLSearchParams(window.location.search);
+    params.set("tab", "profile");
+    window.history.pushState(null, "", `${window.location.pathname}?${params.toString()}`);
   }
 
   // Onboarding is complete once college is saved — persists across logins
@@ -77,7 +126,7 @@ export default function Page() {
 
   // ── Business mode ────────────────────────────────────────
   if (businessMode) {
-    return <Business onBack={() => setBusinessMode(false)} />;
+    return <Business onBack={handleCloseBusiness} />;
   }
 
   const wide = tab === "market" || tab === "connect";
@@ -95,7 +144,7 @@ export default function Page() {
           {tab === "messages" && <Messages onChatOpen={setInChat} />}
           {tab === "market" && <Marketplace onSwitchTab={changeTab} />}
           {tab === "profile" && (
-            <Profile onOpenBusiness={() => setBusinessMode(true)} />
+            <Profile onOpenBusiness={handleOpenBusiness} />
           )}
         </main>
       </div>

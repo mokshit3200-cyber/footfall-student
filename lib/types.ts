@@ -23,6 +23,7 @@ export interface Profile {
   username?: string | null;
   verified?: boolean;
   college?: string;
+  year?: number;
   attendanceTarget: number; // 0.75 = 75%
   gradeSystem: GradeSystem;
   onboarded: boolean;
@@ -201,6 +202,8 @@ export interface Listing {
   image?: string;         // url or base64 data-url
   mine: boolean;          // true if created by this student
   createdAt: string;
+  active?: boolean;       // false = sold/deactivated
+  userId?: string;        // Supabase user_id of seller
 }
 
 export interface Classmate {
@@ -262,6 +265,8 @@ export const SUBJECT_COLORS = [
 export const emptyData: AppData = {
   profile: {
     name: "",
+    college: "",
+    year: 1,
     attendanceTarget: 0.75,
     gradeSystem: "gpa10",
     onboarded: false,

@@ -4,7 +4,19 @@ import { useMemo, useState, useEffect } from "react";
 import { useStore } from "./store";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
-import { dbSaveAttendance, dbSaveTimetableSlot, dbDeleteTimetableSlot, dbSaveTimetableBulk } from "@/lib/dbActions";
+import { 
+  dbSaveAttendance, 
+  dbSaveTimetableSlot, 
+  dbDeleteTimetableSlot, 
+  dbSaveTimetableBulk,
+  dbSaveSubject,
+  dbDeleteSubject,
+  dbSaveDeadline,
+  dbDeleteDeadline,
+  dbToggleDeadline,
+  dbSaveGrade,
+  dbDeleteGrade
+} from "@/lib/dbActions";
 import { isDemo } from "@/lib/config";
 import {
   overallStats,
@@ -353,14 +365,14 @@ export default function Home({ onSwitchTab }: { onSwitchTab?: (tab: any) => void
         </div>
       )}
       <div className="px-5 pt-12 pb-28 no-scrollbar">
-      {/* Greeting Header & Notification Bell */}
+      {/* Brand wordmark (Instagram-style) + Notification Bell */}
       <div className="flex items-center justify-between mb-5">
-        <div>
-          <p className="text-ink-mute text-xs">{longToday()}</p>
-          <h1 className="text-2xl font-bold text-ink mt-0.5">
-            Hi {profile.name} 👋
-          </h1>
-        </div>
+        <img
+          src="/brand/wordmark-white.png"
+          alt="Cmpus"
+          className="h-[26px] w-auto object-contain select-none"
+          draggable={false}
+        />
         <button
           onClick={() => setSheet("notifications")}
           className="relative w-10 h-10 rounded-full bg-[#0e0e0e] border border-white/10 flex items-center justify-center text-ink-soft active:scale-95 transition"
@@ -370,6 +382,14 @@ export default function Home({ onSwitchTab }: { onSwitchTab?: (tab: any) => void
             <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full ring-1 ring-black animate-pulse" />
           )}
         </button>
+      </div>
+
+      {/* Greeting */}
+      <div className="mb-5">
+        <p className="text-ink-mute text-xs">{longToday()}</p>
+        <h1 className="text-2xl font-bold text-ink mt-0.5">
+          Hi {profile.name} 👋
+        </h1>
       </div>
 
       <RemindersPanel />
@@ -626,12 +646,15 @@ export default function Home({ onSwitchTab }: { onSwitchTab?: (tab: any) => void
             return (
               <div key={d.id} className="card p-3.5 flex items-center gap-3">
                 <button
-                  onClick={() =>
+                  onClick={() => {
                     update((s) => {
                       const t = s.deadlines.find((x) => x.id === d.id);
                       if (t) t.done = true;
-                    })
-                  }
+                    });
+                    if (!isDemo() && user) {
+                      dbToggleDeadline(d.id, true);
+                    }
+                  }}
                   className="w-6 h-6 rounded-full border-2 border-white/20 flex items-center justify-center shrink-0 active:scale-90 transition"
                 >
                   <CheckIcon className="w-3.5 h-3.5 text-transparent" />
@@ -690,7 +713,7 @@ export default function Home({ onSwitchTab }: { onSwitchTab?: (tab: any) => void
             {grades.map((g) => (
               <div
                 key={g.id}
-                className="flex items-center justify-between text-[13px]"
+                className="flex items-center justify-between text-[13px] group py-1"
               >
                 <span className="text-ink-soft truncate">
                   {subjectById[g.subjectId]?.name || "Subject"}
@@ -699,10 +722,27 @@ export default function Home({ onSwitchTab }: { onSwitchTab?: (tab: any) => void
                     · {g.credits} cr
                   </span>
                 </span>
-                <span className="font-semibold text-ink tabular-nums">
-                  {g.score}
-                  {profile.gradeSystem === "percentage" ? "%" : ""}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-ink tabular-nums">
+                    {g.score}
+                    {profile.gradeSystem === "percentage" ? "%" : ""}
+                  </span>
+                  <button
+                    onClick={() => {
+                      if (confirm(`Delete grade for ${subjectById[g.subjectId]?.name || "Subject"}?`)) {
+                        update((d) => {
+                          d.grades = d.grades.filter((x) => x.id !== g.id);
+                        });
+                        if (!isDemo() && user) {
+                          dbDeleteGrade(g.id);
+                        }
+                      }
+                    }}
+                    className="text-red-400 hover:text-red-500 opacity-60 hover:opacity-100 transition"
+                  >
+                    <TrashIcon className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -1052,18 +1092,24 @@ function NotificationsSheet({
 
 function SubjectSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { data, update, uid } = useStore();
+  const { user } = useAuth();
   const [name, setName] = useState("");
   function add() {
     const v = name.trim();
     if (!v) return;
+    const newSubject = {
+      id: uid(),
+      name: v,
+      color: SUBJECT_COLORS[data.subjects.length % SUBJECT_COLORS.length],
+    };
     update((d) => {
-      d.subjects.push({
-        id: uid(),
-        name: v,
-        color: SUBJECT_COLORS[d.subjects.length % SUBJECT_COLORS.length],
-      });
+      d.subjects.push(newSubject);
     });
     setName("");
+
+    if (!isDemo() && user) {
+      dbSaveSubject(user.id, newSubject);
+    }
   }
   return (
     <Sheet open={open} onClose={onClose} title="Your subjects">
@@ -1088,11 +1134,14 @@ function SubjectSheet({ open, onClose }: { open: boolean; onClose: () => void })
             />
             <span className="flex-1 text-sm font-medium text-ink">{s.name}</span>
             <button
-              onClick={() =>
+              onClick={() => {
                 update((d) => {
                   d.subjects = d.subjects.filter((x) => x.id !== s.id);
-                })
-              }
+                });
+                if (!isDemo() && user) {
+                  dbDeleteSubject(s.id);
+                }
+              }}
               className="text-ink-mute"
             >
               <TrashIcon className="w-4 h-4" />
@@ -1245,6 +1294,7 @@ function DeadlineSheet({
   onClose: () => void;
 }) {
   const { data, update, uid } = useStore();
+  const { user } = useAuth();
   const [title, setTitle] = useState("");
   const [type, setType] = useState<DeadlineType>("assignment");
   const [date, setDate] = useState(todayISO());
@@ -1252,18 +1302,23 @@ function DeadlineSheet({
 
   function add() {
     if (!title.trim()) return;
+    const newDeadline = {
+      id: uid(),
+      title: title.trim(),
+      type,
+      date,
+      subjectId: subjectId || undefined,
+      done: false,
+    };
     update((d) => {
-      d.deadlines.push({
-        id: uid(),
-        title: title.trim(),
-        type,
-        date,
-        subjectId: subjectId || undefined,
-        done: false,
-      });
+      d.deadlines.push(newDeadline);
     });
     setTitle("");
     onClose();
+
+    if (!isDemo() && user) {
+      dbSaveDeadline(user.id, newDeadline);
+    }
   }
 
   return (
@@ -1319,6 +1374,7 @@ function DeadlineSheet({
 
 function GradeSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { data, update, uid } = useStore();
+  const { user } = useAuth();
   const [subjectId, setSubjectId] = useState("");
   const [credits, setCredits] = useState("4");
   const [score, setScore] = useState("");
@@ -1329,17 +1385,23 @@ function GradeSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
     const sid = subjectId || data.subjects[0]?.id;
     const sc = Number(score);
     if (!sid || !score || isNaN(sc)) return;
+    const newGrade = {
+      id: uid(),
+      subjectId: sid,
+      semester: 1,
+      credits: Number(credits) || 0,
+      score: sc,
+    };
     update((d) => {
-      d.grades.push({
-        id: uid(),
-        subjectId: sid,
-        semester: 1,
-        credits: Number(credits) || 0,
-        score: sc,
-      });
+      d.grades.push(newGrade);
     });
     setScore("");
     onClose();
+
+    if (!isDemo() && user) {
+      const subjectName = data.subjects.find((s) => s.id === sid)?.name ?? sid;
+      dbSaveGrade(user.id, newGrade, subjectName);
+    }
   }
 
   return (

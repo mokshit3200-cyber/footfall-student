@@ -148,10 +148,10 @@ export default function AuthGate() {
     <div className="min-h-screen flex flex-col px-6 pt-14 pb-10 animate-fade-in">
       {/* Brand */}
       <div className="mb-7">
-        <div className="w-12 h-12 rounded-2xl brand-gradient flex items-center justify-center mb-4 shadow-lg shadow-brand-500/25">
-          <span className="text-white text-xl font-bold">F</span>
+        <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-black/40 ring-1 ring-white/10 overflow-hidden" style={{ backgroundColor: "#1A1D1B" }}>
+          <img src="/brand/mark-white.png" alt="Cmpus" className="w-9 h-9 object-contain" />
         </div>
-        <h1 className="text-2xl font-bold text-ink">Footfall Student</h1>
+        <h1 className="text-2xl font-bold text-ink">Cmpus</h1>
         <p className="text-ink-mute text-sm mt-0.5">Your campus, sorted.</p>
       </div>
 

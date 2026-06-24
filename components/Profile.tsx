@@ -4,12 +4,12 @@ import { useMemo, useState, useEffect, useRef } from "react";
 import { useStore } from "./store";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
-import { dbUpdateProfile } from "@/lib/dbActions";
+import { dbUpdateProfile, uploadPhoto } from "@/lib/dbActions";
 import { isDemo } from "@/lib/config";
+import { subscribeUserToPush, unsubscribeUserFromPush } from "./PWA";
 import { overallStats } from "@/lib/attendance";
 import { Sheet, SectionHeader, playPop, triggerConfetti } from "./ui";
-import { ChevronRight, SparkIcon, XIcon, CheckIcon, TrashIcon } from "./icons";
-import { Story, Highlight } from "@/lib/types";
+import { ChevronRight, SparkIcon, XIcon, CheckIcon, TrashIcon, ArrowLeftIcon } from "./icons";
 
 export default function Profile({
   onOpenBusiness,
@@ -17,14 +17,19 @@ export default function Profile({
   onOpenBusiness: () => void;
 }) {
   const { data, update, reset } = useStore();
-  const { profile, business, subjects, attendance, grades, deadlines } = data;
+  const { profile, business, subjects, attendance, deadlines } = data;
   const { user, signOut, refreshProfile } = useAuth();
   const [followerCount, setFollowerCount] = useState<number | null>(null);
   const [followingCount, setFollowingCount] = useState<number | null>(null);
   const [isPrivate, setIsPrivate] = useState<boolean>(false);
 
   useEffect(() => {
-    if (!user) return;
+    if (isDemo() || !user) {
+      setFollowerCount(142);
+      setFollowingCount(98);
+      setIsPrivate(false);
+      return;
+    }
     Promise.all([
       supabase.from("follows").select("id", { count: "exact", head: true }).eq("following_id", user.id).eq("status", "accepted"),
       supabase.from("follows").select("id", { count: "exact", head: true }).eq("follower_id", user.id).eq("status", "accepted"),
@@ -37,20 +42,26 @@ export default function Profile({
   }, [user]);
 
   async function togglePrivacy() {
-    if (!user) return;
     const next = !isPrivate;
     setIsPrivate(next);
-    await supabase.from("profiles").update({ is_private: next }).eq("id", user.id);
+    if (!isDemo() && user) {
+      await supabase.from("profiles").update({ is_private: next }).eq("id", user.id);
+    }
   }
-  const [settingsOpen, setSettingsOpen] = useState(false);
+
   const [remindersOpen, setRemindersOpen] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
-  
-  // New social sheets & modals states
   const [editProfileOpen, setEditProfileOpen] = useState(false);
-  const [createStoryOpen, setCreateStoryOpen] = useState(false);
-  const [createHighlightOpen, setCreateHighlightOpen] = useState(false);
-  const [activeStoriesToView, setActiveStoriesToView] = useState<Story[] | null>(null);
+
+  // Social sheets & custom modals states
+  const [socialSheetOpen, setSocialSheetOpen] = useState(false);
+  const [socialSheetType, setSocialSheetType] = useState<"followers" | "following">("followers");
+  const [socialPeople, setSocialPeople] = useState<any[]>([]);
+  const [socialLoading, setSocialLoading] = useState(false);
+  const [selectedClassmate, setSelectedClassmate] = useState<any | null>(null);
+  const [academicSettingsOpen, setAcademicSettingsOpen] = useState(false);
+  const [moneySettingsOpen, setMoneySettingsOpen] = useState(false);
+  const [selectedListingToEdit, setSelectedListingToEdit] = useState<any | null>(null);
 
   const overall = useMemo(
     () => overallStats(attendance, profile.attendanceTarget),
@@ -58,74 +69,197 @@ export default function Profile({
   );
   const openDeadlines = deadlines.filter((d) => !d.done).length;
 
-  // Filter active stories (posted in the last 24 hours)
-  const activeUserStories = useMemo(() => {
-    return (profile.stories || []).filter((s) => {
-      const diff = Date.now() - new Date(s.createdAt).getTime();
-      return diff < 24 * 3600 * 1000;
-    });
-  }, [profile.stories]);
+  useEffect(() => {
+    if (!socialSheetOpen) return;
+    if (isDemo() || !user) {
+      if (socialSheetType === "followers") {
+        const mockFollowers = (data.classmates || []).slice(0, 3);
+        setSocialPeople(mockFollowers.map(c => ({ ...c, followed: c.followed })));
+      } else {
+        const mockFollowing = (data.classmates || []).filter(c => c.followed);
+        setSocialPeople(mockFollowing.map(c => ({ ...c, followed: true })));
+      }
+      return;
+    }
 
-  const hasStories = activeUserStories.length > 0;
+    async function loadSocial() {
+      setSocialLoading(true);
+      try {
+        if (socialSheetType === "followers") {
+          const { data: res, error } = await supabase.from("follows")
+            .select("id, status, follower:profiles!follows_follower_id_fkey(id,name,username,avatar_url,college,course,year,verified)")
+            .eq("following_id", user!.id)
+            .eq("status", "accepted");
+          if (error) throw error;
+          const list = (res ?? []).map((row: any) => ({
+            id: row.follower.id,
+            name: row.follower.name,
+            username: row.follower.username,
+            avatar: row.follower.avatar_url,
+            college: row.follower.college,
+            course: row.follower.course,
+            year: row.follower.year,
+            verified: row.follower.verified,
+            followed: false,
+          }));
+
+          if (list.length > 0) {
+            const { data: followsBack } = await supabase.from("follows")
+              .select("following_id")
+              .eq("follower_id", user!.id)
+              .in("following_id", list.map(x => x.id))
+              .eq("status", "accepted");
+            const followingIds = new Set((followsBack ?? []).map(x => x.following_id));
+            list.forEach(x => {
+              x.followed = followingIds.has(x.id);
+            });
+          }
+          setSocialPeople(list);
+        } else {
+          const { data: res, error } = await supabase.from("follows")
+            .select("id, status, following:profiles!follows_following_id_fkey(id,name,username,avatar_url,college,course,year,verified)")
+            .eq("follower_id", user!.id)
+            .eq("status", "accepted");
+          if (error) throw error;
+          const list = (res ?? []).map((row: any) => ({
+            id: row.following.id,
+            name: row.following.name,
+            username: row.following.username,
+            avatar: row.following.avatar_url,
+            college: row.following.college,
+            course: row.following.course,
+            year: row.following.year,
+            verified: row.following.verified,
+            followed: true,
+          }));
+          setSocialPeople(list);
+        }
+      } catch (err) {
+        console.error("Error loading social connections:", err);
+      } finally {
+        setSocialLoading(false);
+      }
+    }
+
+    loadSocial();
+  }, [socialSheetOpen, socialSheetType, user, data.classmates]);
+
+  const handleRemoveFollower = async (person: any) => {
+    if (isDemo()) {
+      setSocialPeople(prev => prev.filter(p => p.id !== person.id));
+      setFollowerCount(prev => prev !== null ? Math.max(0, prev - 1) : null);
+      return;
+    }
+    if (!user) return;
+    const { error } = await supabase.from("follows")
+      .delete()
+      .eq("follower_id", person.id)
+      .eq("following_id", user.id);
+    if (!error) {
+      setSocialPeople(prev => prev.filter(p => p.id !== person.id));
+      setFollowerCount(prev => prev !== null ? Math.max(0, prev - 1) : null);
+    }
+  };
+
+  const handleSocialAction = async (person: any) => {
+    if (isDemo()) {
+      update((d) => {
+        const found = (d.classmates || []).find(c => c.id === person.id);
+        if (found) found.followed = !found.followed;
+      });
+      setSocialPeople(prev => prev.map(p => p.id === person.id ? { ...p, followed: !p.followed } : p));
+      setFollowingCount(prev => {
+        if (prev === null) return null;
+        return person.followed ? Math.max(0, prev - 1) : prev + 1;
+      });
+      return;
+    }
+
+    if (!user) return;
+    if (person.followed) {
+      const { error } = await supabase.from("follows")
+        .delete()
+        .eq("follower_id", user.id)
+        .eq("following_id", person.id);
+      if (!error) {
+        setSocialPeople(prev => prev.map(p => p.id === person.id ? { ...p, followed: false } : p));
+        setFollowingCount(prev => prev !== null ? Math.max(0, prev - 1) : null);
+      }
+    } else {
+      const { data: targetProfile } = await supabase.from("profiles")
+        .select("is_private")
+        .eq("id", person.id)
+        .single();
+      const status = targetProfile?.is_private ? "pending" : "accepted";
+      const { error } = await supabase.from("follows")
+        .insert({
+          follower_id: user.id,
+          following_id: person.id,
+          status: status
+        });
+      if (!error) {
+        setSocialPeople(prev => prev.map(p => p.id === person.id ? { ...p, followed: status === "accepted" } : p));
+        if (status === "accepted") {
+          setFollowingCount(prev => prev !== null ? prev + 1 : null);
+        }
+      }
+    }
+  };
 
   return (
     <div className="px-5 pt-12 pb-28 min-h-screen flex flex-col no-scrollbar">
       {/* INSTAGRAM-STYLE PROFILE HEADER */}
       <div className="flex items-center justify-between mb-5">
-        {/* Avatar Ring Section */}
-        {hasStories ? (
+        <div className="relative shrink-0">
           <div 
-            onClick={() => setActiveStoriesToView(activeUserStories)}
-            className="w-20 h-20 rounded-full p-1 bg-gradient-to-tr from-brand-500 via-purple-500 to-pink-500 flex items-center justify-center cursor-pointer active:scale-95 transition shrink-0"
+            onClick={() => setEditProfileOpen(true)}
+            className="w-20 h-20 rounded-full bg-white/[0.07] border border-white/[0.14] flex items-center justify-center cursor-pointer active:scale-95 transition overflow-hidden"
           >
-            <div className="w-full h-full rounded-full bg-black flex items-center justify-center p-0.5 overflow-hidden">
-              {profile.avatar && profile.avatar.startsWith("data:") ? (
-                <img src={profile.avatar} alt="Avatar" className="w-full h-full object-cover rounded-full" />
-              ) : (
-                <span className="text-3xl">{profile.avatar || "👨‍💻"}</span>
-              )}
-            </div>
+            {profile.avatar && profile.avatar.startsWith("data:") ? (
+              <img src={profile.avatar} alt="Avatar" className="w-full h-full object-cover rounded-full" />
+            ) : (
+              <span className="text-3xl">{profile.avatar || "👨‍💻"}</span>
+            )}
           </div>
-        ) : (
-          <div className="relative shrink-0">
-            <div 
-              onClick={() => setCreateStoryOpen(true)}
-              className="w-20 h-20 rounded-full bg-white/[0.07] border border-white/[0.14] flex items-center justify-center cursor-pointer active:scale-95 transition overflow-hidden"
-            >
-              {profile.avatar && profile.avatar.startsWith("data:") ? (
-                <img src={profile.avatar} alt="Avatar" className="w-full h-full object-cover rounded-full" />
-              ) : (
-                <span className="text-3xl">{profile.avatar || "👨‍💻"}</span>
-              )}
-            </div>
-            <button 
-              onClick={() => setCreateStoryOpen(true)}
-              className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-brand-500 text-white flex items-center justify-center border-2 border-black shadow active:scale-90 transition text-sm font-black"
-            >
-              +
-            </button>
-          </div>
-        )}
+        </div>
 
         {/* Stats Grid */}
         <div className="flex-1 flex justify-around text-center pl-4 py-1">
-          <div>
+          <button 
+            onClick={() => {
+              const el = document.getElementById("my-listings-section");
+              if (el) el.scrollIntoView({ behavior: "smooth" });
+            }}
+            className="focus:outline-none cursor-pointer active:scale-95 transition"
+          >
             <p className="text-base font-black text-ink tabular-nums">{data.listings?.length || 0}</p>
             <p className="text-[9px] text-ink-mute font-bold uppercase tracking-wider">Listings</p>
-          </div>
-          <div>
+          </button>
+          <button 
+            onClick={() => {
+              setSocialSheetType("followers");
+              setSocialSheetOpen(true);
+            }}
+            className="focus:outline-none cursor-pointer active:scale-95 transition"
+          >
             <p className="text-base font-black text-ink tabular-nums">{followerCount ?? "—"}</p>
             <p className="text-[9px] text-ink-mute font-bold uppercase tracking-wider">Followers</p>
-          </div>
-          <div>
+          </button>
+          <button 
+            onClick={() => {
+              setSocialSheetType("following");
+              setSocialSheetOpen(true);
+            }}
+            className="focus:outline-none cursor-pointer active:scale-95 transition"
+          >
             <p className="text-base font-black text-ink tabular-nums">{followingCount ?? "—"}</p>
             <p className="text-[9px] text-ink-mute font-bold uppercase tracking-wider">Following</p>
-          </div>
+          </button>
         </div>
       </div>
 
       {/* Profile Info block */}
-      <div className="mb-4 pl-1">
+      <div className="mb-4 pl-1 text-left">
         <h1 className="text-base font-bold text-ink leading-tight">{profile.name || "Student Name"}</h1>
         {profile.username && (
           <p className="text-xs text-brand-300 font-medium mt-0.5">@{profile.username}</p>
@@ -134,6 +268,12 @@ export default function Profile({
           <span>🎓</span>
           <span>{profile.course || "B.Tech Computer Science"}</span>
         </p>
+        {profile.college && (
+          <p className="text-xs text-ink-mute mt-1 flex items-center gap-1.5 font-semibold">
+            <span>🏫</span>
+            <span>{profile.college} {profile.year ? `(Year ${profile.year})` : ""}</span>
+          </p>
+        )}
         {/* Bio */}
         {profile.bio && (
           <p className="text-[13px] text-ink-soft mt-2 leading-relaxed">{profile.bio}</p>
@@ -179,96 +319,29 @@ export default function Profile({
       <div className="flex gap-2.5 mb-3">
         <button
           onClick={() => setEditProfileOpen(true)}
-          className="flex-1 py-2 text-xs font-bold rounded-xl bg-white/[0.07] hover:bg-white/10 active:scale-[0.98] transition text-ink text-center"
+          className="w-full py-2.5 text-xs font-bold rounded-xl bg-white/[0.07] hover:bg-white/10 active:scale-[0.98] transition text-ink text-center"
         >
           Edit Profile
         </button>
-        <button
-          onClick={() => setCreateStoryOpen(true)}
-          className="flex-1 py-2 text-xs font-bold rounded-xl bg-brand-500/15 text-brand-300 hover:bg-brand-500/20 active:scale-[0.98] transition text-center"
-        >
-          + Add Story
-        </button>
       </div>
 
-      {/* Private / Public toggle */}
-      <button onClick={togglePrivacy}
-        className="w-full mb-4 flex items-center justify-between px-4 py-3 rounded-2xl bg-white/[0.04] border border-white/[0.07] active:scale-[0.99] transition">
-        <div className="text-left">
-          <p className="text-xs font-bold text-ink">{isPrivate ? "🔒 Private account" : "🌐 Public account"}</p>
-          <p className="text-[10px] text-ink-mute mt-0.5">{isPrivate ? "New followers need your approval" : "Anyone can follow you instantly"}</p>
+      {profile?.verified && (
+        <div className="w-full mb-4 py-2.5 flex items-center justify-center gap-1.5 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-bold uppercase tracking-wider">
+          ✓ Verified Student ID
         </div>
-        <div className={`w-10 h-5 rounded-full transition-colors relative shrink-0 ${isPrivate ? "bg-brand-500" : "bg-white/10"}`}>
-          <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all ${isPrivate ? "left-5" : "left-0.5"}`} />
-        </div>
-      </button>
-      {profile?.verified ? (
-        <div className="w-full -mt-4 mb-6 py-2.5 flex items-center justify-center gap-1.5 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-bold uppercase tracking-wider">
-          ✓ Verified
-        </div>
-      ) : (
-        <button
-          onClick={() => setVerifyOpen(true)}
-          className="btn-primary w-full -mt-4 mb-6 flex items-center justify-center gap-2"
-        >
-          🛡️ Verify Student ID
-        </button>
       )}
-
-      {/* INSTAGRAM-STYLE STORY HIGHLIGHTS */}
-      <div className="mb-6">
-        <p className="text-[11px] font-bold text-ink-soft uppercase tracking-wide mb-3 pl-1">
-          Highlights
-        </p>
-        <div className="flex gap-4 overflow-x-auto no-scrollbar pb-1">
-          {/* Create Highlight Circle */}
-          <div className="flex flex-col items-center gap-1.5 shrink-0">
-            <button
-              onClick={() => setCreateHighlightOpen(true)}
-              className="w-14 h-14 rounded-full border-2 border-dashed border-white/15 hover:border-white/30 flex items-center justify-center active:scale-95 transition bg-white/[0.05]"
-            >
-              <span className="text-xl text-ink-soft font-semibold">+</span>
-            </button>
-            <span className="text-[10px] font-bold text-ink-soft">New</span>
-          </div>
-
-          {/* Render highlights list */}
-          {(profile.highlights || []).map((highlight) => (
-            <div key={highlight.id} className="flex flex-col items-center gap-1.5 shrink-0 relative group">
-              <button
-                onClick={() => setActiveStoriesToView(highlight.stories)}
-                className="w-14 h-14 rounded-full border border-white/10 bg-white/[0.05] flex items-center justify-center text-2xl active:scale-95 transition"
-              >
-                {highlight.coverEmoji || "🌟"}
-              </button>
-              <span className="text-[10px] font-bold text-ink-soft truncate max-w-[68px]">
-                {highlight.title}
-              </span>
-              <button
-                onClick={() => {
-                  if (confirm(`Delete highlight "${highlight.title}"?`)) {
-                    update((d) => {
-                      d.profile.highlights = (d.profile.highlights || []).filter(h => h.id !== highlight.id);
-                    });
-                  }
-                }}
-                className="absolute -top-1 -right-1 bg-red-500/20 text-red-400 rounded-full w-[18px] h-[18px] flex items-center justify-center text-[8px] border border-white font-bold opacity-0 group-hover:opacity-100 transition-opacity"
-                title="Delete"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
 
       {/* MY LISTINGS */}
       {data.listings && data.listings.length > 0 && (
-        <div className="mb-6">
+        <div id="my-listings-section" className="mb-6 text-left">
           <SectionHeader title="My Listings" />
           <div className="space-y-2">
             {data.listings.map((listing) => (
-              <div key={listing.id} className="card p-3 flex items-center gap-3">
+              <div 
+                key={listing.id} 
+                onClick={() => setSelectedListingToEdit(listing)}
+                className="card p-3 flex items-center gap-3 cursor-pointer hover:bg-white/[0.03] active:scale-[0.99] transition"
+              >
                 {listing.image ? (
                   <img src={listing.image} alt={listing.title} className="w-12 h-12 rounded-xl object-cover shrink-0" />
                 ) : (
@@ -278,13 +351,14 @@ export default function Profile({
                   <p className="text-sm font-bold text-ink truncate">{listing.title}</p>
                   <p className="text-[11px] text-ink-mute mt-0.5">₹{listing.price}{listing.priceUnit ? ` / ${listing.priceUnit}` : ""}</p>
                 </div>
+                <ChevronRight className="w-4 h-4 text-ink-mute shrink-0" />
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* QUICK SNAPSHOT (from original Profile.tsx, moved lower to prioritize social layout) */}
+      {/* QUICK SNAPSHOT */}
       <SectionHeader title="Academic Snapshot" />
       <div className="grid grid-cols-3 gap-2.5 mb-5">
         <Snap
@@ -327,83 +401,179 @@ export default function Profile({
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-white font-bold text-[15px]">Got a side hustle?</p>
-            <p className="text-white/75 text-xs">Start selling on Footfall — it&apos;s free</p>
+            <p className="text-white/75 text-xs">Start selling on Cmpus — it&apos;s free</p>
           </div>
           <ChevronRight className="w-5 h-5 text-white/80 shrink-0" />
         </button>
       )}
 
-      {/* SETTINGS */}
+      {/* GROUPED SETTINGS */}
       <SectionHeader title="Settings" />
-      <div className="card divide-y divide-black/5 shadow-sm">
-        <Row
-          label="Attendance target"
-          value={Math.round(profile.attendanceTarget * 100) + "%"}
-          onClick={() => setSettingsOpen(true)}
-        />
-        <Row
-          label="Grade system"
-          value={
-            profile.gradeSystem === "percentage" ? "Percentage" : "10-point GPA"
-          }
-          onClick={() => setSettingsOpen(true)}
-        />
-        <Row
-          label="Monthly budget"
-          value={profile.monthlyBudget ? "₹" + profile.monthlyBudget : "Not set"}
-          onClick={() => setSettingsOpen(true)}
-        />
-        <Row
-          label="Reminders"
-          value={data.reminders?.enabled ? "On" : "Off"}
-          onClick={() => setRemindersOpen(true)}
-        />
+      <div className="space-y-6 mb-6 text-left">
+        {/* Account Group */}
+        <div>
+          <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider mb-2 pl-1">Account</p>
+          <div className="card divide-y divide-white/[0.04] shadow-sm">
+            <button onClick={() => setEditProfileOpen(true)} className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]">
+              <span className="text-sm text-ink-soft font-semibold">Edit Profile</span>
+              <ChevronRight className="w-4 h-4 text-ink-mute" />
+            </button>
+            <div className="w-full flex items-center justify-between p-3.5">
+              <div>
+                <span className="text-sm text-ink-soft font-semibold block">Private Account</span>
+                <span className="text-[10px] text-ink-mute">Approval needed for new followers</span>
+              </div>
+              <button
+                onClick={togglePrivacy}
+                className={`w-10 h-5 rounded-full transition-colors relative shrink-0 ${isPrivate ? "bg-brand-500" : "bg-white/10"}`}
+              >
+                <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all ${isPrivate ? "left-5.5" : "left-0.5"}`} />
+              </button>
+            </div>
+            {!profile?.verified && (
+              <button onClick={() => setVerifyOpen(true)} className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]">
+                <span className="text-sm text-brand-300 font-semibold">🛡️ Verify Student ID</span>
+                <ChevronRight className="w-4 h-4 text-brand-300" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Academic Group */}
+        <div>
+          <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider mb-2 pl-1">Academic</p>
+          <div className="card divide-y divide-white/[0.04] shadow-sm">
+            <button onClick={() => setAcademicSettingsOpen(true)} className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]">
+              <span className="text-sm text-ink-soft font-semibold">Attendance target</span>
+              <span className="flex items-center gap-1 text-sm font-bold text-ink">
+                {Math.round(profile.attendanceTarget * 100) + "%"}
+                <ChevronRight className="w-4 h-4 text-ink-mute" />
+              </span>
+            </button>
+            <button onClick={() => setAcademicSettingsOpen(true)} className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]">
+              <span className="text-sm text-ink-soft font-semibold">Grade system</span>
+              <span className="flex items-center gap-1 text-sm font-bold text-ink">
+                {profile.gradeSystem === "percentage" ? "Percentage" : "10-point GPA"}
+                <ChevronRight className="w-4 h-4 text-ink-mute" />
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* Money Group */}
+        <div>
+          <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider mb-2 pl-1">Money</p>
+          <div className="card shadow-sm">
+            <button onClick={() => setMoneySettingsOpen(true)} className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]">
+              <span className="text-sm text-ink-soft font-semibold">Monthly budget</span>
+              <span className="flex items-center gap-1 text-sm font-bold text-ink">
+                {profile.monthlyBudget ? "₹" + profile.monthlyBudget : "Not set"}
+                <ChevronRight className="w-4 h-4 text-ink-mute" />
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* Notifications Group */}
+        <div>
+          <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider mb-2 pl-1">Notifications & Sound</p>
+          <div className="card divide-y divide-white/[0.04] shadow-sm">
+            <button onClick={() => setRemindersOpen(true)} className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]">
+              <span className="text-sm text-ink-soft font-semibold">Reminders</span>
+              <span className="flex items-center gap-1 text-sm font-bold text-ink">
+                {data.reminders?.enabled ? "On" : "Off"}
+                <ChevronRight className="w-4 h-4 text-ink-mute" />
+              </span>
+            </button>
+            <div className="w-full flex items-center justify-between p-3.5">
+              <div>
+                <span className="text-sm text-ink-soft font-semibold block">Sound Effects</span>
+                <span className="text-[10px] text-ink-mute">Audio haptics for interactions</span>
+              </div>
+              <button
+                onClick={() => {
+                  update((d) => {
+                    d.profile.soundEnabled = d.profile.soundEnabled === false ? true : false;
+                  });
+                }}
+                className={`w-10 h-5 rounded-full transition-colors relative shrink-0 ${profile.soundEnabled !== false ? "bg-brand-500" : "bg-white/10"}`}
+              >
+                <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all ${profile.soundEnabled !== false ? "left-5.5" : "left-0.5"}`} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* About Group */}
+        <div>
+          <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider mb-2 pl-1">About</p>
+          <div className="card divide-y divide-white/[0.04] shadow-sm">
+            <div className="flex items-center justify-between p-3.5">
+              <span className="text-sm text-ink-soft font-semibold">App version</span>
+              <span className="text-xs text-ink-mute font-bold">Cmpus v1.0</span>
+            </div>
+            <a href="/terms" className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]">
+              <span className="text-sm text-ink-soft font-semibold">Terms of Service</span>
+              <ChevronRight className="w-4 h-4 text-ink-mute" />
+            </a>
+            <a href="/privacy" className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]">
+              <span className="text-sm text-ink-soft font-semibold">Privacy Policy</span>
+              <ChevronRight className="w-4 h-4 text-ink-mute" />
+            </a>
+          </div>
+        </div>
+
+        {/* Danger Zone */}
+        <div>
+          <p className="text-[10px] font-bold text-red-500/80 uppercase tracking-wider mb-2 pl-1">Danger Zone</p>
+          <div className="card divide-y divide-white/[0.04] border border-red-500/10 shadow-sm">
+            <button
+              onClick={async () => {
+                if (confirm("Are you sure you want to sign out?")) {
+                  await signOut();
+                }
+              }}
+              className="w-full p-3.5 text-left active:bg-white/[0.04] text-red-400 font-semibold text-sm flex items-center justify-between"
+            >
+              <span>Sign Out</span>
+              <ChevronRight className="w-4 h-4 text-red-400" />
+            </button>
+            <button
+              onClick={() => {
+                if (confirm("Reset all data? This clears everything on this device.")) {
+                  reset();
+                }
+              }}
+              className="w-full p-3.5 text-left active:bg-white/[0.04] text-red-500 font-bold text-sm flex items-center justify-between"
+            >
+              <span>Reset all data</span>
+              <ChevronRight className="w-4 h-4 text-red-500" />
+            </button>
+          </div>
+        </div>
       </div>
 
-      <button
-        onClick={async () => {
-          if (confirm("Are you sure you want to sign out?")) {
-            await signOut();
-          }
-        }}
-        className="w-full text-center text-brand-300 text-sm font-semibold mt-6"
-      >
-        Sign Out
-      </button>
-
-      <button
-        onClick={() => {
-          if (confirm("Reset all data? This clears everything on this device.")) {
-            reset();
-          }
-        }}
-        className="w-full text-center text-red-400 text-sm font-semibold mt-4"
-      >
-        Reset all data
-      </button>
-      
-      <p className="text-center text-ink-mute text-[11px] mt-6">
-        Powered by{" "}
-        <span className="font-semibold text-brand-500">Footfall &amp; Co</span>
+      <p className="text-center text-ink-mute text-[10px] mt-2 mb-8">
+        Powered by <span className="font-semibold text-brand-500">Footfall &amp; Co</span>
       </p>
 
       {/* SHEETS & DIALOGS */}
-      <SettingsSheet
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-      />
       <RemindersSheet
         open={remindersOpen}
         onClose={() => setRemindersOpen(false)}
       />
-
-      {/* Edit Profile Sheet */}
+      <AcademicSettingsSheet
+        open={academicSettingsOpen}
+        onClose={() => setAcademicSettingsOpen(false)}
+      />
+      <MoneySettingsSheet
+        open={moneySettingsOpen}
+        onClose={() => setMoneySettingsOpen(false)}
+      />
       <EditProfileSheet
         open={editProfileOpen}
         onClose={() => setEditProfileOpen(false)}
       />
-
-      {/* Verify ID Sheet */}
       <VerifyIdSheet
         open={verifyOpen}
         onClose={() => setVerifyOpen(false)}
@@ -411,24 +581,29 @@ export default function Profile({
         college={profile?.college || ""}
         onVerified={() => refreshProfile()}
       />
-
-      {/* Create Story Sheet */}
-      <CreateStoryOpenSheet
-        open={createStoryOpen}
-        onClose={() => setCreateStoryOpen(false)}
+      <SocialListSheet
+        open={socialSheetOpen}
+        onClose={() => setSocialSheetOpen(false)}
+        type={socialSheetType}
+        people={socialPeople}
+        loading={socialLoading}
+        onToggleFollow={handleSocialAction}
+        onOpenClassmate={(p) => setSelectedClassmate(p)}
+        onRemoveFollower={handleRemoveFollower}
       />
-
-      {/* Create Highlight Sheet */}
-      <CreateHighlightSheet
-        open={createHighlightOpen}
-        onClose={() => setCreateHighlightOpen(false)}
-      />
-
-      {/* Story Viewer Modal */}
-      {activeStoriesToView && (
-        <StoryViewerModal
-          stories={activeStoriesToView}
-          onClose={() => setActiveStoriesToView(null)}
+      {selectedClassmate && (
+        <ClassmateDetailSheet
+          open={!!selectedClassmate}
+          onClose={() => setSelectedClassmate(null)}
+          person={selectedClassmate}
+          onToggleFollow={handleSocialAction}
+        />
+      )}
+      {selectedListingToEdit && (
+        <EditListingSheet
+          open={!!selectedListingToEdit}
+          onClose={() => setSelectedListingToEdit(null)}
+          listing={selectedListingToEdit}
         />
       )}
     </div>
@@ -444,30 +619,7 @@ function Snap({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Row({
-  label,
-  value,
-  onClick,
-}: {
-  label: string;
-  value: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]"
-    >
-      <span className="text-sm text-ink-soft font-semibold">{label}</span>
-      <span className="flex items-center gap-1 text-sm font-bold text-ink">
-        {value}
-        <ChevronRight className="w-4 h-4 text-ink-mute" />
-      </span>
-    </button>
-  );
-}
-
-function SettingsSheet({
+function AcademicSettingsSheet({
   open,
   onClose,
 }: {
@@ -478,32 +630,22 @@ function SettingsSheet({
   const [target, setTarget] = useState(
     Math.round(data.profile.attendanceTarget * 100)
   );
-  const [budget, setBudget] = useState(
-    data.profile.monthlyBudget ? String(data.profile.monthlyBudget) : ""
-  );
-  const [soundEnabled, setSoundEnabled] = useState(
-    data.profile.soundEnabled !== false
-  );
 
   useEffect(() => {
     if (open) {
       setTarget(Math.round(data.profile.attendanceTarget * 100));
-      setBudget(data.profile.monthlyBudget ? String(data.profile.monthlyBudget) : "");
-      setSoundEnabled(data.profile.soundEnabled !== false);
     }
   }, [open, data.profile]);
 
   function save() {
     update((d) => {
       d.profile.attendanceTarget = target / 100;
-      d.profile.monthlyBudget = Number(budget) || 0;
-      d.profile.soundEnabled = soundEnabled;
     });
     onClose();
   }
 
   return (
-    <Sheet open={open} onClose={onClose} title="Settings">
+    <Sheet open={open} onClose={onClose} title="Academic Settings">
       <div className="space-y-5">
         <div>
           <label className="text-sm font-semibold text-ink-soft mb-2 block">
@@ -527,6 +669,7 @@ function SettingsSheet({
             {(["gpa10", "percentage"] as const).map((g) => (
               <button
                 key={g}
+                type="button"
                 onClick={() =>
                   update((d) => {
                     d.profile.gradeSystem = g;
@@ -543,46 +686,15 @@ function SettingsSheet({
             ))}
           </div>
         </div>
-        <div>
-          <label className="text-sm font-semibold text-ink-soft mb-2 block">
-            Monthly budget (₹)
-          </label>
-          <input
-            type="number"
-            inputMode="numeric"
-            className="input"
-            placeholder="e.g. 5000 — leave empty for none"
-            value={budget}
-            onChange={(e) => setBudget(e.target.value)}
-          />
-        </div>
-        <div className="flex items-center justify-between py-2 border-t border-white/5 pt-4">
-          <div>
-            <label className="text-sm font-semibold text-ink leading-none">Sound Effects</label>
-            <p className="text-[10px] text-ink-mute mt-1">Play click and chime audio haptics</p>
-          </div>
-          <button
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            className={`w-11 h-6 rounded-full transition-colors relative shrink-0 ${
-              soundEnabled ? "bg-brand-500" : "bg-white/10"
-            }`}
-          >
-            <span
-              className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${
-                soundEnabled ? "translate-x-6" : "translate-x-1"
-              }`}
-            />
-          </button>
-        </div>
-        <button onClick={save} className="btn-primary w-full">
-          Save
+        <button onClick={save} className="btn-primary w-full py-2.5 mt-4">
+          Save Academic Settings
         </button>
       </div>
     </Sheet>
   );
 }
 
-function RemindersSheet({
+function MoneySettingsSheet({
   open,
   onClose,
 }: {
@@ -590,234 +702,47 @@ function RemindersSheet({
   onClose: () => void;
 }) {
   const { data, update } = useStore();
-  const settings = data.reminders || {
-    enabled: false,
-    classReminders: true,
-    classLeadMin: 15,
-    deadlineReminders: true,
-    deadlineLeadDays: 1,
-    attendanceNudge: true,
-    dailyAgenda: false,
-  };
-
-  const [enabled, setEnabled] = useState(settings.enabled);
-  const [classReminders, setClassReminders] = useState(settings.classReminders);
-  const [classLeadMin, setClassLeadMin] = useState(settings.classLeadMin);
-  const [deadlineReminders, setDeadlineReminders] = useState(settings.deadlineReminders);
-  const [deadlineLeadDays, setDeadlineLeadDays] = useState(settings.deadlineLeadDays);
-  const [attendanceNudge, setAttendanceNudge] = useState(settings.attendanceNudge);
-  const [dailyAgenda, setDailyAgenda] = useState(settings.dailyAgenda);
+  const [budget, setBudget] = useState(
+    data.profile.monthlyBudget ? String(data.profile.monthlyBudget) : ""
+  );
 
   useEffect(() => {
-    if (open && data.reminders) {
-      setEnabled(data.reminders.enabled);
-      setClassReminders(data.reminders.classReminders);
-      setClassLeadMin(data.reminders.classLeadMin);
-      setDeadlineReminders(data.reminders.deadlineReminders);
-      setDeadlineLeadDays(data.reminders.deadlineLeadDays);
-      setAttendanceNudge(data.reminders.attendanceNudge);
-      setDailyAgenda(data.reminders.dailyAgenda);
+    if (open) {
+      setBudget(data.profile.monthlyBudget ? String(data.profile.monthlyBudget) : "");
     }
-  }, [open, data.reminders]);
-
-  async function handleToggleMaster(val: boolean) {
-    if (val) {
-      if (!("Notification" in window)) {
-        alert("This browser does not support desktop notifications.");
-        return;
-      }
-      const perm = await Notification.requestPermission();
-      if (perm === "granted") {
-        setEnabled(true);
-      } else {
-        alert("Notification permission was denied. Please enable notifications in your browser settings.");
-        setEnabled(false);
-      }
-    } else {
-      setEnabled(false);
-    }
-  }
+  }, [open, data.profile]);
 
   function save() {
     update((d) => {
-      d.reminders = {
-        enabled,
-        classReminders,
-        classLeadMin,
-        deadlineReminders,
-        deadlineLeadDays,
-        attendanceNudge,
-        dailyAgenda,
-      };
+      d.profile.monthlyBudget = Number(budget) || 0;
     });
     onClose();
   }
 
   return (
-    <Sheet open={open} onClose={onClose} title="Reminders">
-      <div className="space-y-4">
-        <div className="flex items-center justify-between p-3.5 bg-white/[0.04] rounded-2xl">
-          <div>
-            <p className="text-sm font-bold text-ink">Enable Reminders</p>
-            <p className="text-[10px] text-ink-mute">
-              Get browser notifications for schedule
-            </p>
-          </div>
-          <button
-            onClick={() => handleToggleMaster(!enabled)}
-            className={`w-11 h-6 rounded-full transition-colors relative flex items-center shrink-0 ${
-              enabled ? "bg-brand-500" : "bg-black/15"
-            }`}
-          >
-            <span
-              className={`w-[18px] h-[18px] rounded-full bg-white absolute transition-transform shadow ${
-                enabled ? "translate-x-[22px]" : "translate-x-1"
-              }`}
-              style={{ width: "18px", height: "18px" }}
-            />
-          </button>
+    <Sheet open={open} onClose={onClose} title="Money Settings">
+      <div className="space-y-4 text-left">
+        <div>
+          <label className="text-xs font-bold text-ink-soft mb-2 block uppercase tracking-wide">
+            Monthly budget (₹)
+          </label>
+          <input
+            type="number"
+            inputMode="numeric"
+            className="input text-sm"
+            placeholder="e.g. 5000 — leave empty for none"
+            value={budget}
+            onChange={(e) => setBudget(e.target.value)}
+          />
         </div>
-
-        {enabled && (
-          <div className="space-y-3.5 animate-fade-in">
-            {/* Class Reminders */}
-            <div className="card p-4 space-y-3 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-bold text-ink">Class Alerts</p>
-                  <p className="text-[10px] text-ink-mute">
-                    Before each class slot begins
-                  </p>
-                </div>
-                <button
-                  onClick={() => setClassReminders(!classReminders)}
-                  className={`w-10 h-5 rounded-full transition-colors relative flex items-center shrink-0 ${
-                    classReminders ? "bg-brand-500" : "bg-black/15"
-                  }`}
-                >
-                  <span
-                    className={`w-3.5 h-3.5 rounded-full bg-white absolute transition-transform shadow ${
-                      classReminders ? "translate-x-5" : "translate-x-1"
-                    }`}
-                    style={{ width: "14px", height: "14px" }}
-                  />
-                </button>
-              </div>
-              {classReminders && (
-                <div className="flex items-center justify-between pt-3 border-t border-white/10">
-                  <span className="text-xs text-ink-soft">Lead time:</span>
-                  <select
-                    className="input py-1 px-2 text-xs w-[120px]"
-                    value={classLeadMin}
-                    onChange={(e) => setClassLeadMin(Number(e.target.value))}
-                  >
-                    <option value={5}>5 min before</option>
-                    <option value={10}>10 min before</option>
-                    <option value={15}>15 min before</option>
-                    <option value={30}>30 min before</option>
-                  </select>
-                </div>
-              )}
-            </div>
-
-            {/* Deadline Reminders */}
-            <div className="card p-4 space-y-3 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-bold text-ink">Deadline Alerts</p>
-                  <p className="text-[10px] text-ink-mute">
-                    For exams and assignments
-                  </p>
-                </div>
-                <button
-                  onClick={() => setDeadlineReminders(!deadlineReminders)}
-                  className={`w-10 h-5 rounded-full transition-colors relative flex items-center shrink-0 ${
-                    deadlineReminders ? "bg-brand-500" : "bg-black/15"
-                  }`}
-                >
-                  <span
-                    className={`w-3.5 h-3.5 rounded-full bg-white absolute transition-transform shadow ${
-                      deadlineReminders ? "translate-x-5" : "translate-x-1"
-                    }`}
-                    style={{ width: "14px", height: "14px" }}
-                  />
-                </button>
-              </div>
-              {deadlineReminders && (
-                <div className="flex items-center justify-between pt-3 border-t border-white/10">
-                  <span className="text-xs text-ink-soft">Lead time:</span>
-                  <select
-                    className="input py-1 px-2 text-xs w-[120px]"
-                    value={deadlineLeadDays}
-                    onChange={(e) => setDeadlineLeadDays(Number(e.target.value))}
-                  >
-                    <option value={1}>1 day before</option>
-                    <option value={2}>2 days before</option>
-                    <option value={3}>3 days before</option>
-                  </select>
-                </div>
-              )}
-            </div>
-
-            {/* Attendance Nudge */}
-            <div className="card p-4 flex items-center justify-between shadow-sm">
-              <div>
-                <p className="text-sm font-bold text-ink">Attendance Nudge</p>
-                <p className="text-[10px] text-ink-mute">
-                  Nudge at 6:00 PM if attendance is unmarked
-                </p>
-              </div>
-              <button
-                onClick={() => setAttendanceNudge(!attendanceNudge)}
-                className={`w-10 h-5 rounded-full transition-colors relative flex items-center shrink-0 ${
-                  attendanceNudge ? "bg-brand-500" : "bg-black/15"
-                }`}
-              >
-                <span
-                  className={`w-3.5 h-3.5 rounded-full bg-white absolute transition-transform shadow ${
-                    attendanceNudge ? "translate-x-5" : "translate-x-1"
-                  }`}
-                  style={{ width: "14px", height: "14px" }}
-                />
-              </button>
-            </div>
-
-            {/* Daily Agenda */}
-            <div className="card p-4 flex items-center justify-between shadow-sm">
-              <div>
-                <p className="text-sm font-bold text-ink">Daily Agenda</p>
-                <p className="text-[10px] text-ink-mute">
-                  Show today's agenda banner in the morning
-                </p>
-              </div>
-              <button
-                onClick={() => setDailyAgenda(!dailyAgenda)}
-                className={`w-10 h-5 rounded-full transition-colors relative flex items-center shrink-0 ${
-                  dailyAgenda ? "bg-brand-500" : "bg-black/15"
-                }`}
-              >
-                <span
-                  className={`w-3.5 h-3.5 rounded-full bg-white absolute transition-transform shadow ${
-                    dailyAgenda ? "translate-x-5" : "translate-x-1"
-                  }`}
-                  style={{ width: "14px", height: "14px" }}
-                />
-              </button>
-            </div>
-          </div>
-        )}
-
-        <button onClick={save} className="btn-primary w-full py-2.5">
-          Save Settings
+        <button onClick={save} className="btn-primary w-full py-2.5 mt-2">
+          Save Budget
         </button>
       </div>
     </Sheet>
   );
 }
 
-// ── NEW SOCIAL SHEETS & COMPONENTS FOR PROFILE OVERHAUL ──
-
-// Edit Profile Details and Avatar picker
 function EditProfileSheet({
   open,
   onClose,
@@ -828,6 +753,11 @@ function EditProfileSheet({
   const { data, update } = useStore();
   const { user } = useAuth();
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
+  const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
+  const usernameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [college, setCollege] = useState("");
+  const [year, setYear] = useState("");
   const [course, setCourse] = useState("");
   const [avatar, setAvatar] = useState("");
   const [bio, setBio] = useState("");
@@ -837,12 +767,17 @@ function EditProfileSheet({
   const [linkedin, setLinkedin] = useState("");
   const [instagram, setInstagram] = useState("");
   const [portfolio, setPortfolio] = useState("");
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
 
   const emojis = ["👨‍💻", "👩‍💻", "🎓", "🌟", "🎨", "🚀", "🍕", "🎸", "🐱", "🦁", "🥤", "🛹"];
 
   useEffect(() => {
     if (open && data.profile) {
       setName(data.profile.name || "");
+      setUsername(data.profile.username || "");
+      setUsernameStatus("idle");
+      setCollege(data.profile.college || "");
+      setYear(data.profile.year ? String(data.profile.year) : "");
       setCourse(data.profile.course || "B.Tech Computer Science");
       setAvatar(data.profile.avatar || "👨‍💻");
       setBio(data.profile.bio || "");
@@ -852,8 +787,39 @@ function EditProfileSheet({
       setLinkedin(data.profile.links?.linkedin || "");
       setInstagram(data.profile.links?.instagram || "");
       setPortfolio(data.profile.links?.portfolio || "");
+      setAvatarFile(null);
     }
   }, [open, data.profile]);
+
+  // Username validation with 400ms debounce
+  function handleUsernameChange(val: string) {
+    const cleaned = val.toLowerCase().replace(/[^a-z0-9_]/g, "");
+    setUsername(cleaned);
+    if (usernameTimerRef.current) clearTimeout(usernameTimerRef.current);
+    if (cleaned === (data.profile?.username || "")) {
+      setUsernameStatus("idle");
+      return;
+    }
+    const re = /^[a-z0-9_]{3,20}$/;
+    if (!cleaned || !re.test(cleaned)) {
+      setUsernameStatus(cleaned.length === 0 ? "idle" : "invalid");
+      return;
+    }
+    setUsernameStatus("checking");
+    usernameTimerRef.current = setTimeout(async () => {
+      if (isDemo()) {
+        setUsernameStatus(cleaned === "arjun_s" ? "taken" : "available");
+        return;
+      }
+      const { data: existing } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("username", cleaned)
+        .neq("id", user?.id || "")
+        .maybeSingle();
+      setUsernameStatus(existing ? "taken" : "available");
+    }, 400);
+  }
 
   function addSkill() {
     const s = skillInput.trim();
@@ -865,39 +831,66 @@ function EditProfileSheet({
     setSkills(skills.filter((x) => x !== s));
   }
 
-  function handleSave() {
+  async function save() {
     if (!name.trim()) return;
-    const trimmedBio = bio.trim() || undefined;
-    const trimmedSkills = skills.length > 0 ? skills : undefined;
-    const links = { github: github.trim() || undefined, linkedin: linkedin.trim() || undefined, instagram: instagram.trim() || undefined, portfolio: portfolio.trim() || undefined };
-    const hasLinks = links.github || links.linkedin || links.instagram || links.portfolio;
+    const parsedYear = Number(year) || 1;
+    const trimmedBio = bio.trim();
+    const trimmedSkills = skills.map((s) => s.trim()).filter(Boolean);
+
+    const hasLinks = github.trim() || linkedin.trim() || instagram.trim() || portfolio.trim();
+    const links = {
+      github: github.trim(),
+      linkedin: linkedin.trim(),
+      instagram: instagram.trim(),
+      portfolio: portfolio.trim(),
+    };
+
+    let finalAvatar = avatar;
+    if (avatarFile && !isDemo() && user) {
+      try {
+        finalAvatar = await uploadPhoto("avatars", `${user.id}/avatar-${Date.now()}.png`, avatarFile);
+      } catch (err) {
+        console.error("Avatar upload failed, utilizing fallback:", err);
+      }
+    }
 
     update((d) => {
       d.profile.name = name.trim();
+      d.profile.college = college.trim() || undefined;
+      d.profile.year = parsedYear;
       d.profile.course = course.trim();
-      d.profile.avatar = avatar;
+      d.profile.avatar = finalAvatar;
       d.profile.bio = trimmedBio;
       d.profile.skills = trimmedSkills;
       d.profile.links = hasLinks ? links : undefined;
     });
 
     if (!isDemo() && user) {
-      dbUpdateProfile(user.id, {
+      const profileUpdate: Record<string, any> = {
         name: name.trim(),
+        college: college.trim(),
+        year: parsedYear,
         course: course.trim(),
         bio: trimmedBio,
         skills: trimmedSkills,
         links: hasLinks ? (links as Record<string, string>) : {},
-      });
+        avatar_url: finalAvatar,
+      };
+      // Save username if changed and valid
+      const usernameChanged = username !== (data.profile?.username || "");
+      if (usernameChanged && (usernameStatus === "available" || usernameStatus === "idle")) {
+        profileUpdate.username = username || undefined;
+      }
+      dbUpdateProfile(user.id, profileUpdate);
     }
 
     onClose();
   }
 
-  // Handle base64 profile photo upload
   function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) {
+      setAvatarFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setAvatar(reader.result as string);
@@ -908,18 +901,54 @@ function EditProfileSheet({
 
   return (
     <Sheet open={open} onClose={onClose} title="Edit Profile">
-      <div className="space-y-4">
+      <div className="space-y-4 text-left">
         {/* Username */}
         <div>
           <label className="text-[11px] font-bold text-ink-soft uppercase tracking-wide block mb-1">
             Username
           </label>
-          <input
-            className="input text-sm opacity-50 cursor-not-allowed bg-white/[0.02]"
-            value={data.profile?.username ? `@${data.profile.username}` : "No username set"}
-            readOnly
-            disabled
-          />
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-mute text-sm font-medium select-none">@</span>
+            <input
+              className={`input text-sm pl-8 pr-10 transition-colors ${
+                usernameStatus === "available" ? "border-green-500/40 focus:border-green-500/60" :
+                usernameStatus === "taken" ? "border-red-500/40 focus:border-red-500/60" :
+                usernameStatus === "invalid" ? "border-amber-500/40 focus:border-amber-500/60" :
+                ""
+              }`}
+              placeholder="your_username"
+              value={username}
+              onChange={(e) => handleUsernameChange(e.target.value)}
+              maxLength={20}
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2">
+              {usernameStatus === "checking" && (
+                <span className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin inline-block" />
+              )}
+              {usernameStatus === "available" && (
+                <span className="w-5 h-5 rounded-full bg-green-500/20 text-green-400 inline-flex items-center justify-center text-[10px]">✓</span>
+              )}
+              {usernameStatus === "taken" && (
+                <span className="w-5 h-5 rounded-full bg-red-500/20 text-red-400 inline-flex items-center justify-center text-[10px] font-bold">!</span>
+              )}
+              {usernameStatus === "invalid" && (
+                <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 inline-flex items-center justify-center text-[10px] font-bold">⚠</span>
+              )}
+            </span>
+          </div>
+          <p className={`text-[10px] mt-1 font-medium transition-colors ${
+            usernameStatus === "available" ? "text-green-400" :
+            usernameStatus === "taken" ? "text-red-400" :
+            usernameStatus === "invalid" ? "text-amber-400" :
+            usernameStatus === "checking" ? "text-ink-mute" :
+            "text-transparent"
+          }`}>
+            {usernameStatus === "checking" && "Checking availability…"}
+            {usernameStatus === "available" && "Username is available!"}
+            {usernameStatus === "taken" && "Username is already taken"}
+            {usernameStatus === "invalid" && "3–20 chars: lowercase, numbers, underscores only"}
+            {usernameStatus === "idle" && "\u200b"}
+          </p>
         </div>
 
         {/* Name */}
@@ -932,6 +961,34 @@ function EditProfileSheet({
             placeholder="Name"
             value={name}
             onChange={(e) => setName(e.target.value)}
+          />
+        </div>
+
+        {/* College */}
+        <div>
+          <label className="text-[11px] font-bold text-ink-soft uppercase tracking-wide block mb-1">
+            College
+          </label>
+          <input
+            className="input text-sm"
+            placeholder="e.g. Delhi Technological University"
+            value={college}
+            onChange={(e) => setCollege(e.target.value)}
+          />
+        </div>
+
+        {/* Year */}
+        <div>
+          <label className="text-[11px] font-bold text-ink-soft uppercase tracking-wide block mb-1">
+            Year
+          </label>
+          <input
+            type="number"
+            inputMode="numeric"
+            className="input text-sm"
+            placeholder="e.g. 1, 2, 3, 4"
+            value={year}
+            onChange={(e) => setYear(e.target.value)}
           />
         </div>
 
@@ -1068,6 +1125,7 @@ function EditProfileSheet({
               <img src={avatar} alt="Preview" className="w-12 h-12 rounded-full object-cover border border-white/[0.14]" />
               <span className="text-xs font-semibold text-ink-soft">Custom avatar selected</span>
               <button 
+                type="button"
                 onClick={() => setAvatar("👨‍💻")} 
                 className="text-red-500 font-bold text-xs ml-auto"
               >
@@ -1077,7 +1135,7 @@ function EditProfileSheet({
           )}
         </div>
 
-        <button onClick={handleSave} disabled={!name.trim()} className="btn-primary w-full py-2.5 mt-2">
+        <button onClick={save} disabled={!name.trim()} className="btn-primary w-full py-2.5 mt-2">
           Save Changes
         </button>
       </div>
@@ -1085,647 +1143,388 @@ function EditProfileSheet({
   );
 }
 
-// Create and Post Story Sheet
-function CreateStoryOpenSheet({
+function SocialListSheet({
   open,
   onClose,
+  type,
+  people,
+  loading,
+  onToggleFollow,
+  onOpenClassmate,
+  onRemoveFollower,
 }: {
   open: boolean;
   onClose: () => void;
+  type: "followers" | "following";
+  people: any[];
+  loading: boolean;
+  onToggleFollow: (person: any) => Promise<void>;
+  onOpenClassmate: (person: any) => void;
+  onRemoveFollower?: (person: any) => void;
 }) {
-  const { data, update, uid } = useStore();
-  const [mediaType, setMediaType] = useState<"text" | "image">("text");
-  const [caption, setCaption] = useState("");
-  const [textContent, setTextContent] = useState("");
-  const [imageBase64, setImageBase64] = useState("");
-  
-  // Gradients list
-  const gradients = [
-    "from-purple-600 to-pink-500", // Instagram gradient
-    "from-emerald-500 to-teal-700", // Brand teal
-    "from-blue-600 to-indigo-800", // Dark royal blue
-    "from-amber-500 to-red-600", // Sunset orange
-  ];
-  const [activeGradient, setActiveGradient] = useState(gradients[0]);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
+  return (
+    <Sheet open={open} onClose={onClose} title={type === "followers" ? "Followers" : "Following"}>
+      {loading ? (
+        <div className="text-center py-8 text-xs text-ink-mute font-bold">Loading...</div>
+      ) : people.length === 0 ? (
+        <div className="text-center py-8 text-xs text-ink-mute font-bold">
+          {type === "followers" ? "No followers yet." : "You are not following anyone."}
+        </div>
+      ) : (
+        <div className="space-y-3 max-h-[350px] overflow-y-auto no-scrollbar text-left">
+          {people.map((person) => (
+            <div key={person.id} className="flex items-center justify-between py-2 border-b border-white/[0.03]">
+              <div
+                onClick={() => {
+                  onClose();
+                  onOpenClassmate(person);
+                }}
+                className="flex items-center gap-3 cursor-pointer active:opacity-75 transition flex-1 min-w-0"
+              >
+                <div className="w-10 h-10 rounded-full bg-white/[0.05] flex items-center justify-center text-xl shrink-0 overflow-hidden">
+                  {person.avatar && person.avatar.startsWith("data:") ? (
+                    <img src={person.avatar} alt={person.name} className="w-full h-full object-cover rounded-full" />
+                  ) : (
+                    <span>{person.avatar || "🎓"}</span>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1">
+                    <p className="text-sm font-bold text-ink truncate">{person.name}</p>
+                    {person.verified && (
+                      <span className="inline-flex items-center justify-center w-3.5 h-3.5 bg-brand-500 text-white rounded-full text-[7px] shrink-0">
+                        ✓
+                      </span>
+                    )}
+                  </div>
+                  {person.username && <p className="text-xs text-ink-mute truncate">@{person.username}</p>}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {type === "followers" && onRemoveFollower && (
+                  removingId === person.id ? (
+                    <button
+                      type="button"
+                      onClick={() => { onRemoveFollower(person); setRemovingId(null); }}
+                      className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/20 transition"
+                    >
+                      Sure?
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setRemovingId(person.id)}
+                      className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold bg-white/[0.04] text-ink-mute border border-white/[0.06] transition"
+                    >
+                      Remove
+                    </button>
+                  )
+                )}
+                <button
+                  type="button"
+                  onClick={() => onToggleFollow(person)}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition shrink-0 ${
+                    person.followed
+                      ? "bg-white/[0.06] text-brand-300 border border-brand-500/20"
+                      : "bg-brand-500 text-white"
+                  }`}
+                >
+                  {person.followed ? "Following" : "Follow"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
+function ClassmateDetailSheet({
+  open,
+  onClose,
+  person,
+  onToggleFollow,
+}: {
+  open: boolean;
+  onClose: () => void;
+  person: any;
+  onToggleFollow: (person: any) => Promise<void>;
+}) {
+  const [localFollowed, setLocalFollowed] = useState(person.followed);
 
   useEffect(() => {
-    if (open) {
-      setMediaType("text");
-      setCaption("");
-      setTextContent("");
-      setImageBase64("");
-      setActiveGradient(gradients[0]);
-    }
-  }, [open]);
+    setLocalFollowed(person.followed);
+  }, [person.followed]);
 
-  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  return (
+    <Sheet open={open} onClose={onClose} title={`${person.name}'s Profile`}>
+      <div className="space-y-5 text-left">
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 rounded-full bg-white/[0.07] border border-white/[0.14] flex items-center justify-center text-3xl overflow-hidden shrink-0">
+            {person.avatar && person.avatar.startsWith("data:") ? (
+              <img src={person.avatar} className="w-full h-full object-cover" alt="" />
+            ) : (
+              person.avatar || "🎓"
+            )}
+          </div>
+          <div>
+            <div className="flex items-center gap-1">
+              <h3 className="text-base font-bold text-ink">{person.name}</h3>
+              {person.verified && (
+                <span className="inline-flex items-center justify-center w-4 h-4 bg-brand-500 text-white rounded-full text-[8px]">
+                  ✓
+                </span>
+              )}
+            </div>
+            {person.username && <p className="text-xs text-brand-300 font-medium">@{person.username}</p>}
+            <p className="text-[10px] text-ink-mute mt-1 font-semibold">
+              {person.course} {person.year ? `· Year ${person.year}` : ""} {person.college ? `· ${person.college}` : ""}
+            </p>
+          </div>
+        </div>
+
+        {person.bio && (
+          <div>
+            <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wide mb-1">Bio</p>
+            <p className="text-sm text-ink-soft leading-relaxed">{person.bio}</p>
+          </div>
+        )}
+
+        {person.skills && person.skills.length > 0 && (
+          <div>
+            <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wide mb-1.5">Skills</p>
+            <div className="flex flex-wrap gap-1.5">
+              {person.skills.map((s: string) => (
+                <span key={s} className="px-2.5 py-1 bg-white/[0.05] rounded-full text-[10px] text-ink-soft border border-white/[0.08] font-semibold">
+                  {s}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {person.links && (person.links.github || person.links.linkedin || person.links.instagram || person.links.portfolio) && (
+          <div>
+            <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wide mb-1.5">Links</p>
+            <div className="flex flex-wrap gap-1.5">
+              {person.links.github && <span className="px-2.5 py-1 bg-white/[0.05] rounded-full text-[10px] text-ink-mute border border-white/[0.07] font-semibold">🐙 {person.links.github}</span>}
+              {person.links.linkedin && <span className="px-2.5 py-1 bg-white/[0.05] rounded-full text-[10px] text-ink-mute border border-white/[0.07] font-semibold">💼 {person.links.linkedin}</span>}
+              {person.links.instagram && <span className="px-2.5 py-1 bg-white/[0.05] rounded-full text-[10px] text-ink-mute border border-white/[0.07] font-semibold">📸 {person.links.instagram}</span>}
+              {person.links.portfolio && <span className="px-2.5 py-1 bg-white/[0.05] rounded-full text-[10px] text-ink-mute border border-white/[0.07] font-semibold">🌐 {person.links.portfolio}</span>}
+            </div>
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={async () => {
+            await onToggleFollow(person);
+            setLocalFollowed(!localFollowed);
+          }}
+          className={`w-full py-2.5 rounded-xl text-xs font-bold transition ${
+            localFollowed
+              ? "bg-white/[0.06] text-brand-300 border border-brand-500/20 hover:bg-white/10"
+              : "bg-brand-500 text-white hover:bg-brand-600"
+          }`}
+        >
+          {localFollowed ? "Following" : "Follow"}
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
+function EditListingSheet({
+  open,
+  onClose,
+  listing,
+}: {
+  open: boolean;
+  onClose: () => void;
+  listing: any;
+}) {
+  const { update } = useStore();
+  const { user } = useAuth();
+  const [title, setTitle] = useState("");
+  const [price, setPrice] = useState("");
+  const [priceUnit, setPriceUnit] = useState("");
+  const [description, setDescription] = useState("");
+  const [image, setImage] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (open && listing) {
+      setTitle(listing.title || "");
+      setPrice(String(listing.price || ""));
+      setPriceUnit(listing.priceUnit || "");
+      setDescription(listing.description || "");
+      setImage(listing.image || "");
+    }
+  }, [open, listing]);
+
+  async function handleSave() {
+    if (!title.trim()) return;
+    setLoading(true);
+    try {
+      const parsedPrice = Number(price) || 0;
+      update((d) => {
+        d.listings = d.listings.map((l) =>
+          l.id === listing.id
+            ? { ...l, title: title.trim(), price: parsedPrice, priceUnit: priceUnit.trim(), description: description.trim(), image: image.trim() }
+            : l
+        );
+      });
+
+      if (!isDemo() && user) {
+        await supabase.from("listings")
+          .update({
+            title: title.trim(),
+            price: parsedPrice,
+            price_unit: priceUnit.trim() || null,
+            description: description.trim(),
+            images: image.trim() ? [image.trim()] : []
+          })
+          .eq("id", listing.id)
+          .eq("user_id", user.id);
+      }
+      onClose();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirm("Delete this listing permanently?")) return;
+    setLoading(true);
+    try {
+      update((d) => {
+        d.listings = d.listings.filter((l) => l.id !== listing.id);
+      });
+
+      if (!isDemo() && user) {
+        await supabase.from("listings")
+          .delete()
+          .eq("id", listing.id)
+          .eq("user_id", user.id);
+      }
+      onClose();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setImageBase64(reader.result as string);
+        setImage(reader.result as string);
       };
       reader.readAsDataURL(file);
     }
   }
 
-  function handlePost() {
-    if (mediaType === "text" && !textContent.trim()) return;
-    if (mediaType === "image" && !imageBase64) return;
-
-    // Use selected gradient class as mediaUrl for text stories
-    const mediaUrl = mediaType === "text" ? `gradient:${activeGradient}|content:${textContent.trim()}` : imageBase64;
-
-    const newStory = {
-      id: uid(),
-      userId: "me",
-      userName: data.profile.name || "Me",
-      userAvatar: data.profile.avatar || "👨‍💻",
-      mediaUrl,
-      mediaType,
-      caption: mediaType === "image" && caption.trim() ? caption.trim() : undefined,
-      createdAt: new Date().toISOString(),
-    };
-
-    update((d) => {
-      if (!d.profile.stories) d.profile.stories = [];
-      d.profile.stories.push(newStory);
-    });
-
-    onClose();
-  }
-
   return (
-    <Sheet open={open} onClose={onClose} title="Add to Story">
-      <div className="space-y-4">
-        {/* Toggle Media Type */}
-        <div className="flex gap-2 bg-black/[0.04] p-1 rounded-2xl text-xs font-bold">
-          <button
-            type="button"
-            onClick={() => setMediaType("text")}
-            className={`flex-1 py-2 rounded-xl transition ${
-              mediaType === "text" ? "bg-white/10 text-ink" : "text-ink-mute"
-            }`}
-          >
-            ✍️ Text Story
-          </button>
-          <button
-            type="button"
-            onClick={() => setMediaType("image")}
-            className={`flex-1 py-2 rounded-xl transition ${
-              mediaType === "image" ? "bg-white/10 text-ink" : "text-ink-mute"
-            }`}
-          >
-            📸 Photo Story
-          </button>
-        </div>
-
-        {mediaType === "text" ? (
-          /* Text story composer */
-          <div className="space-y-3.5 animate-fade-in">
-            <div className={`w-full h-44 rounded-2xl bg-gradient-to-tr ${activeGradient} flex items-center justify-center p-4 text-center text-white relative shadow-inner`}>
-              <textarea
-                className="bg-transparent w-full text-lg font-black placeholder-white/60 focus:outline-none text-center resize-none border-none leading-snug outline-none"
-                placeholder="What's on your mind?"
-                value={textContent}
-                onChange={(e) => setTextContent(e.target.value)}
-                maxLength={120}
-              />
-              <span className="absolute bottom-2 right-3 text-[10px] text-white/50 font-bold">
-                {textContent.length}/120
-              </span>
-            </div>
-
-            {/* Gradient Selector */}
-            <div>
-              <label className="text-[11px] font-bold text-ink-soft uppercase tracking-wide block mb-2">
-                Background Theme
-              </label>
-              <div className="flex gap-3">
-                {gradients.map((grad) => (
-                  <button
-                    key={grad}
-                    type="button"
-                    onClick={() => setActiveGradient(grad)}
-                    className={`w-10 h-10 rounded-full bg-gradient-to-tr ${grad} transition ${
-                      activeGradient === grad ? "ring-4 ring-brand-500/30 scale-105 border-2 border-white" : ""
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : (
-          /* Image story composer */
-          <div className="space-y-4 animate-fade-in">
-            {imageBase64 ? (
-              <div className="relative w-full h-44 rounded-2xl overflow-hidden shadow-inner border border-white/10 bg-white/[0.07] flex items-center justify-center">
-                <img src={imageBase64} alt="Upload preview" className="w-full h-full object-cover" />
-                <button
-                  onClick={() => setImageBase64("")}
-                  className="absolute top-2 right-2 w-7 h-7 bg-black/60 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                >
-                  ✕
-                </button>
-              </div>
-            ) : (
-              <div className="text-center py-4 bg-white/[0.04] border-2 border-dashed border-white/[0.14] rounded-2xl">
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  id="story-image-picker"
-                  onChange={handleImageUpload}
-                />
-                <label
-                  htmlFor="story-image-picker"
-                  className="inline-block px-5 py-3 bg-brand-500/15 hover:bg-brand-500/20 text-brand-300 font-bold text-xs rounded-xl cursor-pointer transition active:scale-95 shadow-sm"
-                >
-                  📁 Select Photo
-                </label>
-                <p className="text-[10px] text-ink-mute mt-2">Max file size 5MB (JPEG, PNG)</p>
-              </div>
-            )}
-
-            <div>
-              <label className="text-[11px] font-bold text-ink-soft uppercase tracking-wide block mb-1">
-                Caption (Optional)
-              </label>
-              <input
-                className="input text-sm"
-                placeholder="Write a caption..."
-                value={caption}
-                onChange={(e) => setCaption(e.target.value)}
-              />
-            </div>
-          </div>
-        )}
-
-        <button
-          onClick={handlePost}
-          disabled={(mediaType === "text" && !textContent.trim()) || (mediaType === "image" && !imageBase64)}
-          className="btn-primary w-full py-2.5 font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed mt-2"
-        >
-          Share to Story
-        </button>
-      </div>
-    </Sheet>
-  );
-}
-
-// Create highlights Sheet from historical stories
-function CreateHighlightSheet({
-  open,
-  onClose,
-}: {
-  open: boolean;
-  onClose: () => void;
-}) {
-  const { data, update, uid } = useStore();
-  const [title, setTitle] = useState("");
-  const [coverEmoji, setCoverEmoji] = useState("🌟");
-  const [selectedStoryIds, setSelectedStoryIds] = useState<string[]>([]);
-
-  const emojis = ["🌟", "🎓", "🍕", "🎉", "🔥", "💻", "📚", "🎨", "🚀", "🎸", "🌊", "🏡"];
-  const userStories = data.profile.stories || [];
-
-  useEffect(() => {
-    if (open) {
-      setTitle("");
-      setCoverEmoji("🌟");
-      setSelectedStoryIds([]);
-    }
-  }, [open]);
-
-  function handleToggleStory(id: string) {
-    setSelectedStoryIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  }
-
-  function handleCreate() {
-    if (!title.trim() || selectedStoryIds.length === 0) return;
-
-    // Filter the selected story objects
-    const selectedStoriesList = userStories.filter((s) => selectedStoryIds.includes(s.id));
-
-    const newHighlight = {
-      id: uid(),
-      title: title.trim(),
-      coverEmoji,
-      stories: selectedStoriesList,
-    };
-
-    update((d) => {
-      if (!d.profile.highlights) d.profile.highlights = [];
-      d.profile.highlights.push(newHighlight);
-    });
-
-    onClose();
-  }
-
-  return (
-    <Sheet open={open} onClose={onClose} title="Create Highlight">
-      <div className="space-y-4">
-        {/* Title */}
+    <Sheet open={open} onClose={onClose} title="Edit Listing">
+      <div className="space-y-4 text-left">
         <div>
           <label className="text-[11px] font-bold text-ink-soft uppercase tracking-wide block mb-1">
-            Highlight Title
+            Listing Title
           </label>
           <input
             className="input text-sm"
-            placeholder="e.g. Campus / Food / Hack"
+            placeholder="What are you offering?"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            maxLength={10}
-            required
           />
         </div>
-
-        {/* Cover Emoji */}
-        <div>
-          <label className="text-[11px] font-bold text-ink-soft uppercase tracking-wide block mb-2">
-            Select Cover Icon
-          </label>
-          <div className="grid grid-cols-6 gap-2">
-            {emojis.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => setCoverEmoji(emoji)}
-                className={`h-10 rounded-xl flex items-center justify-center text-xl transition bg-white/[0.04] ${
-                  coverEmoji === emoji ? "ring-2 ring-brand-500 bg-brand-500/15" : "hover:bg-white/[0.07]"
-                }`}
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Select Stories */}
-        <div>
-          <label className="text-[11px] font-bold text-ink-soft uppercase tracking-wide block mb-2">
-            Select Stories ({selectedStoryIds.length} selected)
-          </label>
-          {userStories.length === 0 ? (
-            <p className="text-xs text-ink-mute text-center py-4 bg-black/[0.01] rounded-xl border border-white/10">
-              You haven't posted any stories yet.
-            </p>
-          ) : (
-            <div className="max-h-48 overflow-y-auto space-y-2 no-scrollbar border border-white/10 rounded-xl p-2 bg-black/[0.01]">
-              {userStories.map((story) => {
-                const isSelected = selectedStoryIds.includes(story.id);
-                // Parse helper for preview
-                let textPreview = "";
-                if (story.mediaType === "text") {
-                  const contentPart = story.mediaUrl.split("|content:")[1];
-                  textPreview = contentPart ? contentPart : "Text story";
-                } else {
-                  textPreview = story.caption || "[Photo story]";
-                }
-
-                return (
-                  <div
-                    key={story.id}
-                    onClick={() => handleToggleStory(story.id)}
-                    className={`flex items-center gap-3 p-2.5 rounded-xl transition cursor-pointer ${
-                      isSelected ? "bg-brand-500/15 border border-brand-200" : "bg-white hover:bg-white/[0.04]"
-                    }`}
-                  >
-                    {story.mediaType === "image" ? (
-                      <img src={story.mediaUrl} className="w-8 h-8 rounded-lg object-cover" alt="" />
-                    ) : (
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-brand-400 to-teal-600 flex items-center justify-center text-white text-[8px] font-bold">
-                        ✍️
-                      </div>
-                    )}
-                    <span className="text-xs font-semibold text-ink-soft truncate flex-1">{textPreview}</span>
-                    <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${
-                      isSelected ? "border-brand-500 bg-brand-500 text-white" : "border-white/20"
-                    }`}>
-                      {isSelected && <span className="text-[10px] font-bold">✓</span>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        <button
-          onClick={handleCreate}
-          disabled={!title.trim() || selectedStoryIds.length === 0}
-          className="btn-primary w-full py-2.5 font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed mt-2"
-        >
-          Create Highlight
-        </button>
-      </div>
-    </Sheet>
-  );
-}
-
-// ── FULL-SCREEN STORY VIEWER MODAL ──
-export function StoryViewerModal({
-  stories,
-  onClose,
-}: {
-  stories: Story[];
-  onClose: () => void;
-}) {
-  const { update, uid } = useStore();
-  const [index, setIndex] = useState(0);
-  const [progress, setProgress] = useState(0);
-  const [replyText, setReplyText] = useState("");
-  const [toast, setToast] = useState("");
-  const [lastTap, setLastTap] = useState(0);
-  const [showHeart, setShowHeart] = useState(false);
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [translateY, setTranslateY] = useState(0);
-
-  const currentStory = stories[index];
-
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(""), 1500);
-  }
-
-  // Drag down to close handlers
-  function handleTouchStart(e: React.TouchEvent) {
-    setTouchStart(e.touches[0].clientY);
-  }
-
-  function handleTouchMove(e: React.TouchEvent) {
-    if (touchStart === null) return;
-    const currentY = e.touches[0].clientY;
-    const diff = currentY - touchStart;
-    if (diff > 0) {
-      setTranslateY(diff);
-    }
-  }
-
-  function handleTouchEnd() {
-    if (translateY > 120) {
-      onClose();
-    } else {
-      setTranslateY(0);
-    }
-    setTouchStart(null);
-  }
-
-  // Double tap to like
-  function handleDoubleTap(e: React.MouseEvent) {
-    const now = Date.now();
-    const DOUBLE_PRESS_DELAY = 300;
-    if (now - lastTap < DOUBLE_PRESS_DELAY) {
-      setShowHeart(true);
-      setTimeout(() => setShowHeart(false), 800);
-      playPop();
-      handleSendReply("❤️");
-      showToast("Story Liked! ❤️");
-    } else {
-      setLastTap(now);
-    }
-  }
-
-  // Auto-progress story every 5 seconds (50 ticks of 100ms)
-  useEffect(() => {
-    setProgress(0);
-    const interval = setInterval(() => {
-      setProgress((p) => {
-        if (p >= 100) {
-          handleNext();
-          return 0;
-        }
-        return p + 2; // Increments by 2% every 100ms = 5000ms total
-      });
-    }, 100);
-
-    return () => clearInterval(interval);
-  }, [index, stories]);
-
-  function handleNext() {
-    if (index < stories.length - 1) {
-      setIndex(index + 1);
-    } else {
-      onClose();
-    }
-  }
-
-  function handlePrev() {
-    if (index > 0) {
-      setIndex(index - 1);
-    }
-  }
-
-  if (!currentStory) return null;
-
-  // Helper to parse gradients in text stories
-  let textStoryContent = "";
-  let gradientClass = "from-purple-600 to-pink-500";
-  if (currentStory.mediaType === "text" && currentStory.mediaUrl.startsWith("gradient:")) {
-    const parts = currentStory.mediaUrl.split("|content:");
-    textStoryContent = parts[1] || "";
-    const gradPart = parts[0].replace("gradient:", "");
-    if (gradPart) gradientClass = gradPart;
-  } else if (currentStory.mediaType === "text") {
-    textStoryContent = currentStory.mediaUrl;
-  }
-
-  function handleSendReply(text: string) {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    const classmateName = currentStory.userName;
-    
-    update((d) => {
-      // Find or create direct message chat
-      let chat = d.groups.find((g) => g.direct && g.members.includes(classmateName));
-      if (!chat) {
-        chat = {
-          id: uid(),
-          name: classmateName,
-          members: [classmateName],
-          tasks: [],
-          notes: "",
-          createdAt: new Date().toISOString(),
-          messages: [],
-          direct: true,
-        };
-        d.groups.push(chat);
-      }
-      
-      chat.messages = chat.messages || [];
-      chat.messages.push({
-        id: uid(),
-        sender: "me",
-        text: `Replied to your story "${currentStory.mediaType === 'text' ? (textStoryContent.length > 20 ? textStoryContent.slice(0, 20) + '...' : textStoryContent) : 'Photo'}": ${trimmed}`,
-        at: new Date().toISOString(),
-      });
-    });
-  }
-
-  return (
-    <div 
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      style={{ transform: `translateY(${translateY}px)`, transition: translateY === 0 ? "transform 0.2s ease" : "none" }}
-      className="fixed inset-0 z-50 bg-black/95 flex flex-col justify-between p-4 max-w-[440px] mx-auto animate-fade-in"
-    >
-      {/* Toast Notification */}
-      {toast && (
-        <div className="absolute top-16 inset-x-0 mx-auto w-max z-50 bg-brand-500/20 border border-brand-500/40 backdrop-blur-md text-white text-xs font-bold px-4 py-2 rounded-full shadow-lg animate-fade-in">
-          {toast}
-        </div>
-      )}
-
-      {/* Top Segmented Progress Bar */}
-      <div className="flex gap-1.5 w-full pt-2 px-1">
-        {stories.map((_, i) => {
-          let widthVal = "0%";
-          if (i < index) widthVal = "100%";
-          else if (i === index) widthVal = `${progress}%`;
-          
-          return (
-            <div key={i} className="h-1 flex-1 bg-white/20 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-white transition-all duration-75"
-                style={{ width: widthVal }}
-              />
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Header Info */}
-      <div className="flex items-center justify-between gap-3 mt-3 px-1">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm font-bold border border-white/20 overflow-hidden shrink-0">
-            {currentStory.userAvatar && currentStory.userAvatar.startsWith("data:") ? (
-              <img src={currentStory.userAvatar} className="w-full h-full object-cover" alt="" />
-            ) : (
-              <span>{currentStory.userAvatar || "👨‍💻"}</span>
-            )}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-[11px] font-bold text-ink-soft uppercase tracking-wide block mb-1">
+              Price (₹)
+            </label>
+            <input
+              type="number"
+              className="input text-sm"
+              placeholder="0 = Ask"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+            />
           </div>
           <div>
-            <p className="text-xs font-black text-white">{currentStory.userName === "me" ? "You" : currentStory.userName}</p>
-            <p className="text-[9px] text-white/50 font-bold">
-              {new Date(currentStory.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </p>
+            <label className="text-[11px] font-bold text-ink-soft uppercase tracking-wide block mb-1">
+              Unit (e.g. per hr)
+            </label>
+            <input
+              className="input text-sm"
+              placeholder="optional"
+              value={priceUnit}
+              onChange={(e) => setPriceUnit(e.target.value)}
+            />
           </div>
         </div>
-        <button 
-          onClick={onClose}
-          className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white active:scale-90 transition font-bold"
-        >
-          ✕
-        </button>
-      </div>
-
-      {/* Main Content Area (Tappable zones) */}
-      <div 
-        onClick={handleDoubleTap}
-        className="flex-1 flex items-center justify-center relative my-4 rounded-3xl overflow-hidden cursor-pointer"
-      >
-        {/* Left Tap Control */}
-        <div 
-          onClick={(e) => {
-            e.stopPropagation();
-            handlePrev();
-          }} 
-          className="absolute left-0 inset-y-0 w-[35%] z-20 cursor-pointer"
-        />
-        {/* Right Tap Control */}
-        <div 
-          onClick={(e) => {
-            e.stopPropagation();
-            handleNext();
-          }} 
-          className="absolute right-0 inset-y-0 w-[65%] z-20 cursor-pointer"
-        />
-
-        {/* Flying Heart Animation */}
-        {showHeart && (
-          <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none animate-ping">
-            <span className="text-6xl filter drop-shadow-[0_0_12px_rgba(236,72,153,0.8)]">❤️</span>
-          </div>
-        )}
-
-        {/* Content Render */}
-        {currentStory.mediaType === "text" ? (
-          <div className={`w-full h-full bg-gradient-to-tr ${gradientClass} flex items-center justify-center text-center p-6 text-white`}>
-            <p className="text-2xl font-black leading-snug drop-shadow-md px-2 max-w-[280px]">
-              {textStoryContent}
-            </p>
-          </div>
-        ) : (
-          <div className="w-full h-full relative flex items-center justify-center bg-black">
-            <img src={currentStory.mediaUrl} alt="Story" className="w-full max-h-full object-contain pointer-events-none" />
-            {currentStory.caption && (
-              <div className="absolute bottom-6 inset-x-0 text-center px-4 py-3 bg-black/40 backdrop-blur-sm text-white text-sm font-bold z-10 max-w-[90%] mx-auto rounded-2xl border border-white/10">
-                {currentStory.caption}
-              </div>
+        <div>
+          <label className="text-[11px] font-bold text-ink-soft uppercase tracking-wide block mb-1">
+            Description
+          </label>
+          <textarea
+            className="input text-sm resize-none"
+            placeholder="Details, delivery, contact, etc..."
+            rows={3}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="text-[11px] font-bold text-ink-soft uppercase tracking-wide block mb-1">
+            Listing Photo
+          </label>
+          <div className="flex gap-2 items-center">
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              id="listing-edit-photo"
+              onChange={handlePhotoUpload}
+            />
+            <label
+              htmlFor="listing-edit-photo"
+              className="px-3 py-2 bg-white/[0.07] hover:bg-white/10 rounded-xl text-xs font-bold text-ink-soft cursor-pointer transition"
+            >
+              Select Photo
+            </label>
+            {image && (
+              <img src={image} className="w-10 h-10 object-cover rounded-lg border border-white/10" alt="Preview" />
             )}
           </div>
-        )}
-      </div>
-
-      {/* Bottom Quick Reply Bar (only for classmate stories, not "me") */}
-      {currentStory.userId !== "me" && (
-        <div className="mb-2 px-1 flex flex-col gap-2 relative z-30">
-          {/* Emojis row */}
-          <div className="flex justify-around bg-white/[0.04] p-1.5 rounded-2xl border border-white/[0.08] backdrop-blur-sm">
-            {["🔥", "😭", "😮", "😂", "❤️", "👏"].map((emoji) => (
-              <button
-                key={emoji}
-                onClick={() => {
-                  handleSendReply(emoji);
-                  showToast(`Sent ${emoji} reaction!`);
-                }}
-                className="text-xl active:scale-125 transition hover:scale-110"
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
-          
-          {/* Message input */}
-          <div className="flex gap-1.5">
-            <input
-              type="text"
-              placeholder="Send message..."
-              value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && replyText.trim()) {
-                  handleSendReply(replyText);
-                  setReplyText("");
-                  showToast("Reply sent!");
-                }
-              }}
-              className="bg-white/[0.05] hover:bg-white/[0.08] border border-white/[0.1] rounded-xl text-white text-xs px-3.5 py-2.5 flex-1 focus:outline-none focus:border-brand-500 transition"
-            />
-            <button
-              onClick={() => {
-                if (replyText.trim()) {
-                  handleSendReply(replyText);
-                  setReplyText("");
-                  showToast("Reply sent!");
-                }
-              }}
-              className="px-4 bg-brand-500 hover:bg-brand-600 active:scale-95 text-white text-xs font-bold rounded-xl transition"
-            >
-              Send
-            </button>
-          </div>
         </div>
-      )}
-
-      {/* Bottom Spacer */}
-      <div className="h-6 text-center text-[10px] font-bold text-white/40 tracking-wider">
-        Swipe down to close · Double tap center to ❤️
+        <div className="flex gap-2 pt-2">
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={loading}
+            className="flex-1 py-2.5 bg-red-500/20 text-red-400 hover:bg-red-500/30 transition rounded-xl font-bold text-sm"
+          >
+            Delete Listing
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={loading || !title.trim()}
+            className="btn-primary flex-1 py-2.5"
+          >
+            Save Changes
+          </button>
+        </div>
       </div>
-    </div>
+    </Sheet>
   );
 }
 
@@ -1863,6 +1662,249 @@ function VerifyIdSheet({ open, onClose, name, college, onVerified }: VerifyIdShe
             </div>
           </div>
         )}
+      </div>
+    </Sheet>
+  );
+}
+
+function RemindersSheet({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  const { data, update } = useStore();
+  const { user } = useAuth();
+  const settings = data.reminders || {
+    enabled: false,
+    classReminders: true,
+    classLeadMin: 15,
+    deadlineReminders: true,
+    deadlineLeadDays: 1,
+    attendanceNudge: true,
+    dailyAgenda: false,
+  };
+
+  const [enabled, setEnabled] = useState(settings.enabled);
+  const [classReminders, setClassReminders] = useState(settings.classReminders);
+  const [classLeadMin, setClassLeadMin] = useState(settings.classLeadMin);
+  const [deadlineReminders, setDeadlineReminders] = useState(settings.deadlineReminders);
+  const [deadlineLeadDays, setDeadlineLeadDays] = useState(settings.deadlineLeadDays);
+  const [attendanceNudge, setAttendanceNudge] = useState(settings.attendanceNudge);
+  const [dailyAgenda, setDailyAgenda] = useState(settings.dailyAgenda);
+
+  useEffect(() => {
+    if (open && data.reminders) {
+      setEnabled(data.reminders.enabled);
+      setClassReminders(data.reminders.classReminders);
+      setClassLeadMin(data.reminders.classLeadMin);
+      setDeadlineReminders(data.reminders.deadlineReminders);
+      setDeadlineLeadDays(data.reminders.deadlineLeadDays);
+      setAttendanceNudge(data.reminders.attendanceNudge);
+      setDailyAgenda(data.reminders.dailyAgenda);
+    }
+  }, [open, data.reminders]);
+
+  async function handleToggleMaster(val: boolean) {
+    if (val) {
+      if (!("Notification" in window)) {
+        alert("This browser does not support desktop notifications.");
+        return;
+      }
+      const perm = await Notification.requestPermission();
+      if (perm === "granted") {
+        setEnabled(true);
+      } else {
+        alert("Notification permission was denied. Please enable notifications in your browser settings.");
+        setEnabled(false);
+      }
+    } else {
+      setEnabled(false);
+    }
+  }
+
+  function save() {
+    update((d) => {
+      d.reminders = {
+        enabled,
+        classReminders,
+        classLeadMin,
+        deadlineReminders,
+        deadlineLeadDays,
+        attendanceNudge,
+        dailyAgenda,
+      };
+    });
+
+    if (user) {
+      if (enabled) {
+        subscribeUserToPush(user.id);
+      } else {
+        unsubscribeUserFromPush(user.id);
+      }
+    }
+
+    onClose();
+  }
+
+  return (
+    <Sheet open={open} onClose={onClose} title="Reminders">
+      <div className="space-y-4">
+        <div className="flex items-center justify-between p-3.5 bg-white/[0.04] rounded-2xl">
+          <div>
+            <p className="text-sm font-bold text-ink">Enable Reminders</p>
+            <p className="text-[10px] text-ink-mute">
+              Get browser notifications for schedule
+            </p>
+          </div>
+          <button
+            onClick={() => handleToggleMaster(!enabled)}
+            className={`w-11 h-6 rounded-full transition-colors relative flex items-center shrink-0 ${
+              enabled ? "bg-brand-500" : "bg-black/15"
+            }`}
+          >
+            <span
+              className={`w-[18px] h-[18px] rounded-full bg-white absolute transition-transform shadow ${
+                enabled ? "translate-x-[22px]" : "translate-x-1"
+              }`}
+              style={{ width: "18px", height: "18px" }}
+            />
+          </button>
+        </div>
+
+        {enabled && (
+          <div className="space-y-3.5 animate-fade-in text-left">
+            {/* Class Reminders */}
+            <div className="card p-4 space-y-3 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-bold text-ink">Class Alerts</p>
+                  <p className="text-[10px] text-ink-mute">
+                    Before each class slot begins
+                  </p>
+                </div>
+                <button
+                  onClick={() => setClassReminders(!classReminders)}
+                  className={`w-10 h-5 rounded-full transition-colors relative flex items-center shrink-0 ${
+                    classReminders ? "bg-brand-500" : "bg-black/15"
+                  }`}
+                >
+                  <span
+                    className={`w-3.5 h-3.5 rounded-full bg-white absolute transition-transform shadow ${
+                      classReminders ? "translate-x-5" : "translate-x-1"
+                    }`}
+                    style={{ width: "14px", height: "14px" }}
+                  />
+                </button>
+              </div>
+              {classReminders && (
+                <div className="flex items-center justify-between pt-3 border-t border-white/10">
+                  <span className="text-xs text-ink-soft">Lead time:</span>
+                  <select
+                    className="input py-1 px-2 text-xs w-[120px]"
+                    value={classLeadMin}
+                    onChange={(e) => setClassLeadMin(Number(e.target.value))}
+                  >
+                    <option value={5}>5 min before</option>
+                    <option value={10}>10 min before</option>
+                    <option value={15}>15 min before</option>
+                    <option value={30}>30 min before</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* Deadline Reminders */}
+            <div className="card p-4 space-y-3 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-bold text-ink">Deadline Alerts</p>
+                  <p className="text-[10px] text-ink-mute">
+                    For exams and assignments
+                  </p>
+                </div>
+                <button
+                  onClick={() => setDeadlineReminders(!deadlineReminders)}
+                  className={`w-10 h-5 rounded-full transition-colors relative flex items-center shrink-0 ${
+                    deadlineReminders ? "bg-brand-500" : "bg-black/15"
+                  }`}
+                >
+                  <span
+                    className={`w-3.5 h-3.5 rounded-full bg-white absolute transition-transform shadow ${
+                      deadlineReminders ? "translate-x-5" : "translate-x-1"
+                    }`}
+                    style={{ width: "14px", height: "14px" }}
+                  />
+                </button>
+              </div>
+              {deadlineReminders && (
+                <div className="flex items-center justify-between pt-3 border-t border-white/10">
+                  <span className="text-xs text-ink-soft">Lead time:</span>
+                  <select
+                    className="input py-1 px-2 text-xs w-[120px]"
+                    value={deadlineLeadDays}
+                    onChange={(e) => setDeadlineLeadDays(Number(e.target.value))}
+                  >
+                    <option value={1}>1 day before</option>
+                    <option value={2}>2 days before</option>
+                    <option value={3}>3 days before</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* Attendance Nudge */}
+            <div className="card p-4 flex items-center justify-between shadow-sm">
+              <div>
+                <p className="text-sm font-bold text-ink">Attendance Nudge</p>
+                <p className="text-[10px] text-ink-mute">
+                  Nudge at 6:00 PM if attendance is unmarked
+                </p>
+              </div>
+              <button
+                onClick={() => setAttendanceNudge(!attendanceNudge)}
+                className={`w-10 h-5 rounded-full transition-colors relative flex items-center shrink-0 ${
+                  attendanceNudge ? "bg-brand-500" : "bg-black/15"
+                }`}
+              >
+                <span
+                  className={`w-3.5 h-3.5 rounded-full bg-white absolute transition-transform shadow ${
+                    attendanceNudge ? "translate-x-5" : "translate-x-1"
+                  }`}
+                  style={{ width: "14px", height: "14px" }}
+                />
+              </button>
+            </div>
+
+            {/* Daily Agenda */}
+            <div className="card p-4 flex items-center justify-between shadow-sm">
+              <div>
+                <p className="text-sm font-bold text-ink">Daily Agenda</p>
+                <p className="text-[10px] text-ink-mute">
+                  Show today's agenda banner in the morning
+                </p>
+              </div>
+              <button
+                onClick={() => setDailyAgenda(!dailyAgenda)}
+                className={`w-10 h-5 rounded-full transition-colors relative flex items-center shrink-0 ${
+                  dailyAgenda ? "bg-brand-500" : "bg-black/15"
+                }`}
+              >
+                <span
+                  className={`w-3.5 h-3.5 rounded-full bg-white absolute transition-transform shadow ${
+                    dailyAgenda ? "translate-x-5" : "translate-x-1"
+                  }`}
+                  style={{ width: "14px", height: "14px" }}
+                />
+              </button>
+            </div>
+          </div>
+        )}
+
+        <button onClick={save} className="btn-primary w-full py-2.5">
+          Save Settings
+        </button>
       </div>
     </Sheet>
   );

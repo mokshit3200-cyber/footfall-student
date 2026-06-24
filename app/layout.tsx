@@ -5,17 +5,22 @@ import { AuthProvider } from "@/lib/auth";
 import PWA from "@/components/PWA";
 
 export const metadata: Metadata = {
-  title: "Footfall Student",
+  title: "Cmpus",
   description: "Attendance, deadlines, grades, money — your campus, sorted.",
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: "/icon.svg",
-    apple: "/icon.svg",
+    icon: [
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Footfall",
+    title: "Cmpus",
   },
 };
 

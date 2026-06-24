@@ -1,6 +1,6 @@
-/* Footfall Student — minimal offline service worker */
-const CACHE = "footfall-student-v1";
-const PRECACHE = ["/", "/manifest.webmanifest", "/icon.svg"];
+/* Cmpus — minimal offline service worker */
+const CACHE = "cmpus-v2";
+const PRECACHE = ["/", "/manifest.webmanifest", "/icon-192.png", "/brand/mark-white.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -54,14 +54,41 @@ self.addEventListener("fetch", (event) => {
   }
 });
 
+self.addEventListener("push", (event) => {
+  let payload = { title: "Cmpus", body: "New update!", url: "/" };
+  try {
+    if (event.data) {
+      payload = event.data.json();
+    }
+  } catch (err) {
+    payload = { title: "Cmpus", body: event.data ? event.data.text() : "New update!", url: "/" };
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: "/icon-192.png",
+      badge: "/favicon-32.png",
+      data: { url: payload.url || "/" }
+    })
+  );
+});
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  const targetUrl = event.notification.data?.url || "/";
+
   event.waitUntil(
     clients.matchAll({ type: "window" }).then((clientList) => {
       for (const client of clientList) {
-        if (client.url === "/" && "focus" in client) return client.focus();
+        if ("focus" in client) {
+          if (client.navigate) {
+            client.navigate(targetUrl);
+          }
+          return client.focus();
+        }
       }
-      if (clients.openWindow) return clients.openWindow("/");
+      if (clients.openWindow) return clients.openWindow(targetUrl);
     })
   );
 });

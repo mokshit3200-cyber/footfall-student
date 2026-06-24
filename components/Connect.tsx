@@ -5,6 +5,8 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { isDemo } from "@/lib/config";
 import { INTENTS } from "@/lib/intents";
+import { dbPostStory, dbFetchStoriesBar } from "@/lib/dbActions";
+import StoryViewer, { hasViewedAllStories } from "./StoryViewer";
 import {
   CheckIcon,
   ArrowLeftIcon,
@@ -21,7 +23,10 @@ import {
   ShareIcon,
   HandRaiseIcon,
   BuildingIcon,
-  SparklesIcon
+  SparklesIcon,
+  BellIcon,
+  CameraIcon,
+  PlusIcon
 } from "./icons";
 
 // Helper to compute expires_at timestamp
@@ -195,8 +200,31 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
   const [msgLoading, setMsgLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // DM extra actions
+  const [selectedMsgId, setSelectedMsgId] = useState<string | null>(null);
+  const [dmMenuOpen, setDmMenuOpen] = useState(false);
+  const [blockConfirmingId, setBlockConfirmingId] = useState<string | null>(null);
+  const [deleteConvoConfirming, setDeleteConvoConfirming] = useState(false);
+
   // Profile sheet
   const [viewProfile, setViewProfile] = useState<any | null>(null);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [profileBlockConfirming, setProfileBlockConfirming] = useState(false);
+
+  // Stories
+  const [storyUsers, setStoryUsers] = useState<any[]>([]);
+  const [storyViewerOpen, setStoryViewerOpen] = useState(false);
+  const [storyViewerStartIdx, setStoryViewerStartIdx] = useState(0);
+  const [addStoryOpen, setAddStoryOpen] = useState(false);
+  const [storyUploading, setStoryUploading] = useState(false);
+  const storyFileRef = useRef<HTMLInputElement>(null);
+  const [pendingVisibility, setPendingVisibility] = useState<"public" | "followers">("public");
+
+  // DM Inbox
+  const [dmInboxOpen, setDmInboxOpen] = useState(false);
+  const [dmInboxConvos, setDmInboxConvos] = useState<any[]>([]);
+  const [dmInboxLoading, setDmInboxLoading] = useState(false);
+  const [dmUnreadCount, setDmUnreadCount] = useState(0);
 
   // Bookmarks
   const [bookmarkedSignals, setBookmarkedSignals] = useState<Set<string>>(new Set());
@@ -216,6 +244,20 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
     }, 15000); // every 15 seconds
     return () => clearInterval(interval);
   }, []);
+
+  // Synchronize activeDmId with URL parameters for deep-linking
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (activeDmId) {
+      params.set("chat", activeDmId);
+    } else {
+      params.delete("chat");
+    }
+    const newUrl = `${window.location.pathname}?${params.toString()}`;
+    if (window.location.search !== `?${params.toString()}`) {
+      window.history.replaceState(null, "", newUrl);
+    }
+  }, [activeDmId]);
 
   // Share sheet search & friends
   const [shareSearch, setShareSearch] = useState("");
@@ -451,7 +493,102 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
     setMySignalIntent(null);
     setMySignalReach("campus");
     setMySignalExpiresAt(null);
+    // Demo stories
+    setStoryUsers([
+      {
+        userId: "dp1",
+        profile: { id: "dp1", name: "Arjun Sharma", username: "arjun_s", avatar_url: null, college: "IIIT Hyderabad", verified: true },
+        stories: [{ id: "ds-s1", media_url: "https://picsum.photos/seed/story1/400/700", visibility: "public" as const, created_at: new Date(Date.now() - 3600000).toISOString(), expires_at: new Date(Date.now() + 72000000).toISOString() }],
+      },
+      {
+        userId: "dp2",
+        profile: { id: "dp2", name: "Priya Nair", username: "priya.n", avatar_url: null, college: "IIIT Hyderabad", verified: false },
+        stories: [
+          { id: "ds-s2", media_url: "https://picsum.photos/seed/story2/400/700", visibility: "followers" as const, created_at: new Date(Date.now() - 7200000).toISOString(), expires_at: new Date(Date.now() + 72000000).toISOString() },
+          { id: "ds-s3", media_url: "https://picsum.photos/seed/story3/400/700", visibility: "public" as const, created_at: new Date(Date.now() - 1800000).toISOString(), expires_at: new Date(Date.now() + 72000000).toISOString() },
+        ],
+      },
+      {
+        userId: "dp6",
+        profile: { id: "dp6", name: "Divya Krishna", username: "divyak", avatar_url: null, college: "Osmania University", verified: false },
+        stories: [{ id: "ds-s4", media_url: "https://picsum.photos/seed/story4/400/700", visibility: "public" as const, created_at: new Date(Date.now() - 5400000).toISOString(), expires_at: new Date(Date.now() + 72000000).toISOString() }],
+      },
+    ]);
+    // Demo DM inbox
+    setDmUnreadCount(2);
   }, [demo]);
+
+  // ── Load stories bar ───────────────────────────────────────
+  useEffect(() => {
+    if (demo || !user || !profile?.college) return;
+    dbFetchStoriesBar(user.id, profile.college).then(entries => {
+      setStoryUsers(entries);
+    });
+  }, [user, profile, demo]);
+
+  // ── Load DM inbox ─────────────────────────────────────────
+  async function loadDmInbox() {
+    setDmInboxLoading(true);
+    if (demo) {
+      const localGroups = JSON.parse(localStorage.getItem("demo_groups") || "[]");
+      setDmInboxConvos(localGroups);
+      setDmInboxLoading(false);
+      return;
+    }
+    if (!user) { setDmInboxLoading(false); return; }
+    const { data } = await supabase
+      .from("group_members")
+      .select("group_id, groups!inner(id, type, last_message, last_at, request_status)")
+      .eq("user_id", user.id)
+      .eq("groups.type", "dm")
+      .order("groups(last_at)", { ascending: false })
+      .limit(30);
+    if (data) {
+      const convos = await Promise.all(data.map(async (gm: any) => {
+        const group = gm.groups;
+        const { data: members } = await supabase
+          .from("group_members")
+          .select("user_id, profiles!inner(id, name, username, avatar_url, college, course, year, verified)")
+          .eq("group_id", group.id)
+          .neq("user_id", user!.id)
+          .limit(1);
+        const peer = members?.[0]?.profiles || null;
+        return { group_id: group.id, peer, last_message: group.last_message, last_at: group.last_at, request_status: group.request_status };
+      }));
+      setDmInboxConvos(convos.filter(c => c.peer));
+    }
+    setDmInboxLoading(false);
+  }
+
+  // Story upload handler
+  async function handleStoryUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setStoryUploading(true);
+    if (demo) {
+      // Demo: just show a toast
+      setTimeout(() => {
+        setStoryUploading(false);
+        setAddStoryOpen(false);
+        showToast("Story posted! 📸");
+      }, 800);
+      return;
+    }
+    if (!user) { setStoryUploading(false); return; }
+    const ok = await dbPostStory(user.id, file, pendingVisibility);
+    setStoryUploading(false);
+    setAddStoryOpen(false);
+    if (ok) {
+      showToast("Story posted! 📸");
+      // Refresh stories bar
+      if (profile?.college) {
+        const entries = await dbFetchStoriesBar(user.id, profile.college);
+        setStoryUsers(entries);
+      }
+    } else {
+      showToast("Failed to post story");
+    }
+  }
 
   // ── Load feed ───────────────────────────────────────────
   useEffect(() => {
@@ -783,6 +920,34 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
     }
   }
 
+  // Open a full profile view (fetches skills/links from DB in live mode)
+  async function openViewProfile(partial: any) {
+    setViewProfile(partial);
+    setProfileMenuOpen(false);
+    setProfileBlockConfirming(false);
+    if (!demo && (partial.id || partial.user_id)) {
+      const id = partial.id ?? partial.user_id;
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, name, username, avatar_url, college, course, year, verified, is_private, skills, links, bio")
+        .eq("id", id)
+        .single();
+      if (data) setViewProfile((prev: any) => ({ ...prev, ...data }));
+    }
+  }
+
+  // Check for pending DM from Marketplace "Message Seller"
+  useEffect(() => {
+    if (demo) return;
+    const raw = localStorage.getItem("footfall-pending-dm");
+    if (!raw) return;
+    try {
+      const person = JSON.parse(raw);
+      localStorage.removeItem("footfall-pending-dm");
+      if (person?.id) openDm(person);
+    } catch { /* ignore */ }
+  }, [demo]);
+
   useEffect(() => {
     if (!activeDmId || demo) return;
     setMsgLoading(true);
@@ -897,23 +1062,57 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
 
   // ── DM chat screen ───────────────────────────────────────
   if (activeDmId && activePeer) {
+    const deleteMsg = async (msgId: string) => {
+      setMessages(prev => prev.filter(m => m.id !== msgId));
+      setSelectedMsgId(null);
+      if (!demo) {
+        await supabase.from("messages").delete().eq("id", msgId);
+      } else {
+        const saved = JSON.parse(localStorage.getItem(`demo_messages_${activeDmId}`) || "[]");
+        localStorage.setItem(`demo_messages_${activeDmId}`, JSON.stringify(saved.filter((m: any) => m.id !== msgId)));
+      }
+    };
+    const blockPeer = async () => {
+      if (!demo) {
+        await supabase.from("blocks").insert({ blocker_id: user!.id, blocked_id: activePeer.id });
+      }
+      setSignals(prev => prev.filter((s: any) => s.user_id !== activePeer.id));
+      setActiveDmId(null); setActivePeer(null); onChatOpen?.(false);
+      setDmMenuOpen(false); setBlockConfirmingId(null);
+      showToast("User blocked");
+    };
+    const deleteConvo = async () => {
+      if (!demo) {
+        await supabase.from("groups").delete().eq("id", activeDmId);
+      } else {
+        localStorage.removeItem(`demo_messages_${activeDmId}`);
+        const groups = JSON.parse(localStorage.getItem("demo_groups") || "[]");
+        localStorage.setItem("demo_groups", JSON.stringify(groups.filter((g: any) => g.group_id !== activeDmId)));
+      }
+      setActiveDmId(null); setActivePeer(null); onChatOpen?.(false);
+      setDmMenuOpen(false); setDeleteConvoConfirming(false);
+    };
     return (
-      <div className="flex flex-col h-screen max-h-screen bg-black text-white overflow-hidden">
+      <div className="fixed inset-0 z-50 flex flex-col bg-black text-white overflow-hidden" onClick={() => { if (selectedMsgId) setSelectedMsgId(null); }}>
         <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.07] shrink-0 bg-[#0c0c0e]/95 backdrop-blur-md sticky top-0 z-10">
           <button onClick={() => { setActiveDmId(null); setActivePeer(null); onChatOpen?.(false); }}
             className="w-10 h-10 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-95 transition flex items-center justify-center shrink-0 text-white">
             <ArrowLeftIcon className="w-5 h-5" />
           </button>
           <Avatar person={activePeer} size={9} />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1">
               <span className="font-bold text-ink text-sm truncate">{activePeer.name}</span>
               {activePeer.verified && <span className="inline-flex items-center justify-center w-3.5 h-3.5 bg-brand-500 text-white rounded-full text-[7px]"><CheckIcon className="w-2.5 h-2.5" /></span>}
             </div>
             {activePeer.username && <p className="text-[10px] text-brand-300 font-medium truncate">@{activePeer.username}</p>}
           </div>
+          <button onClick={(e) => { e.stopPropagation(); setDmMenuOpen(true); setBlockConfirmingId(null); setDeleteConvoConfirming(false); }}
+            className="w-9 h-9 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-90 transition flex items-center justify-center text-ink-soft shrink-0">
+            <span className="text-lg leading-none font-bold tracking-tighter">⋯</span>
+          </button>
         </div>
-        <div className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-3 bg-black">
+        <div className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-3 bg-black" style={{ overscrollBehavior: "contain" }}>
           {msgLoading ? <div className="flex items-center justify-center h-full opacity-40"><div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>
             : messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center opacity-60">
@@ -923,13 +1122,29 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
               </div>
             )
             : messages.map(m => {
-              const mine = m.sender_id === user?.id;
-              return <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-xs ${mine ? "bg-brand-500 text-white rounded-tr-none" : "bg-white/[0.08] text-ink rounded-tl-none border border-white/[0.05]"}`}>
-                  <p className="break-words leading-relaxed">{m.content}</p>
-                  <span className="text-[9px] opacity-50 block mt-1 text-right">{new Date(m.created_at).toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })}</span>
+              const mine = m.sender_id === user?.id || (demo && m.sender_id === "me");
+              const selected = selectedMsgId === m.id;
+              return (
+                <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                  {mine && selected && (
+                    <div className="flex items-center gap-1 mr-2 self-center">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); deleteMsg(m.id); }}
+                        className="px-2 py-1 rounded-lg bg-red-500/20 text-red-400 text-[10px] font-bold border border-red-500/20"
+                      >
+                        Delete?
+                      </button>
+                    </div>
+                  )}
+                  <div
+                    onClick={(e) => { e.stopPropagation(); if (mine) setSelectedMsgId(selected ? null : m.id); }}
+                    className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-xs cursor-default ${mine ? "bg-brand-500 text-white rounded-tr-none" : "bg-white/[0.08] text-ink rounded-tl-none border border-white/[0.05]"} ${selected ? "ring-2 ring-red-400/50" : ""}`}
+                  >
+                    <p className="break-words leading-relaxed">{m.content}</p>
+                    <span className="text-[9px] opacity-50 block mt-1 text-right">{new Date(m.created_at).toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })}</span>
+                  </div>
                 </div>
-              </div>;
+              );
             })}
           <div ref={bottomRef} />
         </div>
@@ -943,6 +1158,38 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
             </button>
           </form>
         </div>
+        {/* ⋯ Action sheet */}
+        {dmMenuOpen && (
+          <div className="absolute inset-0 z-[60] flex flex-col justify-end" onClick={() => { setDmMenuOpen(false); setBlockConfirmingId(null); setDeleteConvoConfirming(false); }}>
+            <div className="absolute inset-0 bg-black/50" />
+            <div className="relative bg-[#111] border-t border-white/[0.08] rounded-t-3xl p-4 space-y-2" onClick={e => e.stopPropagation()}>
+              <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-3" />
+              {blockConfirmingId ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-ink-mute text-center mb-2">Block {activePeer.name}? They won&apos;t be able to message you.</p>
+                  <button onClick={blockPeer} className="w-full py-3 rounded-2xl bg-red-500/20 text-red-400 font-bold text-sm border border-red-500/20">Confirm Block</button>
+                  <button onClick={() => setBlockConfirmingId(null)} className="w-full py-3 rounded-2xl bg-white/[0.05] text-ink-soft font-bold text-sm">Cancel</button>
+                </div>
+              ) : deleteConvoConfirming ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-ink-mute text-center mb-2">Delete this conversation? This cannot be undone.</p>
+                  <button onClick={deleteConvo} className="w-full py-3 rounded-2xl bg-red-500/20 text-red-400 font-bold text-sm border border-red-500/20">Delete Conversation</button>
+                  <button onClick={() => setDeleteConvoConfirming(false)} className="w-full py-3 rounded-2xl bg-white/[0.05] text-ink-soft font-bold text-sm">Cancel</button>
+                </div>
+              ) : (
+                <>
+                  <button onClick={() => setBlockConfirmingId(activePeer.id)} className="w-full py-3 rounded-2xl bg-red-500/10 text-red-400 font-bold text-sm text-left px-4">
+                    Block {activePeer.name}
+                  </button>
+                  <button onClick={() => setDeleteConvoConfirming(true)} className="w-full py-3 rounded-2xl bg-white/[0.05] text-ink-soft font-bold text-sm text-left px-4">
+                    Delete conversation
+                  </button>
+                  <button onClick={() => setDmMenuOpen(false)} className="w-full py-3 rounded-2xl bg-white/[0.04] text-ink-mute font-bold text-sm">Cancel</button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -954,13 +1201,32 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
     const personId = p.id ?? p.user_id;
     const isPrivate = p.is_private ?? p.profiles?.is_private ?? false;
     const profileData = p.profiles ?? p;
+    const canSeePrivate = !isPrivate || state === "following" || state === "mutual";
+    const skills: string[] = profileData.skills || [];
+    const links: Record<string, string> = profileData.links || {};
+
+    const blockFromProfile = async () => {
+      if (!demo) {
+        await supabase.from("blocks").insert({ blocker_id: user!.id, blocked_id: personId });
+      }
+      setSignals(prev => prev.filter((s: any) => s.user_id !== personId));
+      setViewProfile(null);
+      setProfileMenuOpen(false);
+      setProfileBlockConfirming(false);
+      showToast("User blocked");
+    };
+
     return (
       <div className="min-h-screen bg-black animate-fade-in pb-28">
         <div className="flex items-center gap-3 px-5 pt-12 pb-4 border-b border-white/[0.07] bg-[#0c0c0e]/95 backdrop-blur-md sticky top-0 z-10">
-          <button onClick={() => setViewProfile(null)} className="w-10 h-10 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-95 transition flex items-center justify-center text-white shrink-0">
+          <button onClick={() => { setViewProfile(null); setProfileMenuOpen(false); setProfileBlockConfirming(false); }} className="w-10 h-10 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-95 transition flex items-center justify-center text-white shrink-0">
             <ArrowLeftIcon className="w-5 h-5" />
           </button>
-          <span className="font-bold text-ink">Profile</span>
+          <span className="font-bold text-ink flex-1">Profile</span>
+          <button onClick={() => { setProfileMenuOpen(true); setProfileBlockConfirming(false); }}
+            className="w-9 h-9 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-90 transition flex items-center justify-center text-ink-soft shrink-0">
+            <span className="text-lg leading-none font-bold tracking-tighter">⋯</span>
+          </button>
         </div>
         <div className="px-5 pt-6">
           <div className="flex items-center gap-4 mb-4">
@@ -969,7 +1235,7 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
               <div className="flex items-center gap-1.5">
                 <h2 className="text-lg font-bold text-ink">{profileData.name}</h2>
                 {(profileData.verified) && <span className="inline-flex items-center justify-center w-4 h-4 bg-brand-500 text-white rounded-full text-[8px]"><CheckIcon className="w-3 h-3" /></span>}
-                {profileData.is_private && <LockIcon className="w-3.5 h-3.5 text-ink-mute shrink-0" />}
+                {isPrivate && <LockIcon className="w-3.5 h-3.5 text-ink-mute shrink-0" />}
               </div>
               {profileData.username && <p className="text-sm text-brand-300 font-medium">@{profileData.username}</p>}
               <p className="text-xs text-ink-mute mt-1">{profileData.course} · Y{profileData.year} · {profileData.college}</p>
@@ -1005,7 +1271,67 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
               </button>
             )}
           </div>
+          {/* Private gate or skills/links */}
+          {!canSeePrivate ? (
+            <div className="mt-8 text-center px-4">
+              <div className="w-16 h-16 rounded-full bg-white/[0.04] border border-white/[0.07] flex items-center justify-center mx-auto mb-3">
+                <LockIcon className="w-7 h-7 text-ink-mute" />
+              </div>
+              <p className="text-sm font-bold text-ink">This account is private</p>
+              <p className="text-xs text-ink-mute mt-1 leading-relaxed">Follow to see their skills, links, and full profile</p>
+            </div>
+          ) : (
+            <>
+              {skills.length > 0 && (
+                <div className="mt-5">
+                  <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider mb-2">Skills</p>
+                  <div className="flex flex-wrap gap-2">
+                    {skills.map((s: string) => (
+                      <span key={s} className="px-3 py-1.5 rounded-full bg-white/[0.05] border border-white/[0.08] text-xs font-medium text-ink-soft">{s}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {Object.values(links).some(Boolean) && (
+                <div className="mt-4">
+                  <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider mb-2">Links</p>
+                  <div className="space-y-2">
+                    {Object.entries(links).map(([label, url]) => url && (
+                      <a key={label} href={url as string} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-sm text-brand-300 font-medium active:opacity-70">
+                        <span className="w-7 h-7 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-[10px] shrink-0 capitalize">{label[0]?.toUpperCase()}</span>
+                        <span className="truncate">{url as string}</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
+        {/* Profile ⋯ action sheet */}
+        {profileMenuOpen && (
+          <div className="fixed inset-0 z-[60] flex flex-col justify-end" onClick={() => { setProfileMenuOpen(false); setProfileBlockConfirming(false); }}>
+            <div className="absolute inset-0 bg-black/50" />
+            <div className="relative bg-[#111] border-t border-white/[0.08] rounded-t-3xl p-4 space-y-2" onClick={e => e.stopPropagation()}>
+              <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-3" />
+              {profileBlockConfirming ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-ink-mute text-center mb-2">Block {profileData.name}? They won&apos;t be able to interact with you.</p>
+                  <button onClick={blockFromProfile} className="w-full py-3 rounded-2xl bg-red-500/20 text-red-400 font-bold text-sm border border-red-500/20">Confirm Block</button>
+                  <button onClick={() => setProfileBlockConfirming(false)} className="w-full py-3 rounded-2xl bg-white/[0.05] text-ink-soft font-bold text-sm">Cancel</button>
+                </div>
+              ) : (
+                <>
+                  <button onClick={() => setProfileBlockConfirming(true)} className="w-full py-3 rounded-2xl bg-red-500/10 text-red-400 font-bold text-sm text-left px-4">
+                    Block {profileData.name}
+                  </button>
+                  <button onClick={() => setProfileMenuOpen(false)} className="w-full py-3 rounded-2xl bg-white/[0.04] text-ink-mute font-bold text-sm">Cancel</button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1048,9 +1374,23 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
 
       {/* ── Header ── */}
       <div className="px-5 pt-12 pb-4">
-        <div className="flex items-center gap-2 mb-4">
-          <SignalIcon className="w-6 h-6 text-brand-400" />
-          <h1 className="text-2xl font-bold text-ink tracking-tight">Frequency</h1>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <SignalIcon className="w-6 h-6 text-brand-400" />
+            <h1 className="text-2xl font-bold text-ink tracking-tight">Frequency</h1>
+          </div>
+          {/* DM Inbox Bell */}
+          <button
+            onClick={() => { setDmInboxOpen(true); loadDmInbox(); }}
+            className="relative w-10 h-10 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-90 transition flex items-center justify-center text-ink-soft hover:text-white"
+          >
+            <BellIcon className="w-5 h-5" />
+            {dmUnreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1 border-2 border-black animate-bounce">
+                {dmUnreadCount > 9 ? "9+" : dmUnreadCount}
+              </span>
+            )}
+          </button>
         </div>
         <div className="flex items-center gap-3">
           <div className="relative flex-1">
@@ -1083,7 +1423,7 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
           )}
           <div className="space-y-2.5">
             {searchResults.map((p: any) => (
-              <div key={p.id} onClick={() => setViewProfile(p)}
+              <div key={p.id} onClick={() => openViewProfile(p)}
                 className="bg-[#0c0c0e]/90 border border-white/[0.07] rounded-3xl p-5 flex items-center gap-3.5 cursor-pointer hover:border-white/12 active:scale-[0.98] transition-all">
                 <Avatar person={p} size={10} />
                 <div className="flex-1 min-w-0">
@@ -1104,6 +1444,55 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
         </div>
       ) : (
         <div className="px-5 animate-fade-in">
+          {/* ── Stories Bar ── */}
+          <div className="mb-5 -mx-5 px-5">
+            <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1 select-none">
+              {/* Your Story */}
+              <button
+                onClick={() => setAddStoryOpen(true)}
+                className="flex flex-col items-center gap-1.5 shrink-0 group"
+              >
+                <div className="relative">
+                  <div className="w-[60px] h-[60px] rounded-full bg-white/[0.06] border-2 border-dashed border-white/20 flex items-center justify-center group-hover:border-brand-400/50 transition-colors">
+                    {profile?.avatar_url ? (
+                      <img src={profile.avatar_url} alt="Me" className="w-full h-full rounded-full object-cover opacity-60" />
+                    ) : (
+                      <span className="text-lg font-bold text-white/30">{profile?.name?.[0]?.toUpperCase() || "?"}</span>
+                    )}
+                  </div>
+                  <span className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-brand-500 flex items-center justify-center border-2 border-black">
+                    <PlusIcon className="w-3 h-3 text-white" />
+                  </span>
+                </div>
+                <span className="text-[10px] font-semibold text-ink-mute truncate max-w-[60px]">Your story</span>
+              </button>
+
+              {/* Other stories */}
+              {storyUsers.map((su, idx) => {
+                const allViewed = hasViewedAllStories(su.stories);
+                const initials = (su.profile.name || "?").trim().split(/\s+/).map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+                return (
+                  <button
+                    key={su.userId}
+                    onClick={() => { setStoryViewerStartIdx(idx); setStoryViewerOpen(true); }}
+                    className="flex flex-col items-center gap-1.5 shrink-0 group"
+                  >
+                    <div className={`w-[60px] h-[60px] rounded-full p-[3px] ${allViewed ? "bg-gradient-to-br from-white/10 to-white/5" : "bg-gradient-to-br from-green-400 to-emerald-500"}`}>
+                      <div className="w-full h-full rounded-full bg-black flex items-center justify-center overflow-hidden border-2 border-black">
+                        {su.profile.avatar_url ? (
+                          <img src={su.profile.avatar_url} alt={su.profile.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-xs font-bold text-brand-300">{initials}</span>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-semibold text-ink-mute truncate max-w-[60px]">{su.profile.name.split(" ")[0]}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* My signal */}
           <button onClick={() => {
             setBroadcastInput(mySignal ?? "");
@@ -1263,7 +1652,7 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
                 const countdown = sig.expires_at ? getCountdown(sig.expires_at) : null;
 
                 return (
-                  <div key={sig.id} onClick={() => setViewProfile(sig)}
+                  <div key={sig.id} onClick={() => openViewProfile(sig)}
                     className={`rounded-3xl border p-5 cursor-pointer transition-all active:scale-[0.98] ${
                       isCampus
                         ? "bg-brand-500/[0.04] border-brand-500/15 hover:border-brand-500/25"
@@ -1486,12 +1875,12 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
               onClick={() => {
                 if (navigator.share) {
                   navigator.share({
-                    title: `Footfall vibe from ${shareSignal.profiles?.name || "Student"}`,
-                    text: `Check out this vibe on Footfall: "${shareSignal.content}"`,
+                    title: `Cmpus vibe from ${shareSignal.profiles?.name || "Student"}`,
+                    text: `Check out this vibe on Cmpus: "${shareSignal.content}"`,
                     url: window.location.href
                   }).catch(() => {});
                 } else {
-                  navigator.clipboard.writeText(`Check out this signal on Footfall: "${shareSignal.content}"`);
+                  navigator.clipboard.writeText(`Check out this vibe on Cmpus: "${shareSignal.content}"`);
                   setShareSignal(null);
                   showToast("Link copied");
                 }
@@ -1510,6 +1899,139 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
           <div className="bg-[#1e1e1e] border border-white/10 text-ink text-xs font-semibold rounded-full px-4 py-2.5 shadow-lg flex items-center gap-2">
             <CheckIcon className="w-4 h-4 text-brand-400" />
             {toast}
+          </div>
+        </div>
+      )}
+
+      {/* ── Story Viewer Overlay ── */}
+      {storyViewerOpen && storyUsers.length > 0 && (
+        <StoryViewer
+          storyUsers={storyUsers}
+          startIndex={storyViewerStartIdx}
+          onClose={() => setStoryViewerOpen(false)}
+          onNavigateToProfile={(username) => {
+            const person = storyUsers.find(su => su.profile.username === username)?.profile;
+            if (person) openViewProfile(person);
+          }}
+        />
+      )}
+
+      {/* ── Add Story Bottom Sheet ── */}
+      {addStoryOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity animate-fade-in flex items-end">
+          <div className="absolute inset-0" onClick={() => setAddStoryOpen(false)} />
+          <div className="relative w-full bg-[#0c0c0e] rounded-t-[32px] border-t border-white/[0.08] p-5 pb-8 z-10 animate-slide-up">
+            <div className="flex items-center justify-between mb-5 border-b border-white/[0.05] pb-3 select-none">
+              <h2 className="font-bold text-base text-ink flex items-center gap-2">
+                <CameraIcon className="w-5 h-5 text-brand-400" />
+                <span>Add Story</span>
+              </h2>
+              <button
+                onClick={() => setAddStoryOpen(false)}
+                className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-95 transition flex items-center justify-center text-ink-soft hover:text-white"
+              >
+                <XIcon className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-ink-mute mb-4">Share a photo with your campus or followers. Stories disappear after 24 hours.</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setPendingVisibility("public"); storyFileRef.current?.click(); }}
+                disabled={storyUploading}
+                className="flex-1 h-14 rounded-2xl bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 text-green-400 text-sm font-bold flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-40"
+              >
+                <CampusIcon className="w-4 h-4" />
+                <span>Campus</span>
+              </button>
+              <button
+                onClick={() => { setPendingVisibility("followers"); storyFileRef.current?.click(); }}
+                disabled={storyUploading}
+                className="flex-1 h-14 rounded-2xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-300 text-sm font-bold flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-40"
+              >
+                <LockIcon className="w-4 h-4" />
+                <span>Followers only</span>
+              </button>
+            </div>
+            {storyUploading && (
+              <div className="mt-4 flex items-center justify-center gap-2 text-xs text-ink-mute">
+                <div className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+                <span>Uploading…</span>
+              </div>
+            )}
+            <input
+              ref={storyFileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleStoryUpload}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── DM Inbox Overlay ── */}
+      {dmInboxOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity animate-fade-in flex items-end">
+          <div className="absolute inset-0" onClick={() => setDmInboxOpen(false)} />
+          <div className="relative w-full bg-[#0c0c0e] rounded-t-[32px] border-t border-white/[0.08] p-5 pb-8 max-h-[80vh] overflow-y-auto z-10 animate-slide-up">
+            <div className="flex items-center justify-between mb-5 border-b border-white/[0.05] pb-3 select-none">
+              <h2 className="font-bold text-base text-ink flex items-center gap-2">
+                <ChatIcon className="w-5 h-5 text-brand-400" />
+                <span>Messages</span>
+              </h2>
+              <button
+                onClick={() => setDmInboxOpen(false)}
+                className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-95 transition flex items-center justify-center text-ink-soft hover:text-white"
+              >
+                <XIcon className="w-4 h-4" />
+              </button>
+            </div>
+            {dmInboxLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : dmInboxConvos.length === 0 ? (
+              <div className="text-center py-12 opacity-60">
+                <ChatIcon className="w-10 h-10 text-white/10 mx-auto mb-3" />
+                <p className="text-sm font-bold text-ink mb-1">No messages yet</p>
+                <p className="text-xs text-ink-mute">Start a conversation from someone&apos;s profile</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {dmInboxConvos.map((convo: any) => {
+                  const peer = convo.peer;
+                  if (!peer) return null;
+                  const peerInitials = (peer.name || "?").trim().split(/\s+/).map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+                  return (
+                    <button
+                      key={convo.group_id}
+                      onClick={() => {
+                        setDmInboxOpen(false);
+                        openDm(peer);
+                      }}
+                      className="w-full flex items-center gap-3 p-3 rounded-2xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.05] active:scale-[0.98] transition-all text-left"
+                    >
+                      {peer.avatar_url ? (
+                        <img src={peer.avatar_url} alt={peer.name} className="w-10 h-10 rounded-full object-cover border border-white/10 shrink-0" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30 flex items-center justify-center text-xs font-bold shrink-0">
+                          {peerInitials}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-ink truncate">{peer.name}</p>
+                        <p className="text-[11px] text-ink-mute truncate mt-0.5">{convo.last_message || "Start chatting…"}</p>
+                      </div>
+                      {convo.last_at && (
+                        <span className="text-[10px] text-ink-mute shrink-0">
+                          {new Date(convo.last_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}

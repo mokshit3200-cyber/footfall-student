@@ -8,6 +8,7 @@ import { Listing, ListingCategory } from "@/lib/types";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { isDemo } from "@/lib/config";
+import { uploadPhoto } from "@/lib/dbActions";
 
 const CATEGORIES: { key: ListingCategory; label: string; emoji: string; color: string }[] = [
   { key: "food", label: "Food", emoji: "🍔", color: "#f59e0b" },
@@ -89,10 +90,12 @@ function LiveListingSheet({
   open,
   onClose,
   onSaved,
+  listing,
 }: {
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
+  listing?: any | null;
 }) {
   const { user, profile } = useAuth();
   const [title, setTitle] = useState("");
@@ -100,23 +103,35 @@ function LiveListingSheet({
   const [price, setPrice] = useState("");
   const [contactForPrice, setContactForPrice] = useState(false);
   const [description, setDescription] = useState("");
-  const [image, setImage] = useState<string>("");
+  const [image, setImage] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setTitle("");
-      setCategory("food");
-      setPrice("");
-      setContactForPrice(false);
-      setDescription("");
-      setImage("");
+      setImageFile(null);
+      if (listing) {
+        setTitle(listing.title || "");
+        setCategory(listing.category || "food");
+        setPrice(listing.price > 0 ? String(listing.price) : "");
+        setContactForPrice(listing.price === 0);
+        setDescription(listing.description || "");
+        setImage(listing.images?.[0] || "");
+      } else {
+        setTitle("");
+        setCategory("food");
+        setPrice("");
+        setContactForPrice(false);
+        setDescription("");
+        setImage("");
+      }
     }
-  }, [open]);
+  }, [open, listing]);
 
   async function pick(f?: File) {
     if (!f) return;
+    setImageFile(f);
     try {
       setImage(await fileToDataUrl(f));
     } catch {}
@@ -126,22 +141,52 @@ function LiveListingSheet({
     if (!title.trim() || !description.trim() || !user || !profile?.college) return;
     setSaving(true);
     try {
-      const { error } = await supabase.from("listings").insert({
-        user_id: user.id,
-        title: title.trim(),
-        description: description.trim(),
-        price: contactForPrice ? 0 : Number(price) || 0,
-        category,
-        image_url: image || null,
-        college: profile.college,
-        active: true,
-      });
+      let finalImage = image;
+      if (imageFile && !isDemo() && user) {
+        try {
+          finalImage = await uploadPhoto("listings", `${user.id}/listing-${Date.now()}.png`, imageFile);
+        } catch (err) {
+          console.error("Listing photo upload failed, utilizing fallback:", err);
+        }
+      }
 
-      if (error) {
-        console.error(error);
-        alert("Failed to post listing: " + error.message);
+      if (listing) {
+        const { error } = await supabase
+          .from("listings")
+          .update({
+            title: title.trim(),
+            description: description.trim(),
+            price: contactForPrice ? 0 : Number(price) || 0,
+            category,
+            images: finalImage ? [finalImage] : [],
+          })
+          .eq("id", listing.id)
+          .eq("user_id", user.id);
+
+        if (error) {
+          console.error(error);
+          alert("Failed to update listing: " + error.message);
+        } else {
+          onSaved();
+        }
       } else {
-        onSaved();
+        const { error } = await supabase.from("listings").insert({
+          user_id: user.id,
+          title: title.trim(),
+          description: description.trim(),
+          price: contactForPrice ? 0 : Number(price) || 0,
+          category,
+          images: finalImage ? [finalImage] : [],
+          college: profile.college,
+          active: true,
+        });
+
+        if (error) {
+          console.error(error);
+          alert("Failed to post listing: " + error.message);
+        } else {
+          onSaved();
+        }
       }
     } catch (err) {
       console.error(err);
@@ -151,7 +196,7 @@ function LiveListingSheet({
   }
 
   return (
-    <Sheet open={open} onClose={onClose} title="New listing">
+    <Sheet open={open} onClose={onClose} title={listing ? "Edit listing" : "New listing"}>
       <div className="space-y-4">
         <div>
           <input
@@ -245,7 +290,7 @@ function LiveListingSheet({
           disabled={saving || !title.trim() || !description.trim()}
           className="btn-primary w-full py-3 disabled:opacity-40"
         >
-          {saving ? "Posting..." : "Post listing"}
+          {saving ? (listing ? "Saving..." : "Posting...") : (listing ? "Save changes" : "Post listing")}
         </button>
       </div>
     </Sheet>
@@ -258,6 +303,7 @@ function LiveMarketplace({ onSwitchTab }: { onSwitchTab?: (tab: any) => void }) 
   const [loading, setLoading] = useState(true);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sel, setSel] = useState<any | null>(null);
+  const [editing, setEditing] = useState<any | null>(null);
 
   async function fetchListings() {
     if (!profile?.college) return;
@@ -283,6 +329,29 @@ function LiveMarketplace({ onSwitchTab }: { onSwitchTab?: (tab: any) => void }) 
     fetchListings();
   }, [profile]);
 
+  // Sync selected listing (sel) to URL query parameter for deep-linking
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const itemParam = params.get("item");
+    if (itemParam && listings.length > 0) {
+      const found = listings.find(l => l.id === itemParam);
+      if (found) setSel(found);
+    }
+  }, [listings]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (sel) {
+      params.set("item", sel.id);
+    } else {
+      params.delete("item");
+    }
+    const newUrl = `${window.location.pathname}?${params.toString()}`;
+    if (window.location.search !== `?${params.toString()}`) {
+      window.history.replaceState(null, "", newUrl);
+    }
+  }, [sel]);
+
   if (loading) {
     return (
       <div className="px-5 pt-12 pb-28 min-h-screen no-scrollbar animate-fade-in">
@@ -300,14 +369,22 @@ function LiveMarketplace({ onSwitchTab }: { onSwitchTab?: (tab: any) => void }) 
 
   return (
     <div className="px-5 pt-12 pb-28 min-h-screen no-scrollbar animate-fade-in">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-start justify-between mb-6">
         <h2 className="text-xl font-bold text-ink">Marketplace</h2>
-        <button
-          onClick={() => setSheetOpen(true)}
-          className="bg-brand-500 hover:bg-brand-600 text-white rounded-2xl px-4 py-2 text-xs font-bold transition flex items-center gap-1.5"
-        >
-          <PlusIcon className="w-3.5 h-3.5" /> Post Listing
-        </button>
+        <div className="flex flex-col items-end gap-1">
+          <button
+            onClick={() => setSheetOpen(true)}
+            disabled={!profile?.college}
+            className="bg-brand-500 hover:bg-brand-600 disabled:opacity-40 disabled:hover:bg-brand-500 text-white rounded-2xl px-4 py-2 text-xs font-bold transition flex items-center gap-1.5"
+          >
+            <PlusIcon className="w-3.5 h-3.5" /> Post Listing
+          </button>
+          {!profile?.college && (
+            <p className="text-[10px] text-red-400 font-medium text-right max-w-[150px] leading-tight animate-fade-in">
+              Set your college in Profile to post listings.
+            </p>
+          )}
+        </div>
       </div>
 
       {listings.length === 0 ? (
@@ -326,9 +403,9 @@ function LiveMarketplace({ onSwitchTab }: { onSwitchTab?: (tab: any) => void }) 
                 className="bg-[#0c0c0e]/90 border border-white/[0.07] hover:border-white/15 transition duration-200 rounded-3xl overflow-hidden cursor-pointer flex flex-col h-full"
               >
                 <div className="relative aspect-[16/10] bg-white/[0.03] flex-shrink-0">
-                  {item.image_url ? (
+                  {item.images?.[0] ? (
                     <img
-                      src={item.image_url}
+                      src={item.images[0]}
                       alt={item.title}
                       className="w-full h-full object-cover"
                       loading="lazy"
@@ -347,6 +424,16 @@ function LiveMarketplace({ onSwitchTab }: { onSwitchTab?: (tab: any) => void }) 
                   >
                     {cat.label}
                   </span>
+                  {item.user_id === user?.id && (
+                    <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full text-[9px] font-bold bg-brand-500 text-white shadow-sm">
+                      Mine
+                    </span>
+                  )}
+                  {item.active === false && (
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                      <span className="px-3 py-1 rounded-full text-[11px] font-black text-white bg-white/20 border border-white/30 tracking-widest uppercase">SOLD</span>
+                    </div>
+                  )}
                 </div>
                 <div className="p-3.5 flex flex-col justify-between flex-grow min-w-0">
                   <div className="min-w-0">
@@ -369,9 +456,15 @@ function LiveMarketplace({ onSwitchTab }: { onSwitchTab?: (tab: any) => void }) 
 
       <LiveListingSheet
         open={sheetOpen}
-        onClose={() => setSheetOpen(false)}
+        onClose={() => {
+          setSheetOpen(false);
+          setEditing(null);
+        }}
+        listing={editing}
         onSaved={() => {
           setSheetOpen(false);
+          setEditing(null);
+          setSel(null);
           fetchListings();
         }}
       />
@@ -380,8 +473,8 @@ function LiveMarketplace({ onSwitchTab }: { onSwitchTab?: (tab: any) => void }) 
         <Sheet open={!!sel} onClose={() => setSel(null)} title="Listing Details">
           <div className="space-y-4">
             <div className="relative aspect-[16/10] rounded-2xl overflow-hidden bg-white/[0.03]">
-              {sel.image_url ? (
-                <img src={sel.image_url} alt={sel.title} className="w-full h-full object-cover" />
+              {sel.images?.[0] ? (
+                <img src={sel.images[0]} alt={sel.title} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-white/[0.05]">
                   <span className="text-6xl">{CATEGORIES.find((c) => c.key === sel.category)?.emoji || "📦"}</span>
@@ -410,16 +503,85 @@ function LiveMarketplace({ onSwitchTab }: { onSwitchTab?: (tab: any) => void }) 
               )}
             </div>
 
-            {user?.id !== sel.user_id && (
-              <button
-                onClick={() => {
-                  setSel(null);
-                  if (onSwitchTab) onSwitchTab("connect");
-                }}
-                className="btn-primary w-full py-3"
-              >
-                Chat with Seller 💬
-              </button>
+            {user?.id === sel.user_id ? (
+              <div className="space-y-2 pt-2">
+                {sel.active !== false && (
+                  <button
+                    onClick={async () => {
+                      if (!user) return;
+                      try {
+                        const { error } = await supabase
+                          .from("listings")
+                          .update({ active: false })
+                          .eq("id", sel.id)
+                          .eq("user_id", user.id);
+                        if (!error) {
+                          setSel(null);
+                          fetchListings();
+                        }
+                      } catch (err) {
+                        console.error(err);
+                      }
+                    }}
+                    className="w-full py-3 rounded-xl font-bold bg-white/[0.05] border border-white/[0.08] text-ink-soft active:scale-[0.98] transition flex items-center justify-center gap-2"
+                  >
+                    <span>✓</span><span>Mark as Sold</span>
+                  </button>
+                )}
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => { setEditing(sel); setSheetOpen(true); }}
+                    className="flex-1 py-3 rounded-xl font-bold bg-white/[0.06] hover:bg-white/[0.1] text-ink border border-white/[0.08] active:scale-95 transition flex items-center justify-center gap-1.5"
+                  >
+                    Edit Listing ✏️
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!user) return;
+                      if (confirm("Delete this listing?")) {
+                        try {
+                          const { error } = await supabase
+                            .from("listings")
+                            .delete()
+                            .eq("id", sel.id)
+                            .eq("user_id", user.id);
+                          if (error) {
+                            alert("Failed to delete listing: " + error.message);
+                          } else {
+                            setSel(null);
+                            fetchListings();
+                          }
+                        } catch (err) {
+                          console.error(err);
+                        }
+                      }
+                    }}
+                    className="py-3 px-5 rounded-xl font-bold bg-red-950/20 hover:bg-red-950/40 text-red-400 border border-red-500/10 active:scale-95 transition flex items-center justify-center gap-1.5"
+                  >
+                    Delete 🗑️
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2 pt-2">
+                {sel.user_id && onSwitchTab && (
+                  <button
+                    onClick={() => {
+                      localStorage.setItem("footfall-pending-dm", JSON.stringify({
+                        id: sel.user_id,
+                        name: sel.profiles?.name || "Seller",
+                        username: sel.profiles?.username || null,
+                        avatar_url: null,
+                      }));
+                      setSel(null);
+                      onSwitchTab("connect");
+                    }}
+                    className="btn-primary w-full py-3 flex items-center justify-center gap-2"
+                  >
+                    💬 Message Seller
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </Sheet>
@@ -455,6 +617,29 @@ export default function Marketplace({ onSwitchTab }: { onSwitchTab?: (tab: any) 
 
   // Loading skeleton state for vertical tab changes
   const [isLoading, setIsLoading] = useState(false);
+
+  // Sync selected listing (sel) to URL query parameter for deep-linking in demo mode
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const itemParam = params.get("item");
+    if (itemParam && data.listings.length > 0) {
+      const found = data.listings.find(l => l.id === itemParam);
+      if (found) setSel(found);
+    }
+  }, [data.listings]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (sel) {
+      params.set("item", sel.id);
+    } else {
+      params.delete("item");
+    }
+    const newUrl = `${window.location.pathname}?${params.toString()}`;
+    if (window.location.search !== `?${params.toString()}`) {
+      window.history.replaceState(null, "", newUrl);
+    }
+  }, [sel]);
 
   // Handle touch gestures for pull-to-sync
   function handleTouchStart(e: React.TouchEvent) {
@@ -589,8 +774,13 @@ export default function Marketplace({ onSwitchTab }: { onSwitchTab?: (tab: any) 
     return (
       <div className="min-h-screen pb-28">
         <div className="relative">
-          <div className="aspect-[4/3] md:aspect-[16/9] bg-white/[0.04] overflow-hidden">
+          <div className="aspect-[4/3] md:aspect-[16/9] bg-white/[0.04] overflow-hidden relative">
             <SmartImg src={sel.image} emoji={c.emoji} color={c.color} />
+            {sel.active === false && (
+              <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                <span className="px-5 py-2 rounded-full text-base font-black text-white bg-white/20 border border-white/30 tracking-widest uppercase">SOLD</span>
+              </div>
+            )}
           </div>
           <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black to-transparent" />
           <button onClick={() => setSel(null)} className="absolute top-12 left-4 w-10 h-10 rounded-full bg-black/55 backdrop-blur flex items-center justify-center text-white"><ChevronRight className="w-5 h-5 rotate-180" /></button>
@@ -615,6 +805,18 @@ export default function Marketplace({ onSwitchTab }: { onSwitchTab?: (tab: any) 
             <div className="flex-1"><p className="text-sm font-semibold text-ink">{sel.seller}</p><p className="text-[11px] text-ink-mute">Seller</p></div>
           </div>
           <div className="mt-5 space-y-2.5">
+            {sel.mine && sel.active !== false && (
+              <button
+                onClick={() => {
+                  update((d) => { const l = d.listings.find(x => x.id === sel.id); if (l) l.active = false; });
+                  setSel(null);
+                  flash("Marked as sold ✓");
+                }}
+                className="w-full py-3 rounded-xl font-bold bg-white/[0.05] border border-white/[0.08] text-ink-soft active:scale-[0.98] transition flex items-center justify-center gap-2"
+              >
+                <span>✓</span><span>Mark as Sold</span>
+              </button>
+            )}
             {!sel.mine && onSwitchTab && (
               <button
                 onClick={() => openOfferSheet()}
@@ -737,6 +939,11 @@ export default function Marketplace({ onSwitchTab }: { onSwitchTab?: (tab: any) 
                         <Heart on={!!fav[it.id]} />
                       </button>
                       {it.mine && <span className="absolute top-3 left-3 text-[10px] font-bold bg-brand-500 text-white px-2.5 py-1 rounded-full">Yours</span>}
+                      {it.active === false && (
+                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-3xl">
+                          <span className="px-4 py-1.5 rounded-full text-sm font-black text-white bg-white/20 border border-white/30 tracking-widest uppercase">SOLD</span>
+                        </div>
+                      )}
                       <p className="absolute bottom-3 left-4 text-white text-[19px] font-extrabold drop-shadow-lg">{priceLabel(it)}</p>
                       {vcfg.note && <span className="absolute bottom-3.5 right-3 text-[11px] font-semibold text-white/90 bg-black/40 backdrop-blur px-2 py-1 rounded-full">{vcfg.note}</span>}
                     </div>

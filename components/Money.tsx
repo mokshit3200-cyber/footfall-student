@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useStore } from "./store";
 import {
   todayISO,
@@ -11,8 +11,11 @@ import {
   dayLabel,
 } from "@/lib/dates";
 import { Sheet, Ring } from "./ui";
-import { PlusIcon, TrashIcon, ChevronRight, GearIcon, ArrowUpIcon, ArrowDownIcon } from "./icons";
-import { ExpenseCategory } from "@/lib/types";
+import { PlusIcon, TrashIcon, ChevronRight, GearIcon, ArrowUpIcon, ArrowDownIcon, EditIcon } from "./icons";
+import { ExpenseCategory, Expense, SplitBill } from "@/lib/types";
+import { useAuth } from "@/lib/auth";
+import { isDemo } from "@/lib/config";
+import { dbSaveExpense, dbDeleteExpense, dbSaveSplit, dbDeleteSplit } from "@/lib/dbActions";
 
 export const CATS: {
   key: ExpenseCategory;
@@ -30,9 +33,12 @@ const CAT_MAP = Object.fromEntries(CATS.map((c) => [c.key, c]));
 
 export default function Money() {
   const { data, update, uid } = useStore();
+  const { user } = useAuth();
   const { expenses, splits, profile, classmates } = data;
   const [month, setMonth] = useState(thisMonth());
   const [sheet, setSheet] = useState<null | "add" | "budget" | "split">(null);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [editingSplit, setEditingSplit] = useState<SplitBill | null>(null);
 
   const monthExpenses = useMemo(
     () =>
@@ -229,7 +235,18 @@ export default function Money() {
                         </div>
                         <span className="text-sm font-bold text-ink">₹{e.amount}</span>
                         <button
-                          onClick={() => update((d) => { d.expenses = d.expenses.filter((x) => x.id !== e.id); })}
+                          onClick={() => { setEditingExpense(e); setSheet("add"); }}
+                          className="text-ink-mute/50 active:text-brand-400 ml-1"
+                        >
+                          <EditIcon className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            update((d) => { d.expenses = d.expenses.filter((x) => x.id !== e.id); });
+                            if (!isDemo() && user) {
+                              dbDeleteExpense(e.id);
+                            }
+                          }}
                           className="text-ink-mute/50 active:text-red-500"
                         >
                           <TrashIcon className="w-4 h-4" />
@@ -264,7 +281,18 @@ export default function Money() {
                     <p className="text-[11px] text-ink-mute">{s.people.length + 1} people · ₹{per.toFixed(0)} each</p>
                   </div>
                   <button
-                    onClick={() => update((d) => { d.splits = d.splits.filter((x) => x.id !== s.id); })}
+                    onClick={() => { setEditingSplit(s); setSheet("split"); }}
+                    className="text-ink-mute/50 active:text-brand-400 mr-1"
+                  >
+                    <EditIcon className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      update((d) => { d.splits = d.splits.filter((x) => x.id !== s.id); });
+                      if (!isDemo() && user) {
+                        dbDeleteSplit(s.id);
+                      }
+                    }}
                     className="text-ink-mute/50 active:text-red-500"
                   >
                     <TrashIcon className="w-4 h-4" />
@@ -276,9 +304,9 @@ export default function Money() {
         )}
       </div>
 
-      <AddExpenseSheet open={sheet === "add"} onClose={() => setSheet(null)} />
+      <AddExpenseSheet open={sheet === "add"} onClose={() => { setSheet(null); setEditingExpense(null); }} editing={editingExpense} />
       <BudgetSheet open={sheet === "budget"} onClose={() => setSheet(null)} />
-      <SplitSheet open={sheet === "split"} onClose={() => setSheet(null)} />
+      <SplitSheet open={sheet === "split"} onClose={() => { setSheet(null); setEditingSplit(null); }} editing={editingSplit} />
     </div>
   );
 }
@@ -296,15 +324,32 @@ function Insight({ label, value }: { label: string; value: string }) {
 function AddExpenseSheet({
   open,
   onClose,
+  editing,
 }: {
   open: boolean;
   onClose: () => void;
+  editing?: Expense | null;
 }) {
   const { update, uid } = useStore();
+  const { user } = useAuth();
   const [amount, setAmount] = useState("");
   const [cat, setCat] = useState<ExpenseCategory>("food");
   const [note, setNote] = useState("");
   const [date, setDate] = useState(todayISO());
+
+  useEffect(() => {
+    if (open && editing) {
+      setAmount(String(editing.amount));
+      setCat(editing.category);
+      setNote(editing.note || "");
+      setDate(editing.date);
+    } else if (open && !editing) {
+      setAmount("");
+      setNote("");
+      setCat("food");
+      setDate(todayISO());
+    }
+  }, [open, editing]);
 
   function reset() {
     setAmount("");
@@ -313,18 +358,33 @@ function AddExpenseSheet({
     setDate(todayISO());
   }
 
-  function add(addAnother: boolean) {
+  function save(addAnother: boolean) {
     const a = Number(amount);
     if (!a || a <= 0) return;
+
+    if (editing) {
+      const updated = { ...editing, amount: a, category: cat, date, note: note.trim() || undefined };
+      update((d) => { d.expenses = d.expenses.map(x => x.id === editing.id ? updated : x); });
+      if (!isDemo() && user) dbSaveExpense(user.id, updated);
+      onClose();
+      return;
+    }
+
+    const newExpense = {
+      id: uid(),
+      amount: a,
+      category: cat,
+      date,
+      note: note.trim() || undefined,
+    };
     update((d) => {
-      d.expenses.push({
-        id: uid(),
-        amount: a,
-        category: cat,
-        date,
-        note: note.trim() || undefined,
-      });
+      d.expenses.push(newExpense);
     });
+
+    if (!isDemo() && user) {
+      dbSaveExpense(user.id, newExpense);
+    }
+
     if (addAnother) {
       reset();
     } else {
@@ -334,7 +394,7 @@ function AddExpenseSheet({
   }
 
   return (
-    <Sheet open={open} onClose={onClose} title="Add expense">
+    <Sheet open={open} onClose={onClose} title={editing ? "Edit expense" : "Add expense"}>
       <div className="space-y-4">
         {/* amount */}
         <div className="text-center py-2">
@@ -390,19 +450,21 @@ function AddExpenseSheet({
         />
 
         <div className="flex gap-2">
+          {!editing && (
+            <button
+              onClick={() => save(true)}
+              disabled={!amount}
+              className="btn-ghost flex-1 disabled:opacity-40"
+            >
+              Save &amp; add another
+            </button>
+          )}
           <button
-            onClick={() => add(true)}
-            disabled={!amount}
-            className="btn-ghost flex-1 disabled:opacity-40"
-          >
-            Save &amp; add another
-          </button>
-          <button
-            onClick={() => add(false)}
+            onClick={() => save(false)}
             disabled={!amount}
             className="btn-primary flex-1 disabled:opacity-40"
           >
-            Save
+            {editing ? "Update" : "Save"}
           </button>
         </div>
       </div>
@@ -458,28 +520,56 @@ function BudgetSheet({ open, onClose }: { open: boolean; onClose: () => void }) 
   );
 }
 
-function SplitSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+function SplitSheet({ open, onClose, editing }: { open: boolean; onClose: () => void; editing?: SplitBill | null }) {
   const { update, uid } = useStore();
+  const { user } = useAuth();
   const [total, setTotal] = useState("");
   const [note, setNote] = useState("");
   const [people, setPeople] = useState<string[]>([]);
   const [name, setName] = useState("");
 
+  useEffect(() => {
+    if (open && editing) {
+      setTotal(String(editing.total));
+      setNote(editing.note || "");
+      setPeople(editing.people);
+    } else if (open && !editing) {
+      setTotal("");
+      setNote("");
+      setPeople([]);
+    }
+  }, [open, editing]);
+
   const per = total ? Number(total) / (people.length + 1) : 0;
 
-  function add() {
+  function save() {
     const t = Number(total);
     if (!t || people.length === 0) return;
+
+    if (editing) {
+      const updated = { ...editing, total: t, people, note: note.trim() || undefined };
+      update((d) => { d.splits = d.splits.map(x => x.id === editing.id ? updated : x); });
+      if (!isDemo() && user) dbSaveSplit(user.id, updated);
+      onClose();
+      return;
+    }
+
+    const newSplit = {
+      id: uid(),
+      total: t,
+      people,
+      paidBy: "me",
+      date: todayISO(),
+      note: note.trim() || undefined,
+    };
     update((d) => {
-      d.splits.push({
-        id: uid(),
-        total: t,
-        people,
-        paidBy: "me",
-        date: todayISO(),
-        note: note.trim() || undefined,
-      });
+      d.splits.push(newSplit);
     });
+
+    if (!isDemo() && user) {
+      dbSaveSplit(user.id, newSplit);
+    }
+
     setTotal("");
     setNote("");
     setPeople([]);
@@ -487,7 +577,7 @@ function SplitSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   }
 
   return (
-    <Sheet open={open} onClose={onClose} title="Split a bill">
+    <Sheet open={open} onClose={onClose} title={editing ? "Edit split" : "Split a bill"}>
       <div className="space-y-3">
         <input
           className="input"
@@ -554,8 +644,8 @@ function SplitSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
             </p>
           </div>
         )}
-        <button onClick={add} className="btn-primary w-full">
-          Save split
+        <button onClick={save} className="btn-primary w-full">
+          {editing ? "Update split" : "Save split"}
         </button>
       </div>
     </Sheet>

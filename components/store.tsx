@@ -74,7 +74,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   function update(fn: (draft: AppData) => void) {
     setData((prev) => {
-      const next: AppData = JSON.parse(JSON.stringify(prev));
+      const next = structuredClone(prev);
       fn(next);
       return next;
     });

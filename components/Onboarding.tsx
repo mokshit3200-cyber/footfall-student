@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth";
 import { SUBJECT_COLORS } from "@/lib/types";
@@ -158,12 +158,46 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
   const { user, profile } = useAuth();
   const [step, setStep] = useState(0);
 
-  // step 0 — college + course
+  // step 0 — college + course + username
   const [collegePick, setCollegePick] = useState("");
   const [collegeCustom, setCollegeCustom] = useState("");
   const college = collegePick === "Other" ? collegeCustom : collegePick;
   const [course, setCourse] = useState("");
   const [year, setYear] = useState("");
+  const [username, setUsername] = useState("");
+  const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
+  const checkRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Auto-suggest username from profile name on mount
+  useEffect(() => {
+    if (profile?.name && !username) {
+      const suggested = profile.name
+        .toLowerCase()
+        .replace(/\s+/g, "_")
+        .replace(/[^a-z0-9_]/g, "")
+        .slice(0, 20);
+      setUsername(suggested);
+    }
+  }, [profile?.name]);
+
+  // Real-time username availability check
+  useEffect(() => {
+    const v = username.trim();
+    if (!v) { setUsernameStatus("idle"); return; }
+    if (!/^[a-z0-9_]{3,20}$/.test(v)) { setUsernameStatus("invalid"); return; }
+    setUsernameStatus("checking");
+    if (checkRef.current) clearTimeout(checkRef.current);
+    checkRef.current = setTimeout(async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("username", v)
+        .neq("id", user?.id ?? "")
+        .maybeSingle();
+      setUsernameStatus(data ? "taken" : "available");
+    }, 400);
+    return () => { if (checkRef.current) clearTimeout(checkRef.current); };
+  }, [username, user?.id]);
 
   // step 1 — subjects
   const [subjectInput, setSubjectInput] = useState("");
@@ -191,7 +225,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
     const yearNum = parseInt(year) || 1;
     const { error: profErr } = await supabase
       .from("profiles")
-      .update({ college: college.trim(), course: course.trim(), year: yearNum })
+      .update({ college: college.trim(), course: course.trim(), year: yearNum, username: username.trim() || null })
       .eq("id", user.id);
     if (profErr) {
       setSaveError(`Profile save failed: ${profErr.message}`);
@@ -273,12 +307,52 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
               options={YEARS}
               onChange={setYear}
             />
+
+            {/* Username */}
+            <div>
+              <label className="text-xs font-semibold text-ink-soft mb-1.5 block">Username</label>
+              <div className="relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-mute font-bold text-sm select-none">@</span>
+                <input
+                  className="input pl-7 pr-10"
+                  placeholder="your_handle"
+                  value={username}
+                  maxLength={20}
+                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm">
+                  {usernameStatus === "checking" && <span className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin inline-block" />}
+                  {usernameStatus === "available" && <span className="text-brand-400 font-bold">✓</span>}
+                  {usernameStatus === "taken" && <span className="text-red-400 font-bold">✗</span>}
+                  {usernameStatus === "invalid" && <span className="text-amber-400 font-bold">!</span>}
+                </span>
+              </div>
+              <p className={`text-[11px] mt-1.5 font-medium ${
+                usernameStatus === "available" ? "text-brand-400" :
+                usernameStatus === "taken" ? "text-red-400" :
+                usernameStatus === "invalid" ? "text-amber-400" :
+                "text-ink-mute"
+              }`}>
+                {usernameStatus === "available" && "@" + username + " is available"}
+                {usernameStatus === "taken" && "That username is taken — try another"}
+                {usernameStatus === "invalid" && "3–20 chars, lowercase letters, numbers, underscores only"}
+                {(usernameStatus === "idle" || usernameStatus === "checking") && "3–20 chars · letters, numbers, underscores"}
+              </p>
+            </div>
           </div>
 
           <div className="pt-6">
             <button
               className="btn-primary w-full"
-              disabled={!college.trim() || (collegePick === "Other" && !collegeCustom.trim()) || !course || !year}
+              disabled={
+                !college.trim() ||
+                (collegePick === "Other" && !collegeCustom.trim()) ||
+                !course ||
+                !year ||
+                usernameStatus !== "available"
+              }
               onClick={() => setStep(1)}
             >
               Continue →
@@ -346,7 +420,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                 </svg>
               ) : <CheckIcon className="w-5 h-5" />}
-              Start using Footfall 🎉
+              Start using Cmpus 🎉
             </button>
             <button className="w-full text-center text-ink-mute text-sm" onClick={() => setStep(1)}>← Back</button>
           </div>

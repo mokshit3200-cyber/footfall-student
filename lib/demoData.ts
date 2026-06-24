@@ -321,6 +321,8 @@ export function buildDemoData(): AppData {
     ...emptyData,
     profile: {
       name: "Aarav",
+      college: "Delhi Technological University",
+      year: 3,
       attendanceTarget: 0.75,
       gradeSystem: "gpa10",
       onboarded: true,
