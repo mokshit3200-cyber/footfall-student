@@ -182,3 +182,32 @@ Nothing touches Supabase in demo; nothing asks the user to log in.
 - [ ] tsc + build clean, no `w-4.5`/`w-5.5`, no emoji-as-icons, no scratch files, no horizontal overflow at 414px.
 
 Build it in stages (data model + composer → card + raise/connect → requests in Messages → All-Campuses view → share/bookmark → polish), commit each stage, verify, and report back for review before moving on.
+
+---
+
+## STAGE 4 (final) — All Campuses + Share + bookmark + IA cleanup + polish
+
+### 4a. Information-architecture cleanup (do this as part of Stage 4)
+Two kinds of "Requests" currently confuse users. Fix the placement:
+
+- **Remove the "Requests" tab from `Connect.tsx` entirely.** Connect becomes purely the Frequency feed + the My Campus / All Campuses toggle. Delete the Requests tab UI, its state, and move the follow-request logic out (see next bullet). Do NOT delete the `acceptReq`/`declineReq` logic — relocate it.
+- **Move FOLLOW requests into the Home notifications bell.** `Home.tsx` already has a notification bell (top-right) opening `NotificationsSheet` backed by `data.notifications`. Surface pending follow requests there as actionable items: avatar + "{name} requested to follow you" + **Accept** / **✕ Decline** inline. Accept → `follows.status='accepted'`; Decline → delete the `follows` row. The bell's unread badge count should include pending follow requests. In demo, seed 1–2 follow requests into the notifications list (reuse the old `DEMO_REQUESTS`).
+- **Leave MESSAGE requests exactly where they are** (Messages tab → Requests sub-screen, built in Stage 3). Do not move them to Connect. The main inbox stays clean; accepted threads already auto-graduate into the inbox.
+- Net result: Connect = feed only; follow requests = Home notifications; message requests = Messages Requests screen.
+
+### 4b. All Campuses network view
+Per §3 of this spec: when the toggle is on All Campuses, show `reach='all'` signals from every college; each card shows a **college badge**; filters skew to travel intents (Help/Looking/Event/Sell — drop Free); add the cross-campus highlight banner; the primary action label still adapts (Connect/Help out/I'm interested); add the **bookmark/save** tertiary on cards.
+
+### 4c. Share to a friend
+Per §7: Share sheet with a searchable friend list (your DM peers + accepted follows); selecting forwards the signal as a message into that DM; offer `navigator.share` fallback; demo shows friends + success toast.
+
+### 4d. Final polish
+Skeletons, empty states per filter, optimistic updates, smooth micro-interactions (active:scale, transitions), countdown ticking, online pulse. 414px, no overflow, 44px targets.
+
+### Stage 4 acceptance
+- [ ] Connect has NO Requests tab — just the feed + campus toggle.
+- [ ] Follow requests appear in Home notifications with working Accept/Decline; bell badge counts them.
+- [ ] Message requests still work in Messages (unchanged from Stage 3).
+- [ ] All Campuses view: college badges, travel intents, highlight banner, bookmark, adaptive primary.
+- [ ] Share forwards a signal to a friend.
+- [ ] Demo fully works (no login, no console errors); tsc + build clean; no `w-4.5`/`w-5.5`; SVG icons only; no scratch files; 414px no overflow.
