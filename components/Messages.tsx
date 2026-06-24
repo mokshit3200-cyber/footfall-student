@@ -52,6 +52,19 @@ const THEMES = [
   { id: "rose", name: "Rose Garden", color: "#db2777", bgClass: "bg-[#db2777]", dotColor: "bg-[#db2777]" },
 ] as const;
 
+// ── AVAILABILITY STATUS ──────────────────────────────────────────────────────
+// Lets friends see at a glance whether you're free, in class, studying or busy.
+const STATUSES = [
+  { id: "free",     label: "Free now", short: "Free",     ring: "#22c55e", dot: "bg-green-500",  text: "text-green-400" },
+  { id: "class",    label: "In class", short: "In class", ring: "#f59e0b", dot: "bg-amber-500",  text: "text-amber-400" },
+  { id: "studying", label: "Studying", short: "Studying", ring: "#3b82f6", dot: "bg-blue-500",   text: "text-blue-400" },
+  { id: "busy",     label: "Busy",     short: "Busy",     ring: "#ef4444", dot: "bg-red-500",    text: "text-red-400" },
+] as const;
+
+function statusMeta(id: string | null | undefined) {
+  return STATUSES.find((s) => s.id === id) ?? null;
+}
+
 // ── DEMO CONSTANTS (as const) ─────────────────────────────────────────────────
 const DEMO_CONVOS = [
   { 
@@ -124,9 +137,9 @@ const DEMO_MESSAGES = {
 } as const;
 
 const DEMO_FREQUENCY = [
-  { id: "dp1", name: "Arjun", signal: "DBMS grind rn 📚", avatar_url: null },
-  { id: "dp2", name: "Priya", signal: "anyone for chai at 4pm? ☕", avatar_url: null },
-  { id: "dp5", name: "Karan", signal: "OS scheduling help 🙏", avatar_url: null },
+  { id: "dp1", name: "Arjun", signal: "DBMS grind, library 2nd floor", avatar_url: null, status: "studying" },
+  { id: "dp2", name: "Priya", signal: "anyone for chai at 4pm?", avatar_url: null, status: "free" },
+  { id: "dp5", name: "Karan", signal: "OS lecture till 3", avatar_url: null, status: "class" },
 ] as const;
 
 const DEMO_SEARCH_PEOPLE = [
@@ -179,6 +192,134 @@ function parseMessageContent(rawContent: string): { replyQuote: { sender_name: s
   return { replyQuote: null, cleanContent: rawContent };
 }
 
+// ── NoteBubble — Instagram-style readable note above a Frequency avatar ───────
+function NoteBubble({ text, placeholder }: { text?: string | null; placeholder?: string }) {
+  const real = !!(text && text.trim());
+  const content = real ? text!.trim() : placeholder || "";
+  if (!content) {
+    // keep vertical rhythm so avatars stay aligned even with no note
+    return <div className="h-[30px] shrink-0" aria-hidden />;
+  }
+  return (
+    <div className="flex flex-col items-center shrink-0">
+      <div
+        className={`max-w-[76px] px-2.5 py-1 rounded-2xl text-[9.5px] leading-snug text-center ${
+          real ? "bg-[#262626] text-ink" : "bg-white/[0.04] text-ink-mute border border-dashed border-white/15"
+        }`}
+        style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", wordBreak: "break-word" }}
+      >
+        {content}
+      </div>
+      {/* tail */}
+      <div className={`w-1.5 h-1.5 rounded-full mt-[2px] ${real ? "bg-[#262626]" : "bg-white/[0.06]"}`} />
+      <div className={`w-1 h-1 rounded-full mt-[1px] ${real ? "bg-[#262626]" : "bg-white/[0.06]"}`} />
+    </div>
+  );
+}
+
+// ── SignalEditorSheet — set your note + availability status ───────────────────
+function SignalEditorSheet({
+  open,
+  initialText,
+  initialStatus,
+  onClose,
+  onSave,
+}: {
+  open: boolean;
+  initialText: string;
+  initialStatus: string | null;
+  onClose: () => void;
+  onSave: (text: string, status: string | null) => void;
+}) {
+  const [text, setText] = useState(initialText);
+  const [status, setStatus] = useState<string | null>(initialStatus);
+
+  useEffect(() => {
+    if (open) {
+      setText(initialText);
+      setStatus(initialStatus);
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity animate-fade-in">
+      <div className="absolute inset-0" onClick={onClose} />
+      <div className="absolute bottom-0 inset-x-0 bg-[#0c0c0e] rounded-t-[32px] border-t border-white/[0.08] p-5 pb-8 max-h-[90vh] overflow-y-auto z-10">
+        <div className="flex items-center justify-between mb-5 border-b border-white/[0.05] pb-3">
+          <h2 className="font-bold text-base text-ink">Your signal</h2>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white active:scale-90 transition"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Live preview */}
+        <div className="flex justify-center mb-5">
+          <NoteBubble text={text} placeholder="Set a note" />
+        </div>
+
+        {/* Note input */}
+        <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide block mb-1.5">Note</label>
+        <textarea
+          maxLength={80}
+          placeholder="What are you up to? e.g. Free after 3, anyone for chai?"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={2}
+          className="input w-full text-sm resize-none"
+        />
+        <div className="text-right mt-1">
+          <span className="text-[10px] text-ink-mute">{text.length}/80</span>
+        </div>
+
+        {/* Availability status */}
+        <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide block mb-2 mt-4">Availability</label>
+        <div className="grid grid-cols-2 gap-2">
+          {STATUSES.map((s) => {
+            const active = status === s.id;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setStatus(active ? null : s.id)}
+                className={`flex items-center gap-2.5 px-3 py-3 rounded-xl border transition active:scale-95 ${
+                  active ? "border-white/25 bg-white/[0.06]" : "border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]"
+                }`}
+              >
+                <span className={`w-3 h-3 rounded-full ${s.dot} shrink-0`} style={{ boxShadow: active ? `0 0 0 3px ${s.ring}33` : undefined }} />
+                <span className={`text-xs font-semibold ${active ? "text-ink" : "text-ink-soft"}`}>{s.label}</span>
+                {active && <span className="ml-auto text-brand-300 text-xs font-bold">✓</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2.5 mt-6">
+          <button
+            type="button"
+            onClick={() => onSave("", null)}
+            className="flex-1 py-3 text-xs font-bold bg-white/[0.05] hover:bg-white/10 active:scale-95 transition rounded-xl text-red-400"
+          >
+            Clear
+          </button>
+          <button
+            type="button"
+            onClick={() => onSave(text, status)}
+            className="flex-1 py-3 text-xs font-bold btn-primary rounded-xl"
+          >
+            Share signal
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── COMPONENT ────────────────────────────────────────────────────────────────
 export default function Messages({
   onChatOpen,
@@ -219,6 +360,7 @@ export default function Messages({
 
   // Frequency Strip State
   const [mySignal, setMySignal] = useState("");
+  const [myStatus, setMyStatus] = useState<string | null>(null);
   const [editSignalOpen, setEditSignalOpen] = useState(false);
   const [signals, setSignals] = useState<any[]>([]);
 
@@ -336,18 +478,26 @@ export default function Messages({
     try {
       const { data } = await supabase
         .from("profiles")
-        .select("id, name, username, avatar_url, verified, college, course, year, bio, links, business_name")
+        .select("id, name, username, avatar_url, verified, college, course, year, bio, links, business_name, availability")
         .eq("college", profile.college)
         .neq("id", user!.id)
         .limit(15);
-      
+
       const signalsList = (data ?? []).map((p: any) => ({
         id: p.id,
         name: p.name.split(" ")[0],
         signal: p.bio ? p.bio.slice(0, 45) : null,
         avatar_url: p.avatar_url,
+        status: p.availability ?? null,
         peer: p,
-      })).filter(s => s.signal);
+      })).filter(s => s.signal || s.status);
+
+      // load my own current signal + status
+      const me = await supabase.from("profiles").select("bio, availability").eq("id", user!.id).single();
+      if (me.data) {
+        setMySignal(me.data.bio || "");
+        setMyStatus(me.data.availability ?? null);
+      }
 
       setSignals(signalsList);
     } catch (err) {
@@ -356,13 +506,18 @@ export default function Messages({
   }
 
   // ── Edit Signal modal controls ──────────────────────────────────────────────
-  function handleSaveSignal(txt: string) {
+  function handleSaveSignal(txt: string, status: string | null) {
     setMySignal(txt.trim());
+    setMyStatus(status);
     setEditSignalOpen(false);
     if (!demo && user) {
-      supabase.from("profiles").update({ bio: txt.trim() }).eq("id", user.id).then(() => {
-        loadLiveSignals();
-      });
+      supabase
+        .from("profiles")
+        .update({ bio: txt.trim(), availability: status })
+        .eq("id", user.id)
+        .then(() => {
+          loadLiveSignals();
+        });
     }
   }
 
@@ -672,50 +827,81 @@ export default function Messages({
           </div>
 
           {/* Frequency signals horizontal row */}
-          <div className="flex gap-4 overflow-x-auto no-scrollbar pb-3.5 mb-2 shrink-0 border-b border-white/[0.04]" style={{ scrollbarWidth: "none" }}>
+          <div className="flex gap-3 overflow-x-auto no-scrollbar pt-2 pb-3.5 mb-2 shrink-0 border-b border-white/[0.04]" style={{ scrollbarWidth: "none" }}>
             {/* My signal */}
-            <div className="flex flex-col items-center gap-1.5 shrink-0">
-              <div
-                onClick={() => setEditSignalOpen(true)}
-                className="relative w-12 h-12 rounded-full bg-white/[0.05] border border-white/[0.12] flex items-center justify-center cursor-pointer hover:bg-white/[0.08] active:scale-95 transition"
-              >
-                {profile?.avatar_url ? (
-                  <img src={profile.avatar_url} alt="Me" className="w-full h-full rounded-full object-cover" />
-                ) : (
-                  <span className="text-[11px] font-bold text-brand-300">Signal</span>
-                )}
-                <span className="absolute bottom-0 right-0 w-4 h-4 bg-brand-500 rounded-full border border-black flex items-center justify-center text-[10px] text-white font-extrabold shadow">+</span>
-              </div>
-              <span className="text-[10px] font-semibold text-ink-mute truncate max-w-[55px] text-center">
-                {mySignal ? mySignal : "Your signal"}
-              </span>
-            </div>
+            {(() => {
+              const meStatus = statusMeta(myStatus);
+              return (
+                <div className="flex flex-col items-center gap-1.5 shrink-0 w-[76px]">
+                  {/* Note bubble */}
+                  <NoteBubble text={mySignal} placeholder="Set a note" />
+                  {/* Avatar */}
+                  <button
+                    onClick={() => setEditSignalOpen(true)}
+                    className="relative w-14 h-14 rounded-full flex items-center justify-center cursor-pointer active:scale-95 transition shrink-0"
+                    style={meStatus ? { boxShadow: `0 0 0 2px #000, 0 0 0 4px ${meStatus.ring}` } : undefined}
+                  >
+                    <div className="w-full h-full rounded-full bg-white/[0.05] border border-white/[0.12] flex items-center justify-center overflow-hidden">
+                      {profile?.avatar_url ? (
+                        <img src={profile.avatar_url} alt="Me" className="w-full h-full rounded-full object-cover" />
+                      ) : (
+                        <span className="text-[15px] font-bold text-brand-300">
+                          {profile?.name?.[0]?.toUpperCase() || "?"}
+                        </span>
+                      )}
+                    </div>
+                    <span className="absolute bottom-0 right-0 w-4 h-4 bg-brand-500 rounded-full border-2 border-black flex items-center justify-center text-[10px] text-white font-extrabold">+</span>
+                  </button>
+                  {/* Status label */}
+                  <span className={`text-[10px] font-semibold text-center leading-tight ${meStatus ? meStatus.text : "text-ink-mute"}`}>
+                    {meStatus ? meStatus.short : "You"}
+                  </span>
+                </div>
+              );
+            })()}
 
             {/* Other signals */}
-            {signals.map((sig) => (
-              <div key={sig.id} className="flex flex-col items-center gap-1.5 shrink-0">
-                <div
+            {signals.map((sig) => {
+              const st = statusMeta(sig.status);
+              const ringStyle = st
+                ? { boxShadow: `0 0 0 2px #000, 0 0 0 4px ${st.ring}` }
+                : { boxShadow: `0 0 0 2px #000, 0 0 0 4px rgba(255,255,255,0.12)` };
+              return (
+                <button
+                  key={sig.id}
                   onClick={() => {
                     setProfileUser(sig.peer || sig);
                     setProfileSheetOpen(true);
                   }}
-                  className="w-12 h-12 rounded-full p-[2.5px] bg-gradient-to-tr from-brand-500 to-emerald-400 flex items-center justify-center cursor-pointer hover:scale-105 active:scale-95 transition animate-pulse duration-1000"
+                  className="flex flex-col items-center gap-1.5 shrink-0 w-[76px] active:scale-95 transition"
                 >
-                  <div className="w-full h-full rounded-full bg-black p-[2.5px]">
-                    {sig.avatar_url ? (
-                      <img src={sig.avatar_url} alt={sig.name} className="w-full h-full rounded-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center font-bold text-xs">
-                        {sig.name[0]}
-                      </div>
+                  {/* Note bubble */}
+                  <NoteBubble text={sig.signal} />
+                  {/* Avatar with status ring */}
+                  <div
+                    className="relative w-14 h-14 rounded-full flex items-center justify-center shrink-0"
+                    style={ringStyle}
+                  >
+                    <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center">
+                      {sig.avatar_url ? (
+                        <img src={sig.avatar_url} alt={sig.name} className="w-full h-full rounded-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center font-bold text-base">
+                          {sig.name[0]}
+                        </div>
+                      )}
+                    </div>
+                    {st && (
+                      <span className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-black ${st.dot}`} />
                     )}
                   </div>
-                </div>
-                <span className="text-[10px] font-medium text-ink-soft truncate max-w-[55px] text-center">
-                  {sig.signal}
-                </span>
-              </div>
-            ))}
+                  {/* Name + status */}
+                  <span className="text-[10px] font-semibold text-ink-soft truncate max-w-[72px] text-center leading-tight">
+                    {sig.name}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           {/* Search bar */}
@@ -1262,61 +1448,14 @@ export default function Messages({
         </div>
       )}
 
-      {/* Signal modal creator editor bottom sheet */}
-      {editSignalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity animate-fade-in">
-          <div className="absolute inset-0" onClick={() => setEditSignalOpen(false)} />
-          <div className="absolute bottom-0 inset-x-0 bg-[#0c0c0e] rounded-t-[32px] border-t border-white/[0.08] p-5 max-h-[85vh] z-10">
-            <div className="flex items-center justify-between mb-4 border-b border-white/[0.05] pb-3">
-              <h2 className="font-bold text-base text-ink">Broadcasting Signal</h2>
-              <button
-                onClick={() => setEditSignalOpen(false)}
-                className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white"
-              >
-                ✕
-              </button>
-            </div>
-            
-            <textarea
-              maxLength={80}
-              placeholder="What are you up to? E.g. DBMS grind rn 📚"
-              defaultValue={mySignal}
-              onChange={(e) => {
-                const val = e.target.value;
-                const charCount = document.getElementById("signal-char-counter");
-                if (charCount) charCount.innerText = `${val.length}/80`;
-              }}
-              id="signal-input-text"
-              rows={3}
-              className="input w-full text-sm resize-none"
-            />
-            
-            <div className="flex items-center justify-between mt-2.5">
-              <span id="signal-char-counter" className="text-[10px] text-ink-mute">{mySignal.length}/80</span>
-            </div>
-
-            <div className="flex gap-2.5 mt-5">
-              <button
-                type="button"
-                onClick={() => handleSaveSignal("")}
-                className="flex-1 py-3 text-xs font-bold bg-white/[0.05] hover:bg-white/10 active:scale-95 transition rounded-xl text-red-400"
-              >
-                Clear Signal
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const input = document.getElementById("signal-input-text") as HTMLTextAreaElement;
-                  handleSaveSignal(input?.value || "");
-                }}
-                className="flex-1 py-3 text-xs font-bold btn-primary rounded-xl"
-              >
-                Save Signal
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Signal editor bottom sheet (note + availability status) */}
+      <SignalEditorSheet
+        open={editSignalOpen}
+        initialText={mySignal}
+        initialStatus={myStatus}
+        onClose={() => setEditSignalOpen(false)}
+        onSave={handleSaveSignal}
+      />
 
       {/* Convo Row actions sheet */}
       {actionsConvo && (
