@@ -371,3 +371,81 @@ export const GlobeIcon = ({ className }: P) => (
   </svg>
 );
 
+export const CoffeeIcon = ({ className }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke={C} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 8h1a4 4 0 1 1 0 8h-1" />
+    <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8Z" />
+    <path d="M6 2v2M10 2v2M14 2v2" />
+  </svg>
+);
+
+export const HelpIcon = ({ className }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke={C} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="8.5" />
+    <circle cx="12" cy="12" r="3.5" />
+    <path d="m6 6 4.2 4.2M13.8 13.8l4.2 4.2M18 6l-4.2 4.2M9.8 13.8 6 18" />
+  </svg>
+);
+
+export const UsersGroupIcon = ({ className }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke={C} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="9" cy="7.5" r="2.8" />
+    <path d="M3 18.5a5 5 0 0 1 10 0" />
+    <circle cx="17" cy="9.5" r="2.2" />
+    <path d="M13.2 18.5a4 4 0 0 1 7.6 0" />
+  </svg>
+);
+
+export const ConfettiIcon = ({ className }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke={C} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 11a1 1 0 1 0 0-2 1 1 0 0 0 0 2ZM18 5a1 1 0 1 0 0-2 1 1 0 0 0 0 2ZM14 18a1 1 0 1 0 0-2 1 1 0 0 0 0 2ZM7 19v-2M15 11l2 2M6 5l3 3M19 19l-2-2" />
+    <path d="m11 5 1.5 1.5M10 13l-1.5 1.5" />
+  </svg>
+);
+
+export const TagIcon = ({ className }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke={C} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20.5 11.5 12.5 3.5H4v8.5l8 8 8.5-8Z" />
+    <circle cx="8" cy="7.5" r="1" fill={C} stroke="none" />
+  </svg>
+);
+
+export const HandRaiseIcon = ({ className }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke={C} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 11V7.5a1.5 1.5 0 0 0-3-0V11M15 11V5.5a1.5 1.5 0 0 0-3-0V11M12 11V4.5a1.5 1.5 0 0 0-3-0V11M9 11V8.5a1.5 1.5 0 0 0-3-0V16a6 6 0 0 0 12 0v-5" />
+  </svg>
+);
+
+export const BookmarkIcon = ({ className }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke={C} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M5 4.5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16l-7-4.5-7 4.5v-16Z" />
+  </svg>
+);
+
+export const ShareIcon = ({ className }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke={C} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 12v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6M16 6l-4-4-4 4M12 2v13" />
+  </svg>
+);
+
+export const BoltIcon = ({ className }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke={C} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+  </svg>
+);
+
+export const SparklesIcon = ({ className }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke={C} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+    <path d="m12 3 1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3Z" />
+    <path d="m5 16 1 2 2 1-2 1-1 2-1-2-2-1 2-1 1-2ZM19 4l0.8 1.7 1.7 0.8-1.7 0.8-0.8 1.7-0.8-1.7-1.7-0.8 1.7-0.8L19 4Z" />
+  </svg>
+);
+
+export const BuildingIcon = ({ className }: P) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke={C} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="10" width="18" height="11" rx="2" />
+    <path d="M9 21v-4h6v4M3 10l9-7 9 7" />
+  </svg>
+);
+
+

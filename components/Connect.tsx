@@ -14,17 +14,104 @@ import {
   SignalIcon,
   CampusIcon,
   GlobeIcon,
-  SendIcon
+  SendIcon,
+  CoffeeIcon,
+  BookIcon,
+  HelpIcon,
+  UsersGroupIcon,
+  ConfettiIcon,
+  TagIcon,
+  ClockIcon,
+  BookmarkIcon,
+  ShareIcon
 } from "./icons";
+
+// ── Intents configuration ────────────────────────────────────────────────────
+export const INTENTS = [
+  { id: "free", label: "Free now", color: "#22c55e", bg: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20", activeBg: "bg-emerald-500 text-white border-emerald-500", icon: CoffeeIcon },
+  { id: "study", label: "Studying", color: "#3b82f6", bg: "bg-blue-500/10 text-blue-400 border-blue-500/20", activeBg: "bg-blue-500 text-white border-blue-500", icon: BookIcon },
+  { id: "help", label: "Need help", color: "#f59e0b", bg: "bg-amber-500/10 text-amber-400 border-amber-500/20", activeBg: "bg-amber-500 text-white border-amber-500", icon: HelpIcon },
+  { id: "looking", label: "Looking for", color: "#8b5cf6", bg: "bg-purple-500/10 text-purple-400 border-purple-500/20", activeBg: "bg-purple-500 text-white border-purple-500", icon: UsersGroupIcon },
+  { id: "event", label: "Event", color: "#ec4899", bg: "bg-pink-500/10 text-pink-400 border-pink-500/20", activeBg: "bg-pink-500 text-white border-pink-500", icon: ConfettiIcon },
+  { id: "sell", label: "Sell", color: "#14b8a6", bg: "bg-teal-500/10 text-teal-400 border-teal-500/20", activeBg: "bg-teal-500 text-white border-teal-500", icon: TagIcon },
+];
+
+// Helper to compute expires_at timestamp
+export function getExpiresAt(duration: "1h" | "4h" | "today"): Date {
+  const now = new Date();
+  if (duration === "1h") {
+    return new Date(now.getTime() + 60 * 60 * 1000);
+  } else if (duration === "4h") {
+    return new Date(now.getTime() + 4 * 60 * 60 * 1000);
+  } else {
+    // today = end of day (23:59:59)
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    return endOfDay;
+  }
+}
 
 // ── Demo data ────────────────────────────────────────────────────────────────
 const DEMO_SIGNALS = [
-  { id:"ds1", user_id:"dp1", content:"DBMS grind rn 📚", created_at: new Date(Date.now()-7200000).toISOString(), profiles:{ name:"Arjun Sharma",  username:"arjun_s",  course:"B.Tech CSE", year:2, college:"IIIT Hyderabad",    verified:true,  is_private:false, avatar_url:null }},
-  { id:"ds2", user_id:"dp2", content:"anyone for chai at 4pm? ☕",       created_at: new Date(Date.now()-1800000).toISOString(), profiles:{ name:"Priya Nair",    username:"priya.n",  course:"B.Tech ECE", year:3, college:"IIIT Hyderabad",    verified:false, is_private:true,  avatar_url:null }},
-  { id:"ds3", user_id:"dp3", content:"need hackathon team 🚀",            created_at: new Date(Date.now()-18000000).toISOString(),profiles:{ name:"Rohan Mehta",   username:"rohanm",   course:"B.Com",      year:1, college:"Osmania University",verified:false, is_private:false, avatar_url:null }},
-  { id:"ds4", user_id:"dp4", content:"placement prep SOS 😭",             created_at: new Date(Date.now()-3600000).toISOString(), profiles:{ name:"Sneha Rao",     username:"sneha.r",  course:"MBA",        year:2, college:"BITS Pilani Hyd",  verified:true,  is_private:false, avatar_url:null }},
-  { id:"ds5", user_id:"dp5", content:"anyone explain OS scheduling? 🙏",  created_at: new Date(Date.now()-900000).toISOString(),  profiles:{ name:"Karan Patel",   username:"karanp",   course:"B.Tech Mech",year:3, college:"IIIT Hyderabad",   verified:false, is_private:false, avatar_url:null }},
-  { id:"ds6", user_id:"dp6", content:"weekend trip planning 🏕️",          created_at: new Date(Date.now()-5400000).toISOString(), profiles:{ name:"Divya Krishna", username:"divyak",   course:"BCA",        year:2, college:"Osmania University",verified:false, is_private:false, avatar_url:null }},
+  { 
+    id:"ds1", 
+    user_id:"dp1", 
+    content:"DBMS grind rn 📚", 
+    intent: "study",
+    reach: "campus",
+    expires_at: new Date(Date.now() + 7200000).toISOString(),
+    created_at: new Date(Date.now()-7200000).toISOString(), 
+    profiles:{ name:"Arjun Sharma",  username:"arjun_s",  course:"B.Tech CSE", year:2, college:"IIIT Hyderabad",    verified:true,  is_private:false, avatar_url:null }
+  },
+  { 
+    id:"ds2", 
+    user_id:"dp2", 
+    content:"anyone for chai at 4pm? ☕", 
+    intent: "free",
+    reach: "campus",
+    expires_at: new Date(Date.now() + 10800000).toISOString(),
+    created_at: new Date(Date.now()-1800000).toISOString(), 
+    profiles:{ name:"Priya Nair",    username:"priya.n",  course:"B.Tech ECE", year:3, college:"IIIT Hyderabad",    verified:false, is_private:true,  avatar_url:null }
+  },
+  { 
+    id:"ds3", 
+    user_id:"dp3", 
+    content:"need remote frontend developer for next-gen fintech project 🚀", 
+    intent: "looking",
+    reach: "all",
+    expires_at: new Date(Date.now() + 14400000).toISOString(),
+    created_at: new Date(Date.now()-18000000).toISOString(),
+    profiles:{ name:"Rohan Mehta",   username:"rohanm",   course:"B.Com",      year:1, college:"Osmania University",verified:false, is_private:false, avatar_url:null }
+  },
+  { 
+    id:"ds4", 
+    user_id:"dp4", 
+    content:"selling brand new mechanical keyboard, keychron k2, ping if interested!", 
+    intent: "sell",
+    reach: "all",
+    expires_at: new Date(Date.now() + 3600000).toISOString(),
+    created_at: new Date(Date.now()-3600000).toISOString(), 
+    profiles:{ name:"Sneha Rao",     username:"sneha.r",  course:"MBA",        year:2, college:"BITS Pilani Hyd",  verified:true,  is_private:false, avatar_url:null }
+  },
+  { 
+    id:"ds5", 
+    user_id:"dp5", 
+    content:"anyone explain OS scheduling? exam tomorrow 🙏", 
+    intent: "help",
+    reach: "campus",
+    expires_at: new Date(Date.now() + 5400000).toISOString(),
+    created_at: new Date(Date.now()-900000).toISOString(),  
+    profiles:{ name:"Karan Patel",   username:"karanp",   course:"B.Tech Mech",year:3, college:"IIIT Hyderabad",   verified:false, is_private:false, avatar_url:null }
+  },
+  { 
+    id:"ds6", 
+    user_id:"dp6", 
+    content:"hosting sunset photography meet this saturday 🏕️", 
+    intent: "event",
+    reach: "all",
+    expires_at: new Date(Date.now() + 21600000).toISOString(),
+    created_at: new Date(Date.now()-5400000).toISOString(), 
+    profiles:{ name:"Divya Krishna", username:"divyak",   course:"BCA",        year:2, college:"Osmania University",verified:false, is_private:false, avatar_url:null }
+  },
 ];
 const DEMO_FOLLOW_STATES: Record<string,string> = { dp1:"mutual", dp2:"pending", dp3:"following", dp4:"none", dp5:"none", dp6:"none" };
 const DEMO_REQUESTS = [
@@ -77,9 +164,20 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
   const [scope, setScope] = useState<"campus" | "all">("campus");
   const [signals, setSignals] = useState<any[]>([]);
   const [feedLoading, setFeedLoading] = useState(true);
+  
+  // Rich active user signal state
   const [mySignal, setMySignal] = useState<string | null>(null);
+  const [mySignalIntent, setMySignalIntent] = useState<string | null>(null);
+  const [mySignalReach, setMySignalReach] = useState<"campus" | "all">("campus");
+  const [mySignalExpiresAt, setMySignalExpiresAt] = useState<string | null>(null);
+
+  // Composer sheet states
   const [broadcasting, setBroadcasting] = useState(false);
   const [broadcastInput, setBroadcastInput] = useState("");
+  const [broadcastIntent, setBroadcastIntent] = useState<string>("free");
+  const [broadcastReach, setBroadcastReach] = useState<"campus" | "all">("campus");
+  const [broadcastDuration, setBroadcastDuration] = useState<"1h" | "4h" | "today">("4h");
+  
   const [saving, setSaving] = useState(false);
 
   // Follow states
@@ -101,12 +199,22 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
   // Profile sheet
   const [viewProfile, setViewProfile] = useState<any | null>(null);
 
+  // Lock reach selector to campus if free intent is selected
+  useEffect(() => {
+    if (broadcastIntent === "free") {
+      setBroadcastReach("campus");
+    }
+  }, [broadcastIntent]);
+
   // ── Demo seed ───────────────────────────────────────────
   useEffect(() => {
     if (!demo) return;
     setSignals(DEMO_SIGNALS as any[]);
     setFeedLoading(false);
     setMySignal(null);
+    setMySignalIntent(null);
+    setMySignalReach("campus");
+    setMySignalExpiresAt(null);
   }, [demo]);
 
   // ── Load feed ───────────────────────────────────────────
@@ -124,11 +232,16 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
         .neq("user_id", user!.id)
         .order("created_at", { ascending: false })
         .limit(60),
-      supabase.from("signals").select("content").eq("user_id", user!.id).gt("expires_at", new Date().toISOString()).maybeSingle(),
+      supabase.from("signals")
+        .select("content, intent, reach, expires_at")
+        .eq("user_id", user!.id)
+        .gt("expires_at", new Date().toISOString())
+        .maybeSingle(),
     ]);
 
     let data = feedRes.data ?? [];
-    // Campus-first sort
+    
+    // Sort campus-first (optional fallback if needed)
     if (profile?.college) {
       data = [...data].sort((a, b) => {
         const ac = a.profiles?.college === profile.college ? 0 : 1;
@@ -136,7 +249,13 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
         return ac - bc || new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
     }
-    if (scope === "campus") data = data.filter((s: any) => s.profiles?.college === profile?.college);
+
+    // Filter based on selected scope
+    if (scope === "campus") {
+      data = data.filter((s: any) => s.profiles?.college === profile?.college);
+    } else {
+      data = data.filter((s: any) => s.reach === "all");
+    }
 
     // Load follow states
     const ids = data.map((s: any) => s.user_id);
@@ -159,7 +278,18 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
     }
 
     setSignals(data);
-    setMySignal(mySignalRes.data?.content ?? null);
+    
+    if (mySignalRes.data) {
+      setMySignal(mySignalRes.data.content);
+      setMySignalIntent(mySignalRes.data.intent);
+      setMySignalReach(mySignalRes.data.reach as "campus" | "all");
+      setMySignalExpiresAt(mySignalRes.data.expires_at);
+    } else {
+      setMySignal(null);
+      setMySignalIntent(null);
+      setMySignalReach("campus");
+      setMySignalExpiresAt(null);
+    }
     setFeedLoading(false);
   }
 
@@ -168,17 +298,80 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
     const text = broadcastInput.trim();
     if (!text) return;
     setSaving(true);
-    if (demo) { setMySignal(text); setBroadcasting(false); setBroadcastInput(""); setSaving(false); return; }
-    await supabase.from("signals").upsert({ user_id: user!.id, content: text, expires_at: new Date(Date.now() + 86400000).toISOString() }, { onConflict: "user_id" });
+    
+    const expiresAt = getExpiresAt(broadcastDuration);
+    
+    if (demo) {
+      setMySignal(text);
+      setMySignalIntent(broadcastIntent);
+      setMySignalReach(broadcastReach);
+      setMySignalExpiresAt(expiresAt.toISOString());
+      
+      const newSig = {
+        id: "my-signal-id",
+        user_id: user?.id || "me",
+        content: text,
+        intent: broadcastIntent,
+        reach: broadcastReach,
+        expires_at: expiresAt.toISOString(),
+        created_at: new Date().toISOString(),
+        profiles: {
+          name: profile?.name || "Me",
+          username: profile?.username || "me",
+          course: profile?.course || "B.Tech CSE",
+          year: profile?.year || 2,
+          college: profile?.college || "IIIT Hyderabad",
+          verified: profile?.verified || false,
+          is_private: (profile as any)?.is_private || false,
+          avatar_url: profile?.avatar_url || null
+        }
+      };
+      
+      // Upsert in local signals state
+      setSignals(prev => [newSig, ...prev.filter(s => s.user_id !== (user?.id || "me"))]);
+      
+      setBroadcasting(false);
+      setBroadcastInput("");
+      setSaving(false);
+      return;
+    }
+    
+    const expiresAtIso = expiresAt.toISOString();
+    await supabase.from("signals").upsert({ 
+      user_id: user!.id, 
+      content: text, 
+      intent: broadcastIntent,
+      reach: broadcastReach,
+      expires_at: expiresAtIso 
+    }, { onConflict: "user_id" });
+    
     setMySignal(text);
+    setMySignalIntent(broadcastIntent);
+    setMySignalReach(broadcastReach);
+    setMySignalExpiresAt(expiresAtIso);
+    
     setBroadcasting(false);
     setBroadcastInput("");
     setSaving(false);
+    
+    loadFeed();
   }
 
   async function clearSignal() {
-    if (!demo) await supabase.from("signals").delete().eq("user_id", user!.id);
+    if (demo) {
+      setMySignal(null);
+      setMySignalIntent(null);
+      setMySignalReach("campus");
+      setMySignalExpiresAt(null);
+      setSignals(prev => prev.filter(s => s.user_id !== (user?.id || "me")));
+      return;
+    }
+    await supabase.from("signals").delete().eq("user_id", user!.id);
     setMySignal(null);
+    setMySignalIntent(null);
+    setMySignalReach("campus");
+    setMySignalExpiresAt(null);
+    loadFeed();
   }
 
   // ── Search ──────────────────────────────────────────────
@@ -537,54 +730,45 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
             <div className="px-5">
 
               {/* My signal */}
-              {!broadcasting ? (
-                <button onClick={() => { setBroadcastInput(mySignal ?? ""); setBroadcasting(true); }}
-                  className={`w-full mb-5 rounded-3xl border p-5 text-left transition-all active:scale-[0.98] ${
-                    mySignal ? "bg-brand-500/[0.04] border-brand-500/20 hover:border-brand-500/30" : "bg-white/[0.02] border-white/[0.07] border-dashed hover:border-white/12"
-                  }`}>
-                  <div className="flex items-center gap-3">
-                    <SignalIcon className={`w-5 h-5 shrink-0 ${mySignal ? "text-brand-400 animate-pulse" : "text-ink-mute opacity-40"}`} />
-                    <div className="flex-1 min-w-0">
-                      {mySignal ? (
-                        <>
-                          <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider mb-0.5">Broadcasting · 24h</p>
-                          <p className="text-sm text-ink font-semibold truncate">"{mySignal}"</p>
-                        </>
-                      ) : (
-                        <p className="text-sm text-ink-soft">What are you broadcasting right now?</p>
-                      )}
-                    </div>
-                    {mySignal && (
-                      <button onClick={e => { e.stopPropagation(); clearSignal(); }}
-                        className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/10 active:scale-90 transition flex items-center justify-center text-ink-soft hover:text-red-400 shrink-0">
-                        <XIcon className="w-3.5 h-3.5" />
-                      </button>
+              <button onClick={() => {
+                setBroadcastInput(mySignal ?? "");
+                setBroadcastIntent(mySignalIntent ?? "free");
+                setBroadcastReach(mySignalReach ?? "campus");
+                setBroadcastDuration("4h");
+                setBroadcasting(true);
+              }}
+                className={`w-full mb-5 rounded-3xl border p-5 text-left transition-all active:scale-[0.98] ${
+                  mySignal ? "bg-brand-500/[0.04] border-brand-500/20 hover:border-brand-500/30" : "bg-white/[0.02] border-white/[0.07] border-dashed hover:border-white/12"
+                }`}>
+                <div className="flex items-center gap-3">
+                  <span style={mySignal && mySignalIntent ? { color: INTENTS.find(i => i.id === mySignalIntent)?.color } : {}}>
+                    <SignalIcon className={`w-5 h-5 shrink-0 ${mySignal ? "animate-pulse" : "text-ink-mute opacity-40"}`} />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    {mySignal ? (
+                      <>
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: INTENTS.find(i => i.id === mySignalIntent)?.color || "#10b981" }}>
+                            Broadcasting · {INTENTS.find(i => i.id === mySignalIntent)?.label || "Signal"}
+                          </p>
+                          {mySignalReach === "all" && (
+                            <span className="text-[8px] font-extrabold bg-purple-500/15 text-purple-400 px-1.5 py-0.2 rounded-full border border-purple-500/20 select-none">ALL CAMPUSES</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-ink font-semibold truncate">"{mySignal}"</p>
+                      </>
+                    ) : (
+                      <p className="text-sm text-ink-soft">What are you broadcasting right now?</p>
                     )}
                   </div>
-                </button>
-              ) : (
-                <div className="mb-5 rounded-3xl border border-brand-500/20 bg-brand-500/[0.03] p-5 animate-fade-in">
-                  <div className="flex items-center gap-2 mb-3 select-none">
-                    <SignalIcon className="w-4 h-4 text-brand-400 animate-pulse" />
-                    <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider">Set your signal</p>
-                  </div>
-                  <input autoFocus maxLength={80} value={broadcastInput} onChange={e => setBroadcastInput(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && broadcastSignal()}
-                    className="input w-full text-sm mb-4 rounded-xl bg-[#1a1a1a] border border-white/[0.06] focus:border-brand-500/50" placeholder='"DBMS grind rn 📚"' />
-                  <div className="flex gap-3">
-                    <button onClick={broadcastSignal} disabled={saving || !broadcastInput.trim()}
-                      className="flex-1 h-10 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-40 active:scale-95 transition text-white text-xs font-bold flex items-center justify-center gap-1.5">
-                      {saving ? "Broadcasting…" : (
-                        <>
-                          <span>Broadcast</span>
-                          <SignalIcon className="w-3.5 h-3.5" />
-                        </>
-                      )}
+                  {mySignal && (
+                    <button onClick={e => { e.stopPropagation(); clearSignal(); }}
+                      className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/10 active:scale-90 transition flex items-center justify-center text-ink-soft hover:text-red-400 shrink-0">
+                      <XIcon className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={() => setBroadcasting(false)} className="px-4 h-10 rounded-xl bg-white/[0.06] text-ink-soft hover:bg-white/10 active:scale-95 transition text-xs font-bold">Cancel</button>
-                  </div>
+                  )}
                 </div>
-              )}
+              </button>
 
               {/* Campus toggle */}
               <div className="flex bg-white/[0.04] border border-white/[0.05] rounded-2xl p-1 mb-5 select-none">
@@ -698,6 +882,223 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
             </div>
           )}
         </>
+      )}
+
+      {/* ── Broadcast Composer Sheet (Bottom Sheet) ── */}
+      {broadcasting && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity animate-fade-in flex items-end">
+          <div className="absolute inset-0" onClick={() => setBroadcasting(false)} />
+          <div className="relative w-full bg-[#0c0c0e] rounded-t-[32px] border-t border-white/[0.08] p-5 pb-8 max-h-[90vh] overflow-y-auto z-10 animate-slide-up">
+            <div className="flex items-center justify-between mb-5 border-b border-white/[0.05] pb-3 select-none">
+              <h2 className="font-bold text-base text-ink flex items-center gap-2">
+                <SignalIcon className="w-5 h-5 text-brand-400 animate-pulse" />
+                <span>What's your signal?</span>
+              </h2>
+              <button
+                onClick={() => setBroadcasting(false)}
+                className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-95 transition flex items-center justify-center text-ink-soft hover:text-white"
+              >
+                <XIcon className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Live Preview Card */}
+            <div className="mb-5 select-none">
+              <label className="text-[10px] font-bold text-ink-mute uppercase tracking-wider block mb-2">Live Card Preview</label>
+              {(() => {
+                const intentInfo = INTENTS.find(i => i.id === broadcastIntent) || INTENTS[0];
+                const PreviewIcon = intentInfo.icon;
+                const initials = (profile?.name || "?").trim().split(/\s+/).map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+                return (
+                  <div className="w-full bg-[#141416] border border-white/[0.08] rounded-3xl p-5 relative text-left">
+                    <div className="flex items-start gap-3.5">
+                      <div className="relative shrink-0">
+                        {profile?.avatar_url ? (
+                          <img src={profile.avatar_url} alt={profile.name} className="w-10 h-10 rounded-full object-cover border border-white/10" style={{ borderColor: intentInfo.color }} />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs shrink-0 bg-brand-500/20 text-brand-300 border-2" style={{ borderColor: intentInfo.color }}>
+                            {initials}
+                          </div>
+                        )}
+                        <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-brand-500 rounded-full border-2 border-black flex items-center justify-center">
+                          <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                          <span className="font-bold text-ink text-sm truncate">{profile?.name || "Me"}</span>
+                          {profile?.verified && (
+                            <span className="inline-flex items-center justify-center w-3.5 h-3.5 bg-brand-500 text-white rounded-full text-[7px]">
+                              <CheckIcon className="w-2.5 h-2.5" />
+                            </span>
+                          )}
+                          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 border" style={{ borderColor: `${intentInfo.color}30`, color: intentInfo.color, backgroundColor: `${intentInfo.color}10` }}>
+                            <PreviewIcon className="w-3 h-3" />
+                            <span>{intentInfo.label}</span>
+                          </span>
+                        </div>
+                        <p className="text-sm font-semibold text-ink leading-relaxed break-words">
+                          {broadcastInput.trim() ? `"${broadcastInput}"` : '"What is your signal right now?"'}
+                        </p>
+                        <div className="flex items-center justify-between text-[11px] text-ink-mute mt-2">
+                          <p>{profile?.course || "Student"} · Y{profile?.year || 1}</p>
+                          <div className="flex items-center gap-1">
+                            <ClockIcon className="w-3.5 h-3.5 opacity-60" />
+                            <span>{broadcastDuration === "1h" ? "1h left" : broadcastDuration === "4h" ? "4h left" : "today"}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Note input */}
+            <div className="mb-4">
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide">Signal Note</label>
+                <span className={`text-[10px] ${broadcastInput.length >= 80 ? "text-red-400 font-bold" : "text-ink-mute"}`}>
+                  {broadcastInput.length}/80
+                </span>
+              </div>
+              <textarea
+                maxLength={80}
+                placeholder="What are you up to? e.g. DBMS grind in library, anyone free?"
+                value={broadcastInput}
+                onChange={(e) => setBroadcastInput(e.target.value)}
+                rows={2}
+                className="input w-full text-sm resize-none rounded-2xl bg-[#161618] border border-white/[0.08] p-3 text-white placeholder-white/30 focus:border-brand-500/50 focus:outline-none transition-colors"
+              />
+            </div>
+
+            {/* Intent Picker */}
+            <div className="mb-5">
+              <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide block mb-2.5">Choose Intent</label>
+              <div className="grid grid-cols-3 gap-2">
+                {INTENTS.map((intent) => {
+                  const Icon = intent.icon;
+                  const active = broadcastIntent === intent.id;
+                  return (
+                    <button
+                      key={intent.id}
+                      type="button"
+                      onClick={() => setBroadcastIntent(intent.id)}
+                      className={`flex flex-col items-center justify-center p-2.5 rounded-2xl border transition-all duration-200 active:scale-95 ${
+                        active
+                          ? "text-white font-bold border-transparent"
+                          : "border-white/[0.06] bg-white/[0.02] text-ink-mute hover:bg-white/[0.04]"
+                      }`}
+                      style={active ? { backgroundColor: intent.color } : {}}
+                    >
+                      <Icon className="w-5 h-5 mb-1" />
+                      <span className="text-[10px] truncate max-w-full">{intent.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Reach segmented picker */}
+            <div className="mb-5">
+              <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide block mb-2">Reach</label>
+              {broadcastIntent === "free" ? (
+                <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-3 flex items-center justify-between text-xs text-ink-soft select-none">
+                  <span className="flex items-center gap-1.5 font-semibold text-emerald-400">
+                    <CampusIcon className="w-4 h-4" />
+                    <span>My Campus (Locked)</span>
+                  </span>
+                  <span className="text-[10px] text-ink-mute">"Free now" is inherently local</span>
+                </div>
+              ) : (
+                <div className="flex bg-white/[0.03] border border-white/[0.05] rounded-2xl p-1">
+                  {(["campus", "all"] as const).map(r => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setBroadcastReach(r)}
+                      className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 ${
+                        broadcastReach === r
+                          ? "bg-brand-500 text-white shadow-md"
+                          : "text-ink-soft hover:bg-white/[0.02]"
+                      }`}
+                    >
+                      {r === "campus" ? (
+                        <>
+                          <CampusIcon className="w-3.5 h-3.5" />
+                          <span>My Campus</span>
+                        </>
+                      ) : (
+                        <>
+                          <GlobeIcon className="w-3.5 h-3.5" />
+                          <span>All Campuses</span>
+                        </>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Duration picker */}
+            <div className="mb-6">
+              <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide block mb-2">Duration</label>
+              <div className="flex bg-white/[0.03] border border-white/[0.05] rounded-2xl p-1">
+                {(["1h", "4h", "today"] as const).map(d => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setBroadcastDuration(d)}
+                    className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 ${
+                      broadcastDuration === d
+                        ? "bg-brand-500 text-white shadow-md"
+                        : "text-ink-soft hover:bg-white/[0.02]"
+                    }`}
+                  >
+                    <ClockIcon className="w-3.5 h-3.5" />
+                    <span>{d === "1h" ? "1 Hour" : d === "4h" ? "4 Hours" : "Today"}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex gap-3">
+              {mySignal && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearSignal();
+                    setBroadcasting(false);
+                  }}
+                  className="flex-1 h-12 rounded-2xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-bold active:scale-95 transition-all flex items-center justify-center"
+                >
+                  Clear Signal
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setBroadcasting(false)}
+                className={`h-12 rounded-2xl bg-white/[0.06] text-ink-soft hover:bg-white/10 active:scale-95 transition-all text-xs font-bold ${mySignal ? "px-6" : "flex-1"}`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={broadcastSignal}
+                disabled={saving || !broadcastInput.trim()}
+                className="flex-[2] h-12 rounded-2xl bg-brand-500 hover:bg-brand-600 disabled:opacity-40 active:scale-95 transition-all text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-lg shadow-brand-500/15"
+              >
+                {saving ? "Broadcasting…" : (
+                  <>
+                    <span>Broadcast Signal</span>
+                    <SignalIcon className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
