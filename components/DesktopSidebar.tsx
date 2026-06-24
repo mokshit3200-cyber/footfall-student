@@ -7,14 +7,14 @@ import {
   UsersIcon,
   StoreIcon,
   UserIcon,
-  CampusIcon,
+  ChatIcon,
 } from "./icons";
 
 const ITEMS: { key: Tab; label: string; Icon: typeof HomeIcon }[] = [
   { key: "home", label: "Home", Icon: HomeIcon },
   { key: "connect", label: "Connect", Icon: UsersIcon },
+  { key: "messages", label: "Messages", Icon: ChatIcon },
   { key: "market", label: "Marketplace", Icon: StoreIcon },
-  { key: "campus", label: "My Campus", Icon: CampusIcon },
   { key: "profile", label: "Profile", Icon: UserIcon },
 ];
 

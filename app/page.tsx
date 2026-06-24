@@ -12,7 +12,7 @@ import Home from "@/components/Home";
 import Money from "@/components/Money";
 import Connect from "@/components/Connect";
 import Marketplace from "@/components/Marketplace";
-import MyCampus from "@/components/MyCampus";
+import Messages from "@/components/Messages";
 import Profile from "@/components/Profile";
 import Business from "@/components/Business";
 import RemindersEngine from "@/components/RemindersEngine";
@@ -80,7 +80,7 @@ export default function Page() {
     return <Business onBack={() => setBusinessMode(false)} />;
   }
 
-  const wide = tab === "market" || tab === "connect" || tab === "campus";
+  const wide = tab === "market" || tab === "connect";
 
   return (
     <div className="md:flex">
@@ -92,8 +92,8 @@ export default function Page() {
           {tab === "home" && <Home onSwitchTab={changeTab} />}
           {tab === "money" && <Money />}
           {tab === "connect" && <Connect onSwitchTab={changeTab} onChatOpen={setInChat} />}
+          {tab === "messages" && <Messages onChatOpen={setInChat} />}
           {tab === "market" && <Marketplace onSwitchTab={changeTab} />}
-          {tab === "campus" && <MyCampus />}
           {tab === "profile" && (
             <Profile onOpenBusiness={() => setBusinessMode(true)} />
           )}

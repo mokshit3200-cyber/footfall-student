@@ -1,14 +1,14 @@
 "use client";
 
-import { HomeIcon, UsersIcon, StoreIcon, UserIcon, CampusIcon } from "./icons";
+import { HomeIcon, UsersIcon, StoreIcon, UserIcon, ChatIcon } from "./icons";
 
-export type Tab = "home" | "connect" | "money" | "market" | "campus" | "profile";
+export type Tab = "home" | "connect" | "money" | "market" | "campus" | "messages" | "profile";
 
 const TABS: { key: Tab; label: string; Icon: typeof HomeIcon }[] = [
   { key: "home", label: "Home", Icon: HomeIcon },
   { key: "connect", label: "Connect", Icon: UsersIcon },
+  { key: "messages", label: "Messages", Icon: ChatIcon },
   { key: "market", label: "Market", Icon: StoreIcon },
-  { key: "campus", label: "Campus", Icon: CampusIcon },
   { key: "profile", label: "Profile", Icon: UserIcon },
 ];
 
