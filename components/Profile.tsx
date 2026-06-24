@@ -252,7 +252,7 @@ export default function Profile({
                     });
                   }
                 }}
-                className="absolute -top-1 -right-1 bg-red-500/20 text-red-400 rounded-full w-4.5 h-4.5 flex items-center justify-center text-[8px] border border-white font-bold opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute -top-1 -right-1 bg-red-500/20 text-red-400 rounded-full w-[18px] h-[18px] flex items-center justify-center text-[8px] border border-white font-bold opacity-0 group-hover:opacity-100 transition-opacity"
                 title="Delete"
               >
                 ✕
@@ -670,8 +670,8 @@ function RemindersSheet({
             }`}
           >
             <span
-              className={`w-4.5 h-4.5 rounded-full bg-white absolute transition-transform shadow ${
-                enabled ? "translate-x-5.5" : "translate-x-1"
+              className={`w-[18px] h-[18px] rounded-full bg-white absolute transition-transform shadow ${
+                enabled ? "translate-x-[22px]" : "translate-x-1"
               }`}
               style={{ width: "18px", height: "18px" }}
             />

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { isDemo } from "@/lib/config";
+import { INTENTS } from "@/lib/intents";
 import {
   CheckIcon,
   EditIcon,
@@ -33,7 +34,16 @@ import {
   PlusIcon,
   PaperclipIcon,
   TrashIcon,
-  MailIcon
+  MailIcon,
+  CoffeeIcon,
+  BookIcon,
+  HelpIcon,
+  UsersGroupIcon,
+  ConfettiIcon,
+  TagIcon,
+  CampusIcon,
+  GlobeIcon,
+  HandRaiseIcon
 } from "./icons";
 
 // ── TYPES & INTERFACES ────────────────────────────────────────────────────────
@@ -82,18 +92,7 @@ const THEMES = [
   { id: "rose", name: "Rose Garden", color: "#db2777", bgClass: "bg-[#db2777]", dotColor: "bg-[#db2777]" },
 ] as const;
 
-// ── AVAILABILITY STATUS ──────────────────────────────────────────────────────
-// Lets friends see at a glance whether you're free, in class, studying or busy.
-const STATUSES = [
-  { id: "free",     label: "Free now", short: "Free",     ring: "#22c55e", dot: "bg-green-500",  text: "text-green-400" },
-  { id: "class",    label: "In class", short: "In class", ring: "#f59e0b", dot: "bg-amber-500",  text: "text-amber-400" },
-  { id: "studying", label: "Studying", short: "Studying", ring: "#3b82f6", dot: "bg-blue-500",   text: "text-blue-400" },
-  { id: "busy",     label: "Busy",     short: "Busy",     ring: "#ef4444", dot: "bg-red-500",    text: "text-red-400" },
-] as const;
 
-function statusMeta(id: string | null | undefined) {
-  return STATUSES.find((s) => s.id === id) ?? null;
-}
 
 // ── DEMO CONSTANTS (as const) ─────────────────────────────────────────────────
 const DEMO_CONVOS = [
@@ -167,9 +166,9 @@ const DEMO_MESSAGES = {
 } as const;
 
 const DEMO_FREQUENCY = [
-  { id: "dp1", name: "Arjun", signal: "DBMS grind, library 2nd floor", avatar_url: null, status: "studying" },
-  { id: "dp2", name: "Priya", signal: "anyone for chai at 4pm?", avatar_url: null, status: "free" },
-  { id: "dp5", name: "Karan", signal: "OS lecture till 3", avatar_url: null, status: "class" },
+  { id: "dp1", name: "Arjun", signal: "DBMS grind rn 📚", avatar_url: null, status: "study" },
+  { id: "dp2", name: "Priya", signal: "anyone for chai at 4pm? ☕", avatar_url: null, status: "free" },
+  { id: "dp5", name: "Karan", signal: "anyone explain OS scheduling? exam tomorrow 🙏", avatar_url: null, status: "help" },
 ] as const;
 
 const DEMO_SEARCH_PEOPLE = [
@@ -247,38 +246,74 @@ function NoteBubble({ text, placeholder }: { text?: string | null; placeholder?:
   );
 }
 
-// ── SignalEditorSheet — set your note + availability status ───────────────────
+function getExpiresAt(duration: "1h" | "4h" | "today"): Date {
+  const now = new Date();
+  if (duration === "1h") {
+    return new Date(now.getTime() + 60 * 60 * 1000);
+  } else if (duration === "4h") {
+    return new Date(now.getTime() + 4 * 60 * 60 * 1000);
+  } else {
+    // today = end of day (23:59:59)
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    return endOfDay;
+  }
+}
+
+// ── SignalEditorSheet — Bottom Sheet Broadcast Composer ───────────────────
 function SignalEditorSheet({
   open,
   initialText,
-  initialStatus,
+  initialIntent,
+  initialReach,
   onClose,
   onSave,
+  onClear,
+  profile,
+  demo,
 }: {
   open: boolean;
   initialText: string;
-  initialStatus: string | null;
+  initialIntent: string | null;
+  initialReach: "campus" | "all";
   onClose: () => void;
-  onSave: (text: string, status: string | null) => void;
+  onSave: (text: string, intent: string, reach: "campus" | "all", duration: "1h" | "4h" | "today") => void;
+  onClear: () => void;
+  profile: any;
+  demo: boolean;
 }) {
-  const [text, setText] = useState(initialText);
-  const [status, setStatus] = useState<string | null>(initialStatus);
+  const [broadcastInput, setBroadcastInput] = useState(initialText);
+  const [broadcastIntent, setBroadcastIntent] = useState<string>(initialIntent || "free");
+  const [broadcastReach, setBroadcastReach] = useState<"campus" | "all">(initialReach);
+  const [broadcastDuration, setBroadcastDuration] = useState<"1h" | "4h" | "today">("4h");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setText(initialText);
-      setStatus(initialStatus);
+      setBroadcastInput(initialText);
+      setBroadcastIntent(initialIntent || "free");
+      setBroadcastReach(initialReach);
+      setBroadcastDuration("4h");
     }
-  }, [open]);
+  }, [open, initialText, initialIntent, initialReach]);
+
+  // Lock reach selector to campus if free intent is selected
+  useEffect(() => {
+    if (broadcastIntent === "free") {
+      setBroadcastReach("campus");
+    }
+  }, [broadcastIntent]);
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity animate-fade-in">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity animate-fade-in flex items-end">
       <div className="absolute inset-0" onClick={onClose} />
-      <div className="absolute bottom-0 inset-x-0 bg-[#0c0c0e] rounded-t-[32px] border-t border-white/[0.08] p-5 pb-8 max-h-[90vh] overflow-y-auto z-10">
-        <div className="flex items-center justify-between mb-5 border-b border-white/[0.05] pb-3">
-          <h2 className="font-bold text-base text-ink">Your signal</h2>
+      <div className="relative w-full bg-[#0c0c0e] rounded-t-[32px] border-t border-white/[0.08] p-5 pb-8 max-h-[90vh] overflow-y-auto z-10">
+        <div className="flex items-center justify-between mb-5 border-b border-white/[0.05] pb-3 select-none">
+          <h2 className="font-bold text-base text-ink flex items-center gap-2">
+            <SignalIcon className="w-5 h-5 text-brand-400 animate-pulse" />
+            <span>What's your signal?</span>
+          </h2>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-95 transition flex items-center justify-center text-white"
@@ -287,62 +322,201 @@ function SignalEditorSheet({
           </button>
         </div>
 
-        {/* Live preview */}
-        <div className="flex justify-center mb-5">
-          <NoteBubble text={text} placeholder="Set a note" />
+        {/* Live Preview Card */}
+        <div className="mb-5 select-none">
+          <label className="text-[10px] font-bold text-ink-mute uppercase tracking-wider block mb-2">Live Card Preview</label>
+          {(() => {
+            const intentInfo = INTENTS.find(i => i.id === broadcastIntent) || INTENTS[0];
+            const PreviewIcon = intentInfo.icon;
+            const initials = (profile?.name || "?").trim().split(/\s+/).map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+            return (
+              <div className="w-full bg-[#141416] border border-white/[0.08] rounded-3xl p-5 relative text-left text-white">
+                <div className="flex items-start gap-3.5">
+                  <div className="relative shrink-0">
+                    {profile?.avatar_url ? (
+                      <img src={profile.avatar_url} alt={profile.name} className="w-10 h-10 rounded-full object-cover border border-white/10" style={{ borderColor: intentInfo.color }} />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs shrink-0 bg-brand-500/20 text-brand-300 border-2" style={{ borderColor: intentInfo.color }}>
+                        {initials}
+                      </div>
+                    )}
+                    <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-brand-500 rounded-full border-2 border-black flex items-center justify-center">
+                      <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                      <span className="font-bold text-ink text-sm truncate">{profile?.name || "Me"}</span>
+                      {profile?.verified && (
+                        <span className="inline-flex items-center justify-center w-3.5 h-3.5 bg-brand-500 text-white rounded-full text-[7px]">
+                          <CheckIcon className="w-2.5 h-2.5" />
+                        </span>
+                      )}
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 border" style={{ borderColor: `${intentInfo.color}30`, color: intentInfo.color, backgroundColor: `${intentInfo.color}10` }}>
+                        <PreviewIcon className="w-3 h-3" />
+                        <span>{intentInfo.label}</span>
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold text-ink leading-relaxed break-words">
+                      {broadcastInput.trim() ? `"${broadcastInput}"` : '"What is your signal right now?"'}
+                    </p>
+                    <div className="flex items-center justify-between text-[11px] text-ink-mute mt-2">
+                      <p>{profile?.course || "Student"} · Y{profile?.year || 1}</p>
+                      <div className="flex items-center gap-1">
+                        <ClockIcon className="w-3.5 h-3.5 opacity-60" />
+                        <span>{broadcastDuration === "1h" ? "1h left" : broadcastDuration === "4h" ? "4h left" : "today"}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Note input */}
-        <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide block mb-1.5">Note</label>
-        <textarea
-          maxLength={80}
-          placeholder="What are you up to? e.g. Free after 3, anyone for chai?"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={2}
-          className="input w-full text-sm resize-none"
-        />
-        <div className="text-right mt-1">
-          <span className="text-[10px] text-ink-mute">{text.length}/80</span>
+        <div className="mb-4">
+          <div className="flex justify-between items-center mb-1.5">
+            <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide">Signal Note</label>
+            <span className={`text-[10px] ${broadcastInput.length >= 80 ? "text-red-400 font-bold" : "text-ink-mute"}`}>
+              {broadcastInput.length}/80
+            </span>
+          </div>
+          <textarea
+            maxLength={80}
+            placeholder="What are you up to? e.g. DBMS grind in library, anyone free?"
+            value={broadcastInput}
+            onChange={(e) => setBroadcastInput(e.target.value)}
+            rows={2}
+            className="input w-full text-sm resize-none rounded-2xl bg-[#161618] border border-white/[0.08] p-3 text-white placeholder-white/30 focus:border-brand-500/50 focus:outline-none transition-colors"
+          />
         </div>
 
-        {/* Availability status */}
-        <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide block mb-2 mt-4">Availability</label>
-        <div className="grid grid-cols-2 gap-2">
-          {STATUSES.map((s) => {
-            const active = status === s.id;
-            return (
+        {/* Intent Picker */}
+        <div className="mb-5">
+          <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide block mb-2.5">Choose Intent</label>
+          <div className="grid grid-cols-3 gap-2">
+            {INTENTS.map((intent) => {
+              const Icon = intent.icon;
+              const active = broadcastIntent === intent.id;
+              return (
+                <button
+                  key={intent.id}
+                  type="button"
+                  onClick={() => setBroadcastIntent(intent.id)}
+                  className={`flex flex-col items-center justify-center p-2.5 rounded-2xl border transition-all duration-200 active:scale-95 ${
+                    active
+                      ? "text-white font-bold border-transparent"
+                      : "border-white/[0.06] bg-white/[0.02] text-ink-mute hover:bg-white/[0.04]"
+                  }`}
+                  style={active ? { backgroundColor: intent.color } : {}}
+                >
+                  <Icon className="w-5 h-5 mb-1" />
+                  <span className="text-[10px] truncate max-w-full">{intent.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Reach segmented picker */}
+        <div className="mb-5">
+          <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide block mb-2">Reach</label>
+          {broadcastIntent === "free" ? (
+            <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-3 flex items-center justify-between text-xs text-ink-soft select-none">
+              <span className="flex items-center gap-1.5 font-semibold text-emerald-400">
+                <CampusIcon className="w-4 h-4" />
+                <span>My Campus (Locked)</span>
+              </span>
+              <span className="text-[10px] text-ink-mute">"Free now" is inherently local</span>
+            </div>
+          ) : (
+            <div className="flex bg-white/[0.03] border border-white/[0.05] rounded-2xl p-1">
+              {(["campus", "all"] as const).map(r => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setBroadcastReach(r)}
+                  className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 ${
+                    broadcastReach === r
+                      ? "bg-brand-500 text-white shadow-md"
+                      : "text-ink-soft hover:bg-white/[0.02]"
+                  }`}
+                >
+                  {r === "campus" ? (
+                    <>
+                      <CampusIcon className="w-3.5 h-3.5" />
+                      <span>My Campus</span>
+                    </>
+                  ) : (
+                    <>
+                      <GlobeIcon className="w-3.5 h-3.5" />
+                      <span>All Campuses</span>
+                    </>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Duration picker */}
+        <div className="mb-6">
+          <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide block mb-2">Duration</label>
+          <div className="flex bg-white/[0.03] border border-white/[0.05] rounded-2xl p-1">
+            {(["1h", "4h", "today"] as const).map(d => (
               <button
-                key={s.id}
+                key={d}
                 type="button"
-                onClick={() => setStatus(active ? null : s.id)}
-                className={`flex items-center gap-2.5 px-3 py-3 rounded-xl border transition active:scale-95 ${
-                  active ? "border-white/25 bg-white/[0.06]" : "border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]"
+                onClick={() => setBroadcastDuration(d)}
+                className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 ${
+                  broadcastDuration === d
+                    ? "bg-brand-500 text-white shadow-md"
+                    : "text-ink-soft hover:bg-white/[0.02]"
                 }`}
               >
-                <span className={`w-3 h-3 rounded-full ${s.dot} shrink-0`} style={{ boxShadow: active ? `0 0 0 3px ${s.ring}33` : undefined }} />
-                <span className={`text-xs font-semibold ${active ? "text-ink" : "text-ink-soft"}`}>{s.label}</span>
-                {active && <CheckIcon className="w-4 h-4 ml-auto text-brand-300 shrink-0" />}
+                <ClockIcon className="w-3.5 h-3.5" />
+                <span>{d === "1h" ? "1 Hour" : d === "4h" ? "4 Hours" : "Today"}</span>
               </button>
-            );
-          })}
+            ))}
+          </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex gap-2.5 mt-6">
+        {/* Action buttons */}
+        <div className="flex gap-3">
+          {initialText && (
+            <button
+              type="button"
+              onClick={() => {
+                onClear();
+                onClose();
+              }}
+              className="flex-1 h-12 rounded-2xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-bold active:scale-95 transition-all flex items-center justify-center"
+            >
+              Clear Signal
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => onSave("", null)}
-            className="flex-1 py-3 text-xs font-bold bg-white/[0.05] hover:bg-white/10 active:scale-95 transition rounded-xl text-red-400"
+            onClick={onClose}
+            className={`h-12 rounded-2xl bg-white/[0.06] text-ink-soft hover:bg-white/10 active:scale-95 transition-all text-xs font-bold ${initialText ? "px-6" : "flex-1"}`}
           >
-            Clear
+            Cancel
           </button>
           <button
             type="button"
-            onClick={() => onSave(text, status)}
-            className="flex-1 py-3 text-xs font-bold btn-primary rounded-xl"
+            onClick={() => {
+              onSave(broadcastInput, broadcastIntent, broadcastReach, broadcastDuration);
+            }}
+            disabled={saving || !broadcastInput.trim()}
+            className="flex-[2] h-12 rounded-2xl bg-brand-500 hover:bg-brand-600 disabled:opacity-40 active:scale-95 transition-all text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-lg shadow-brand-500/15"
           >
-            Share signal
+            {saving ? "Broadcasting…" : (
+              <>
+                <span>Broadcast Signal</span>
+                <SignalIcon className="w-4 h-4" />
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -390,9 +564,20 @@ export default function Messages({
 
   // Frequency Strip State
   const [mySignal, setMySignal] = useState("");
-  const [myStatus, setMyStatus] = useState<string | null>(null);
+  const [myStatus, setMyStatus] = useState<string | null>(null); // maps to intent
+  const [mySignalReach, setMySignalReach] = useState<"campus" | "all">("campus");
   const [editSignalOpen, setEditSignalOpen] = useState(false);
   const [signals, setSignals] = useState<any[]>([]);
+
+  // Composer sheet states inside Messages
+  const [broadcastInput, setBroadcastInput] = useState("");
+  const [broadcastIntent, setBroadcastIntent] = useState<string>("free");
+  const [broadcastReach, setBroadcastReach] = useState<"campus" | "all">("campus");
+  const [broadcastDuration, setBroadcastDuration] = useState<"1h" | "4h" | "today">("4h");
+  const [saving, setSaving] = useState(false);
+
+  // Message Requests UI State
+  const [viewRequestsScreen, setViewRequestsScreen] = useState(false);
 
   // Sheets Open State
   const [profileSheetOpen, setProfileSheetOpen] = useState(false);
@@ -410,7 +595,83 @@ export default function Messages({
   // ── Load Signals & Conversations ───────────────────────────────────────────
   useEffect(() => {
     if (demo) {
-      setConvos([...DEMO_CONVOS]);
+      // Load base demo convos
+      const baseConvos = [...DEMO_CONVOS];
+      
+      // Load demo requests that we want to seed (unless they are already acted upon in localStorage)
+      const seedRequestsDone = localStorage.getItem("demo_requests_seeded");
+      if (!seedRequestsDone) {
+        const demoRequests = [
+          {
+            group_id: "dg-req-1",
+            type: "dm",
+            peer: {
+              id: "dp_req1",
+              name: "Sneha Rao",
+              username: "sneha.r",
+              avatar_url: null,
+              verified: true,
+              is_online: true,
+              college: "BITS Pilani Hyd",
+              course: "MBA",
+              year: 2
+            },
+            last_message: "✋ raised a hand on signal: 'selling keychron k2'",
+            last_at: new Date(Date.now() - 600000).toISOString(),
+            unread: 1,
+            request_status: "pending",
+            requested_by: "dp_req1",
+            origin_signal_note: "selling brand new mechanical keyboard, keychron k2, ping if interested!"
+          },
+          {
+            group_id: "dg-req-2",
+            type: "dm",
+            peer: {
+              id: "dp_req2",
+              name: "Rohan Mehta",
+              username: "rohanm",
+              avatar_url: null,
+              verified: false,
+              is_online: false,
+              college: "Osmania University",
+              course: "B.Com",
+              year: 1
+            },
+            last_message: "hey, can you help with coding?",
+            last_at: new Date(Date.now() - 1800000).toISOString(),
+            unread: 1,
+            request_status: "pending",
+            requested_by: "dp_req2",
+            origin_signal_note: "anyone explain OS scheduling? exam tomorrow 🙏"
+          }
+        ];
+        
+        // Put in localStorage groups
+        const curGroups = JSON.parse(localStorage.getItem("demo_groups") || "[]");
+        const merged = [...curGroups];
+        for (const req of demoRequests) {
+          if (!merged.some(g => g.group_id === req.group_id)) {
+            merged.push(req);
+          }
+        }
+        localStorage.setItem("demo_groups", JSON.stringify(merged));
+        localStorage.setItem("demo_requests_seeded", "true");
+      }
+      
+      const localGroups = JSON.parse(localStorage.getItem("demo_groups") || "[]");
+      
+      // Merge localGroups into baseConvos (localGroups overrides baseConvos)
+      const mergedList = [...baseConvos];
+      for (const lg of localGroups) {
+        const idx = mergedList.findIndex(c => c.group_id === lg.group_id);
+        if (idx !== -1) {
+          mergedList[idx] = lg;
+        } else {
+          mergedList.unshift(lg); // new local groups at top
+        }
+      }
+      
+      setConvos(mergedList);
       setSignals([...DEMO_FREQUENCY]);
       setMySignal("");
       setLoading(false);
@@ -449,7 +710,7 @@ export default function Messages({
 
       const { data: groupsInfo } = await supabase
         .from("groups")
-        .select("id, name, type, avatar")
+        .select("id, name, type, avatar, request_status, requested_by, origin_signal_id, signals(content)")
         .in("id", groupIds);
 
       const lastByGroup: Record<string, any> = {};
@@ -470,6 +731,9 @@ export default function Messages({
         const groupInfo = groupsMap[gid];
         const groupMembers = membersByGroup[gid];
         const isGroup = groupInfo?.type === "group";
+        
+        const signalObj = (groupInfo?.signals as any);
+        const signalContent = Array.isArray(signalObj) ? signalObj[0]?.content : signalObj?.content;
 
         if (isGroup) {
           const others = groupMembers.filter(m => m.user_id !== user!.id).map(m => m.profiles);
@@ -481,6 +745,8 @@ export default function Messages({
             last_message: lastByGroup[gid]?.content ?? "",
             last_at: lastByGroup[gid]?.created_at ?? groupInfo.created_at ?? new Date().toISOString(),
             unread: 0,
+            request_status: groupInfo?.request_status ?? "accepted",
+            requested_by: groupInfo?.requested_by,
           };
         } else {
           const peer = groupMembers.find(m => m.user_id !== user!.id)?.profiles;
@@ -491,6 +757,10 @@ export default function Messages({
             last_message: lastByGroup[gid]?.content ?? "",
             last_at: lastByGroup[gid]?.created_at ?? new Date().toISOString(),
             unread: 0,
+            request_status: groupInfo?.request_status ?? "accepted",
+            requested_by: groupInfo?.requested_by,
+            origin_signal_id: groupInfo?.origin_signal_id,
+            origin_signal_note: signalContent || null,
           };
         }
       }).sort((a: any, b: any) => new Date(b.last_at).getTime() - new Date(a.last_at).getTime());
@@ -507,26 +777,44 @@ export default function Messages({
     if (!profile?.college) return;
     try {
       const { data } = await supabase
-        .from("profiles")
-        .select("id, name, username, avatar_url, verified, college, course, year, bio, links, business_name, availability")
-        .eq("college", profile.college)
-        .neq("id", user!.id)
-        .limit(15);
+        .from("signals")
+        .select("*, profiles!signals_user_id_fkey(id,name,username,avatar_url,verified,college,course,year)")
+        .gt("expires_at", new Date().toISOString())
+        .eq("reach", "campus")
+        .neq("user_id", user!.id)
+        .order("created_at", { ascending: false })
+        .limit(20);
 
-      const signalsList = (data ?? []).map((p: any) => ({
-        id: p.id,
-        name: p.name.split(" ")[0],
-        signal: p.bio ? p.bio.slice(0, 45) : null,
-        avatar_url: p.avatar_url,
-        status: p.availability ?? null,
-        peer: p,
-      })).filter(s => s.signal || s.status);
+      const signalsList = (data ?? []).map((s: any) => {
+        const p = s.profiles;
+        return {
+          id: s.id,
+          user_id: s.user_id,
+          name: p?.name?.split(" ")[0] || "Student",
+          signal: s.content,
+          intent: s.intent,
+          avatar_url: p?.avatar_url,
+          peer: p,
+          status: s.intent // Map sig.status to s.intent for top strip ring helper
+        };
+      });
 
-      // load my own current signal + status
-      const me = await supabase.from("profiles").select("bio, availability").eq("id", user!.id).single();
+      // load my own current signal
+      const me = await supabase
+        .from("signals")
+        .select("content, intent, reach")
+        .eq("user_id", user!.id)
+        .gt("expires_at", new Date().toISOString())
+        .maybeSingle();
+
       if (me.data) {
-        setMySignal(me.data.bio || "");
-        setMyStatus(me.data.availability ?? null);
+        setMySignal(me.data.content);
+        setMyStatus(me.data.intent);
+        setMySignalReach(me.data.reach as "campus" | "all");
+      } else {
+        setMySignal("");
+        setMyStatus(null);
+        setMySignalReach("campus");
       }
 
       setSignals(signalsList);
@@ -535,20 +823,126 @@ export default function Messages({
     }
   }
 
-  // ── Edit Signal modal controls ──────────────────────────────────────────────
-  function handleSaveSignal(txt: string, status: string | null) {
-    setMySignal(txt.trim());
-    setMyStatus(status);
-    setEditSignalOpen(false);
-    if (!demo && user) {
-      supabase
-        .from("profiles")
-        .update({ bio: txt.trim(), availability: status })
-        .eq("id", user.id)
-        .then(() => {
-          loadLiveSignals();
-        });
+  // ── Unified Broadcast Composer handlers ──────────────────────────────────────
+  async function handleSaveSignal(txt: string, intent: string, reach: "campus" | "all", duration: "1h" | "4h" | "today") {
+    const text = txt.trim();
+    if (!text) return;
+    setSaving(true);
+    
+    const expiresAt = getExpiresAt(duration);
+    
+    if (demo) {
+      setMySignal(text);
+      setMyStatus(intent);
+      setMySignalReach(reach);
+      setEditSignalOpen(false);
+      setSaving(false);
+      return;
     }
+    
+    const expiresAtIso = expiresAt.toISOString();
+    await supabase.from("signals").upsert({ 
+      user_id: user!.id, 
+      content: text, 
+      intent: intent,
+      reach: reach,
+      expires_at: expiresAtIso 
+    }, { onConflict: "user_id" });
+    
+    setMySignal(text);
+    setMyStatus(intent);
+    setMySignalReach(reach);
+    
+    setEditSignalOpen(false);
+    setSaving(false);
+    
+    loadLiveSignals();
+  }
+
+  async function handleClearSignal() {
+    if (demo) {
+      setMySignal("");
+      setMyStatus(null);
+      setMySignalReach("campus");
+      setEditSignalOpen(false);
+      return;
+    }
+    await supabase.from("signals").delete().eq("user_id", user!.id);
+    setMySignal("");
+    setMyStatus(null);
+    setMySignalReach("campus");
+    setEditSignalOpen(false);
+    loadLiveSignals();
+  }
+
+  // ── Message Requests Handlers ────────────────────────────────────────────────
+  async function handleAcceptRequest(groupId: string) {
+    if (demo) {
+      const updated = convos.map(c => {
+        if (c.group_id === groupId) {
+          return { ...c, request_status: "accepted" as const };
+        }
+        return c;
+      });
+      setConvos(updated);
+      
+      const localGroups = JSON.parse(localStorage.getItem("demo_groups") || "[]");
+      localStorage.setItem("demo_groups", JSON.stringify(localGroups.map((g: any) => {
+        if (g.group_id === groupId) {
+          return { ...g, request_status: "accepted" };
+        }
+        return g;
+      })));
+      return;
+    }
+    
+    try {
+      const { error } = await supabase
+        .from("groups")
+        .update({ request_status: "accepted" })
+        .eq("id", groupId);
+      if (error) {
+        alert("Error accepting request: " + error.message);
+      } else {
+        loadConvos();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function handleDeclineRequest(groupId: string) {
+    if (demo) {
+      setConvos(prev => prev.filter(c => c.group_id !== groupId));
+      
+      const localGroups = JSON.parse(localStorage.getItem("demo_groups") || "[]");
+      localStorage.setItem("demo_groups", JSON.stringify(localGroups.filter((g: any) => g.group_id !== groupId)));
+      return;
+    }
+    
+    try {
+      const { error } = await supabase
+        .from("group_members")
+        .delete()
+        .eq("group_id", groupId)
+        .eq("user_id", user!.id);
+      if (error) {
+        alert("Error declining request: " + error.message);
+      } else {
+        loadConvos();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function handleBlockRequest(groupId: string) {
+    const blocked = JSON.parse(localStorage.getItem("blocked_groups") || "[]");
+    if (!blocked.includes(groupId)) {
+      blocked.push(groupId);
+      localStorage.setItem("blocked_groups", JSON.stringify(blocked));
+    }
+    setConvos(prev => prev.filter(c => c.group_id !== groupId));
   }
 
   // ── Open Chat View ─────────────────────────────────────────────────────────
@@ -574,15 +968,22 @@ export default function Messages({
     setDisappearingMode(savedDisappearing);
 
     if (demo) {
-      const demoMsgs = DEMO_MESSAGES[convo.group_id as keyof typeof DEMO_MESSAGES] ?? [];
-      setMessages(demoMsgs.map(m => ({
+      const localMsgs = JSON.parse(localStorage.getItem(`demo_messages_${convo.group_id}`) || "null");
+      const baseMsgs = DEMO_MESSAGES[convo.group_id as keyof typeof DEMO_MESSAGES] ?? [];
+      const finalMsgs = localMsgs || baseMsgs.map(m => ({
         id: m.id,
         sender_id: m.sender_id,
         content: m.content,
         created_at: m.created_at,
         reactions: m.reactions ? [...m.reactions] as { emoji: string; from: string }[] : [],
         reply_to: null
-      })));
+      }));
+      setMessages(finalMsgs);
+      
+      if (!localMsgs && baseMsgs.length > 0) {
+        localStorage.setItem(`demo_messages_${convo.group_id}`, JSON.stringify(finalMsgs));
+      }
+      
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "auto" }), 50);
       return;
     }
@@ -642,15 +1043,28 @@ export default function Messages({
         created_at: new Date().toISOString(),
         reactions: [],
       };
-      setMessages(prev => [...prev, fakeMsg]);
       
-      // Update convo list last message preview
-      setConvos(prev => prev.map(c => {
+      const savedMsgs = JSON.parse(localStorage.getItem(`demo_messages_${activeDmId}`) || "[]");
+      const updatedMsgs = [...savedMsgs, fakeMsg];
+      localStorage.setItem(`demo_messages_${activeDmId}`, JSON.stringify(updatedMsgs));
+      
+      setMessages(updatedMsgs);
+      
+      const updatedConvos = convos.map(c => {
         if (c.group_id === activeDmId) {
           return { ...c, last_message: `You: ${content}`, last_at: new Date().toISOString() };
         }
         return c;
-      }));
+      });
+      setConvos(updatedConvos);
+      
+      const localGroups = JSON.parse(localStorage.getItem("demo_groups") || "[]");
+      localStorage.setItem("demo_groups", JSON.stringify(localGroups.map((g: any) => {
+        if (g.group_id === activeDmId) {
+          return { ...g, last_message: `You: ${content}`, last_at: new Date().toISOString() };
+        }
+        return g;
+      })));
 
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
       return;
@@ -710,20 +1124,6 @@ export default function Messages({
       });
   }, [composeOpen]);
 
-  // Filter conversations
-  const filteredConvos = convos.filter(c => {
-    // Check if blocked
-    const blockedList = JSON.parse(localStorage.getItem("blocked_groups") || "[]");
-    if (blockedList.includes(c.group_id)) return false;
-
-    const q = search.toLowerCase();
-    if (c.type === "dm") {
-      const peerDisplayName = c.peer ? getNickname(c.peer.id, c.peer.name, c.group_id) : "";
-      return peerDisplayName.toLowerCase().includes(q) || (c.peer?.username || "").toLowerCase().includes(q);
-    }
-    return (c.group_name || "").toLowerCase().includes(q);
-  });
-
   // Filter Compose users
   const filteredComposePeople = people.filter(p => {
     const q = peopleSearch.toLowerCase();
@@ -774,6 +1174,19 @@ export default function Messages({
         if (error) {
           alert("Error creating DM: " + error.message);
         } else if (newGroupId) {
+          // Query follows table for robust mutual follow check
+          const [{ data: outFollow }, { data: inFollow }] = await Promise.all([
+            supabase.from("follows").select("status").eq("follower_id", user!.id).eq("following_id", classmate.id).maybeSingle(),
+            supabase.from("follows").select("status").eq("following_id", user!.id).eq("follower_id", classmate.id).maybeSingle()
+          ]);
+          const isMutual = outFollow?.status === "accepted" && inFollow?.status === "accepted";
+          const requestStatus = isMutual ? 'accepted' : 'pending';
+
+          await supabase.from("groups").update({
+            request_status: requestStatus,
+            requested_by: user!.id
+          }).eq("id", newGroupId);
+
           setComposeOpen(false);
           setSelectedPeople([]);
           loadConvos().then(() => {
@@ -838,10 +1251,37 @@ export default function Messages({
     }
   }
 
+  const mainConvos = convos.filter(c => {
+    const blockedList = JSON.parse(localStorage.getItem("blocked_groups") || "[]");
+    if (blockedList.includes(c.group_id)) return false;
+
+    // Filter out pending requests that you didn't initiate
+    if (c.request_status === 'pending' && c.requested_by !== (user?.id || "me")) {
+      return false;
+    }
+    return true;
+  });
+
+  const incomingRequests = convos.filter(c => {
+    const blockedList = JSON.parse(localStorage.getItem("blocked_groups") || "[]");
+    if (blockedList.includes(c.group_id)) return false;
+
+    return c.request_status === 'pending' && c.requested_by !== (user?.id || "me");
+  });
+
+  const filteredConvos = mainConvos.filter(c => {
+    const q = search.toLowerCase();
+    if (c.type === "dm") {
+      const peerDisplayName = c.peer ? getNickname(c.peer.id, c.peer.name, c.group_id) : "";
+      return peerDisplayName.toLowerCase().includes(q) || (c.peer?.username || "").toLowerCase().includes(q);
+    }
+    return (c.group_name || "").toLowerCase().includes(q);
+  });
+
   return (
     <div className="flex flex-col min-h-screen bg-black text-white max-w-2xl mx-auto border-x border-white/[0.04]">
       {/* SCREEN 1 — INBOX (default view) */}
-      {!activeDmId && (
+      {!activeDmId && !viewRequestsScreen && (
         <div className="flex flex-col flex-1 pb-28 pt-8 px-5">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
@@ -858,16 +1298,25 @@ export default function Messages({
           <div className="flex gap-3 overflow-x-auto no-scrollbar pt-2 pb-3.5 mb-2 shrink-0 border-b border-white/[0.04]" style={{ scrollbarWidth: "none" }}>
             {/* My signal */}
             {(() => {
-              const meStatus = statusMeta(myStatus);
+              const myIntentInfo = INTENTS.find(i => i.id === myStatus) || null;
+              const ringStyle = myIntentInfo
+                ? { boxShadow: `0 0 0 2px #000, 0 0 0 4px ${myIntentInfo.color}` }
+                : undefined;
               return (
                 <div className="flex flex-col items-center gap-1.5 shrink-0 w-[76px]">
                   {/* Note bubble */}
                   <NoteBubble text={mySignal} placeholder="Set a note" />
                   {/* Avatar */}
                   <button
-                    onClick={() => setEditSignalOpen(true)}
+                    onClick={() => {
+                      setBroadcastInput(mySignal ?? "");
+                      setBroadcastIntent(myStatus ?? "free");
+                      setBroadcastReach(mySignalReach);
+                      setBroadcastDuration("4h");
+                      setEditSignalOpen(true);
+                    }}
                     className="relative w-14 h-14 rounded-full flex items-center justify-center cursor-pointer active:scale-95 transition shrink-0"
-                    style={meStatus ? { boxShadow: `0 0 0 2px #000, 0 0 0 4px ${meStatus.ring}` } : undefined}
+                    style={ringStyle}
                   >
                     <div className="w-full h-full rounded-full bg-white/[0.05] border border-white/[0.12] flex items-center justify-center overflow-hidden">
                       {profile?.avatar_url ? (
@@ -883,8 +1332,8 @@ export default function Messages({
                     </span>
                   </button>
                   {/* Status label */}
-                  <span className={`text-[10px] font-semibold text-center leading-tight ${meStatus ? meStatus.text : "text-ink-mute"}`}>
-                    {meStatus ? meStatus.short : "You"}
+                  <span className={`text-[10px] font-semibold text-center leading-tight ${myIntentInfo ? "" : "text-ink-mute"}`} style={myIntentInfo ? { color: myIntentInfo.color } : {}}>
+                    {myIntentInfo ? myIntentInfo.label : "You"}
                   </span>
                 </div>
               );
@@ -892,10 +1341,8 @@ export default function Messages({
 
             {/* Other signals */}
             {signals.map((sig) => {
-              const st = statusMeta(sig.status);
-              const ringStyle = st
-                ? { boxShadow: `0 0 0 2px #000, 0 0 0 4px ${st.ring}` }
-                : { boxShadow: `0 0 0 2px #000, 0 0 0 4px rgba(255,255,255,0.12)` };
+              const intentInfo = INTENTS.find(i => i.id === sig.status) || INTENTS[0];
+              const ringStyle = { boxShadow: `0 0 0 2px #000, 0 0 0 4px ${intentInfo.color}` };
               return (
                 <button
                   key={sig.id}
@@ -921,9 +1368,6 @@ export default function Messages({
                         </div>
                       )}
                     </div>
-                    {st && (
-                      <span className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-black ${st.dot}`} />
-                    )}
                   </div>
                   {/* Name + status */}
                   <span className="text-[10px] font-semibold text-ink-soft truncate max-w-[72px] text-center leading-tight">
@@ -947,6 +1391,25 @@ export default function Messages({
               className="w-full bg-[#1a1a1a] hover:bg-[#222] border border-transparent focus:border-white/10 rounded-full py-2.5 pl-10 pr-4 text-xs text-ink focus:outline-none transition"
             />
           </div>
+
+          {/* Message Requests Row Entry Point */}
+          {incomingRequests.length > 0 && (
+            <button
+              onClick={() => setViewRequestsScreen(true)}
+              className="w-full flex items-center justify-between py-3 px-4 mb-3.5 rounded-2xl bg-brand-500/10 border border-brand-500/20 hover:bg-brand-500/15 active:scale-[0.98] transition-all select-none"
+            >
+              <div className="flex items-center gap-2">
+                <MailIcon className="w-4 h-4 text-brand-400" />
+                <span className="text-sm font-bold text-ink">Message Requests</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-brand-500 text-white text-[10px] font-extrabold">
+                  {incomingRequests.length}
+                </span>
+                <ChevronRight className="w-4 h-4 text-ink-mute" />
+              </div>
+            </button>
+          )}
 
           {/* Convos list */}
           {loading ? (
@@ -1040,6 +1503,9 @@ export default function Messages({
                         )}
                       </div>
                       <p className={`text-xs truncate ${unread ? "text-ink font-semibold" : "text-ink-mute"}`}>
+                        {c.request_status === "pending" ? (
+                          <span className="text-brand-300 font-medium">[Request Sent] </span>
+                        ) : null}
                         {c.last_message ? c.last_message : "Start the conversation"}
                       </p>
                     </div>
@@ -1054,6 +1520,113 @@ export default function Messages({
                       )}
                     </div>
                   </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SCREEN 3 — MESSAGE REQUESTS SCREEN */}
+      {!activeDmId && viewRequestsScreen && (
+        <div className="flex flex-col flex-1 pb-28 pt-8 px-5">
+          {/* Header */}
+          <div className="flex items-center gap-3 mb-6">
+            <button
+              onClick={() => setViewRequestsScreen(false)}
+              className="w-9 h-9 rounded-full bg-white/[0.05] hover:bg-white/10 flex items-center justify-center transition active:scale-95 text-white"
+            >
+              <ArrowLeftIcon className="w-5 h-5" />
+            </button>
+            <h1 className="text-xl font-bold text-ink">Message Requests</h1>
+          </div>
+
+          {/* Incoming Requests List */}
+          {incomingRequests.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center flex-grow opacity-60">
+              <div className="w-12 h-12 bg-white/[0.04] border border-white/[0.08] rounded-full flex items-center justify-center mb-3">
+                <MailIcon className="w-6 h-6 text-brand-300" />
+              </div>
+              <h3 className="font-bold text-sm text-ink mb-1">No Message Requests</h3>
+              <p className="text-xs text-ink-mute max-w-[200px]">You have no pending requests.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {incomingRequests.map((c) => {
+                const classmate = c.peer;
+                if (!classmate) return null;
+                const initials = (classmate.name || "?").trim().split(/\s+/).map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+
+                return (
+                  <div
+                    key={c.group_id}
+                    className="bg-[#121214] border border-white/[0.06] rounded-3xl p-5 flex flex-col gap-4"
+                  >
+                    {/* Header: Classmate info */}
+                    <div className="flex items-center gap-3">
+                      <div className="relative w-10 h-10 rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center font-bold text-xs overflow-hidden shrink-0 border border-white/[0.08]">
+                        {classmate.avatar_url ? (
+                          <img src={classmate.avatar_url} alt={classmate.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span>{initials}</span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-ink text-sm truncate">{classmate.name}</span>
+                          {classmate.verified && (
+                            <span className="inline-flex items-center justify-center w-3.5 h-3.5 bg-brand-500 text-white rounded-full text-[7px]">
+                              <CheckIcon className="w-2.5 h-2.5" />
+                            </span>
+                          )}
+                          <span className="text-[10px] font-medium text-brand-300 bg-brand-500/10 border border-brand-500/20 px-2 py-0.5 rounded-full">
+                            {classmate.college || "Campus"}
+                          </span>
+                        </div>
+                        <p className="text-xs text-ink-mute truncate">
+                          {classmate.course || "Student"} {classmate.year ? `· Y${classmate.year}` : ""}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Context Card: Signal Response */}
+                    {c.origin_signal_note && (
+                      <div className="bg-white/[0.03] border border-white/[0.05] rounded-2xl p-3.5 text-xs text-ink leading-relaxed">
+                        <span className="text-brand-300 font-bold block mb-1">
+                          ✋ responding to your signal:
+                        </span>
+                        <span className="italic text-ink-soft">
+                          "{c.origin_signal_note}"
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleDeclineRequest(c.group_id)}
+                        className="flex-1 py-2.5 rounded-xl bg-white/[0.05] hover:bg-red-500/10 hover:text-red-400 text-xs font-bold transition active:scale-95 text-ink-soft border border-white/[0.04]"
+                      >
+                        Decline
+                      </button>
+                      <button
+                        onClick={() => handleBlockRequest(c.group_id)}
+                        className="flex-1 py-2.5 rounded-xl bg-white/[0.05] hover:bg-red-500/20 hover:text-red-500 text-xs font-bold transition active:scale-95 text-ink-soft border border-white/[0.04]"
+                      >
+                        Block
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleAcceptRequest(c.group_id);
+                          setViewRequestsScreen(false);
+                          handleOpenChat(c);
+                        }}
+                        className="flex-1 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold transition active:scale-95 shadow-md shadow-brand-500/15"
+                      >
+                        Accept
+                      </button>
+                    </div>
+                  </div>
                 );
               })}
             </div>
@@ -1474,9 +2047,13 @@ export default function Messages({
       <SignalEditorSheet
         open={editSignalOpen}
         initialText={mySignal}
-        initialStatus={myStatus}
+        initialIntent={myStatus}
+        initialReach={mySignalReach}
         onClose={() => setEditSignalOpen(false)}
         onSave={handleSaveSignal}
+        onClear={handleClearSignal}
+        profile={profile}
+        demo={demo}
       />
 
       {/* Convo Row actions sheet */}
@@ -2559,7 +3136,7 @@ function PrivacySubScreen({
                 }`}
               >
                 <span className={`w-5 h-5 bg-white rounded-full absolute transition-transform ${
-                  readReceipts ? "translate-x-5.5" : "translate-x-0.5"
+                  readReceipts ? "translate-x-[22px]" : "translate-x-0.5"
                 }`} />
               </button>
             </div>
@@ -2577,7 +3154,7 @@ function PrivacySubScreen({
                 }`}
               >
                 <span className={`w-5 h-5 bg-white rounded-full absolute transition-transform ${
-                  activityStatus ? "translate-x-5.5" : "translate-x-0.5"
+                  activityStatus ? "translate-x-[22px]" : "translate-x-0.5"
                 }`} />
               </button>
             </div>
@@ -2602,7 +3179,7 @@ function PrivacySubScreen({
                 }`}
               >
                 <span className={`w-5 h-5 bg-white rounded-full absolute transition-transform ${
-                  restricted ? "translate-x-5.5" : "translate-x-0.5"
+                  restricted ? "translate-x-[22px]" : "translate-x-0.5"
                 }`} />
               </button>
             </div>

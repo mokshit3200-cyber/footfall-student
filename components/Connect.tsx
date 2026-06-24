@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react"; // frequency
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { isDemo } from "@/lib/config";
+import { INTENTS } from "@/lib/intents";
 import {
   CheckIcon,
   ArrowLeftIcon,
@@ -15,27 +16,11 @@ import {
   CampusIcon,
   GlobeIcon,
   SendIcon,
-  CoffeeIcon,
-  BookIcon,
-  HelpIcon,
-  UsersGroupIcon,
-  ConfettiIcon,
-  TagIcon,
   ClockIcon,
   BookmarkIcon,
   ShareIcon,
   HandRaiseIcon
 } from "./icons";
-
-// ── Intents configuration ────────────────────────────────────────────────────
-export const INTENTS = [
-  { id: "free", label: "Free now", color: "#22c55e", bg: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20", activeBg: "bg-emerald-500 text-white border-emerald-500", icon: CoffeeIcon },
-  { id: "study", label: "Studying", color: "#3b82f6", bg: "bg-blue-500/10 text-blue-400 border-blue-500/20", activeBg: "bg-blue-500 text-white border-blue-500", icon: BookIcon },
-  { id: "help", label: "Need help", color: "#f59e0b", bg: "bg-amber-500/10 text-amber-400 border-amber-500/20", activeBg: "bg-amber-500 text-white border-amber-500", icon: HelpIcon },
-  { id: "looking", label: "Looking for", color: "#8b5cf6", bg: "bg-purple-500/10 text-purple-400 border-purple-500/20", activeBg: "bg-purple-500 text-white border-purple-500", icon: UsersGroupIcon },
-  { id: "event", label: "Event", color: "#ec4899", bg: "bg-pink-500/10 text-pink-400 border-pink-500/20", activeBg: "bg-pink-500 text-white border-pink-500", icon: ConfettiIcon },
-  { id: "sell", label: "Sell", color: "#14b8a6", bg: "bg-teal-500/10 text-teal-400 border-teal-500/20", activeBg: "bg-teal-500 text-white border-teal-500", icon: TagIcon },
-];
 
 // Helper to compute expires_at timestamp
 export function getExpiresAt(duration: "1h" | "4h" | "today"): Date {
@@ -568,16 +553,48 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
       const fakeGroupId = `dg-fake-${person.id}`;
       setActiveDmId(fakeGroupId);
       
-      const initialMsgs = [];
-      if (seedContent) {
-        initialMsgs.push({
+      const followState = followStates[person.id] || "none";
+      const isMutual = followState === "mutual";
+      const requestStatus = isMutual ? "accepted" : "pending";
+      
+      const newConvo = {
+        group_id: fakeGroupId,
+        type: "dm",
+        peer: {
+          id: person.id,
+          name: person.name,
+          username: person.username,
+          avatar_url: person.avatar_url,
+          verified: person.verified,
+          college: person.college,
+          course: person.course,
+          year: person.year
+        },
+        last_message: seedContent || "",
+        last_at: new Date().toISOString(),
+        unread: 0,
+        request_status: requestStatus,
+        requested_by: "me",
+        origin_signal_note: person.signal_note || person.content || ""
+      };
+      
+      // Save/Merge in localStorage
+      const localGroups = JSON.parse(localStorage.getItem("demo_groups") || "[]");
+      const filteredGroups = localGroups.filter((g: any) => g.group_id !== fakeGroupId);
+      localStorage.setItem("demo_groups", JSON.stringify([newConvo, ...filteredGroups]));
+      
+      const savedMsgs = JSON.parse(localStorage.getItem(`demo_messages_${fakeGroupId}`) || "[]");
+      if (savedMsgs.length === 0 && seedContent) {
+        const fakeMsg = {
           id: `seed-${Date.now()}`,
-          sender_id: user?.id || "me",
+          sender_id: "me",
           content: seedContent,
           created_at: new Date().toISOString()
-        });
+        };
+        savedMsgs.push(fakeMsg);
+        localStorage.setItem(`demo_messages_${fakeGroupId}`, JSON.stringify(savedMsgs));
       }
-      setMessages(initialMsgs);
+      setMessages(savedMsgs);
       setMsgLoading(false);
       return;
     }
@@ -591,16 +608,25 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
     } else {
       const groupId = data as string;
       
+      // Query follows table for robust mutual follow check
+      const [{ data: outFollow }, { data: inFollow }] = await Promise.all([
+        supabase.from("follows").select("status").eq("follower_id", user!.id).eq("following_id", person.id).maybeSingle(),
+        supabase.from("follows").select("status").eq("following_id", user!.id).eq("follower_id", person.id).maybeSingle()
+      ]);
+      const isMutual = outFollow?.status === "accepted" && inFollow?.status === "accepted";
+      const requestStatus = isMutual ? 'accepted' : 'pending';
+      
+      const groupUpdates: any = {
+        request_status: requestStatus,
+        requested_by: user!.id
+      };
+      if (signalId) {
+        groupUpdates.origin_signal_id = signalId;
+      }
+      
       if (seedContent) {
-        const isMutual = followStates[person.id] === 'mutual';
-        const requestStatus = isMutual ? 'accepted' : 'pending';
-        
         await Promise.all([
-          supabase.from("groups").update({
-            request_status: requestStatus,
-            requested_by: user!.id,
-            origin_signal_id: signalId
-          }).eq("id", groupId),
+          supabase.from("groups").update(groupUpdates).eq("id", groupId),
           supabase.from("messages").insert({
             group_id: groupId,
             sender_id: user!.id,
@@ -608,6 +634,8 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
             type: 'text'
           })
         ]);
+      } else {
+        await supabase.from("groups").update(groupUpdates).eq("id", groupId);
       }
       setActiveDmId(groupId);
     }
@@ -642,7 +670,21 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
         content,
         created_at: new Date().toISOString()
       };
-      setMessages(prev => [...prev, fakeMsg]);
+      // Append in localStorage
+      const savedMsgs = JSON.parse(localStorage.getItem(`demo_messages_${activeDmId}`) || "[]");
+      const updatedMsgs = [...savedMsgs, fakeMsg];
+      localStorage.setItem(`demo_messages_${activeDmId}`, JSON.stringify(updatedMsgs));
+      setMessages(updatedMsgs);
+      
+      // Update last message in demo_groups in localStorage
+      const localGroups = JSON.parse(localStorage.getItem("demo_groups") || "[]");
+      const updatedGroups = localGroups.map((g: any) => {
+        if (g.group_id === activeDmId) {
+          return { ...g, last_message: content, last_at: new Date().toISOString() };
+        }
+        return g;
+      });
+      localStorage.setItem("demo_groups", JSON.stringify(updatedGroups));
       
       // Simulated reply after 1.5 seconds
       setTimeout(() => {
@@ -652,7 +694,26 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
           content: `Hey! Let's connect about that. 👍`,
           created_at: new Date().toISOString()
         };
-        setMessages(prev => [...prev, replyMsg]);
+        const curMsgs = JSON.parse(localStorage.getItem(`demo_messages_${activeDmId}`) || "[]");
+        const withReply = [...curMsgs, replyMsg];
+        localStorage.setItem(`demo_messages_${activeDmId}`, JSON.stringify(withReply));
+        
+        // Only update state if we are still chatting with the same peer
+        setMessages(prev => {
+          if (prev.length > 0 && prev[0].id === updatedMsgs[0].id) {
+            return withReply;
+          }
+          return prev;
+        });
+        
+        // Update last message in localStorage
+        const curGroups = JSON.parse(localStorage.getItem("demo_groups") || "[]");
+        localStorage.setItem("demo_groups", JSON.stringify(curGroups.map((g: any) => {
+          if (g.group_id === activeDmId) {
+            return { ...g, last_message: replyMsg.content, last_at: new Date().toISOString() };
+          }
+          return g;
+        })));
       }, 1500);
       return;
     }
