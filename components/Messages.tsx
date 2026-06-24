@@ -10,6 +10,7 @@ import {
   EditIcon,
   SignalIcon,
   UserIcon,
+  UserPlusIcon,
   SearchIcon,
   BellOffIcon,
   BellIcon,
@@ -2477,7 +2478,9 @@ function ChatInfoScreen({
         {/* 4 Action icon buttons row */}
         <div className="flex justify-around px-2 py-2 border-y border-white/[0.06] mb-2 select-none">
           {[
-            { icon: <UserIcon className="w-5 h-5" />, label: "Profile", action: () => { if (peer) onViewProfile(peer); } },
+            isGroup
+              ? { icon: <UsersIcon className="w-5 h-5" />, label: "Members", action: () => showToast(`${(convo?.members?.length ?? 0) + 1} members in this group`) }
+              : { icon: <UserIcon className="w-5 h-5" />, label: "Profile", action: () => { if (peer) onViewProfile(peer); } },
             { icon: <SearchIcon className="w-5 h-5" />, label: "Search", action: () => showToast("Search features coming soon") },
             { icon: muted ? <BellOffIcon className="w-5 h-5" /> : <BellIcon className="w-5 h-5" />, label: muted ? "Unmute" : "Mute", action: () => { setMuted(v => !v); showToast(muted ? "Unmuted notifications" : "Muted notifications"); } },
             { icon: <LockIcon className="w-5 h-5" />, label: "Privacy", action: () => setPrivacyOpen(true) },
@@ -2492,6 +2495,43 @@ function ChatInfoScreen({
             </button>
           ))}
         </div>
+
+        {/* Members list (groups only) */}
+        {isGroup && (
+          <div className="px-4 mt-1 mb-1 select-none">
+            <p className="text-[11px] font-bold text-ink-mute uppercase tracking-wide px-1 mb-1.5">
+              {(convo?.members?.length ?? 0) + 1} members
+            </p>
+            <div className="space-y-0.5">
+              {/* You */}
+              <div className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl">
+                <div className="w-9 h-9 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30 flex items-center justify-center font-bold text-xs shrink-0">
+                  {(profile?.name?.[0] || "Y").toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-ink truncate">You</p>
+                </div>
+                <span className="text-[10px] font-semibold text-brand-300">Admin</span>
+              </div>
+              {/* Other members */}
+              {(convo?.members ?? []).map((m: any) => (
+                <div key={m.id} className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl">
+                  {m.avatar_url ? (
+                    <img src={m.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover border border-white/10 shrink-0" />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-white/[0.06] text-ink-soft flex items-center justify-center font-bold text-xs shrink-0">
+                      {(m.name?.[0] || "?").toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-ink truncate">{m.name}</p>
+                    {m.username && <p className="text-[11px] text-ink-mute truncate">@{m.username}</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Settings rows */}
         <div className="px-4 mt-1 space-y-0.5 select-none">
@@ -2539,30 +2579,32 @@ function ChatInfoScreen({
             <ChevronRight className="w-4 h-4 text-ink-mute shrink-0" />
           </button>
 
-          {/* Nicknames */}
-          <button
-            onClick={() => setNicknamesOpen(true)}
-            className="w-full flex items-center gap-3.5 px-3 py-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-left"
-          >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-500 to-brand-500 flex items-center justify-center shrink-0">
-              <SmileIcon className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-ink">Nicknames</p>
-            </div>
-            <ChevronRight className="w-4 h-4 text-ink-mute shrink-0" />
-          </button>
+          {/* Nicknames (DM only) */}
+          {!isGroup && (
+            <button
+              onClick={() => setNicknamesOpen(true)}
+              className="w-full flex items-center gap-3.5 px-3 py-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-left"
+            >
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-500 to-brand-500 flex items-center justify-center shrink-0">
+                <SmileIcon className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-ink">Nicknames</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-ink-mute shrink-0" />
+            </button>
+          )}
 
-          {/* Create a group chat */}
+          {/* Create / add to group */}
           <button
             onClick={() => { onBack(); onCreateGroup(); }}
             className="w-full flex items-center gap-3.5 px-3 py-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-left"
           >
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-600 to-brand-500 flex items-center justify-center shrink-0">
-              <UsersIcon className="w-5 h-5 text-white" />
+              <UserPlusIcon className="w-5 h-5 text-white" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-ink">Create a group chat</p>
+              <p className="text-sm font-bold text-ink">{isGroup ? "Add members" : "Create a group chat"}</p>
             </div>
             <ChevronRight className="w-4 h-4 text-ink-mute shrink-0" />
           </button>
@@ -2636,22 +2678,34 @@ function ChatInfoScreen({
           )}
         </div>
 
-        {/* Block / Report danger zone */}
+        {/* Danger zone */}
         <div className="mt-8 px-4 pb-4 space-y-0.5 select-none">
-          <button
-            onClick={() => setBlockConfirmOpen(true)}
-            className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-bold text-red-400 hover:bg-red-500/[0.06] active:bg-red-500/10 transition inline-flex items-center gap-2"
-          >
-            <BanIcon className="w-4 h-4 text-red-400" />
-            Block {isGroup ? "Group" : displayName?.split(" ")[0]}
-          </button>
-          <button
-            onClick={() => setReportSheetOpen(true)}
-            className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-bold text-red-400 hover:bg-red-500/[0.06] active:bg-red-500/10 transition inline-flex items-center gap-2"
-          >
-            <AlertIcon className="w-4 h-4 text-red-400" />
-            Report
-          </button>
+          {isGroup ? (
+            <button
+              onClick={() => setBlockConfirmOpen(true)}
+              className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-bold text-red-400 hover:bg-red-500/[0.06] active:bg-red-500/10 transition inline-flex items-center gap-2"
+            >
+              <ArrowLeftIcon className="w-4 h-4 text-red-400" />
+              Leave group
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={() => setBlockConfirmOpen(true)}
+                className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-bold text-red-400 hover:bg-red-500/[0.06] active:bg-red-500/10 transition inline-flex items-center gap-2"
+              >
+                <BanIcon className="w-4 h-4 text-red-400" />
+                Block {displayName?.split(" ")[0]}
+              </button>
+              <button
+                onClick={() => setReportSheetOpen(true)}
+                className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-bold text-red-400 hover:bg-red-500/[0.06] active:bg-red-500/10 transition inline-flex items-center gap-2"
+              >
+                <AlertIcon className="w-4 h-4 text-red-400" />
+                Report
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -2725,10 +2779,10 @@ function ChatInfoScreen({
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[60] transition-opacity animate-fade-in">
           <div className="absolute inset-0" onClick={() => setBlockConfirmOpen(false)} />
           <div className="absolute bottom-0 inset-x-0 bg-[#0c0c0e] rounded-t-[32px] border-t border-white/[0.08] p-6 z-10 space-y-4">
-            <h3 className="font-bold text-base text-ink">Block {isGroup ? "Group" : displayName}?</h3>
+            <h3 className="font-bold text-base text-ink">{isGroup ? `Leave ${displayName}?` : `Block ${displayName}?`}</h3>
             <p className="text-xs text-ink-mute">
-              {isGroup 
-                ? "You will no longer receive messages from this group, and it will be removed from your inbox."
+              {isGroup
+                ? "You'll stop receiving messages from this group, and it will be removed from your inbox."
                 : `You will no longer receive messages or calls from ${displayName}, and this conversation will be removed from your inbox.`
               }
             </p>
@@ -2746,7 +2800,7 @@ function ChatInfoScreen({
                 }}
                 className="flex-1 py-3 text-xs font-bold bg-red-500 hover:bg-red-600 active:scale-95 transition rounded-xl text-white"
               >
-                Block
+                {isGroup ? "Leave" : "Block"}
               </button>
             </div>
           </div>

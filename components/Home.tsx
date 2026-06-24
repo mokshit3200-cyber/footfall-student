@@ -1004,9 +1004,9 @@ function NotificationsSheet({
       </div>
 
       {list.length === 0 ? (
-        <div className="py-12 text-center">
-          <span className="text-3xl">🔔</span>
-          <p className="text-sm text-ink-mute mt-2">All caught up! No notifications.</p>
+        <div className="py-12 flex flex-col items-center text-center">
+          <BellIcon className="w-9 h-9 text-white/15 mb-2" />
+          <p className="text-sm text-ink-mute">All caught up! No notifications.</p>
         </div>
       ) : (
         <div className="space-y-2 max-h-[60vh] overflow-y-auto no-scrollbar pb-6">
@@ -1589,8 +1589,8 @@ function RemindersPanel() {
       {/* Permission banner */}
       {showBanner && (
         <div className="card p-4 bg-brand-500/15 border border-brand-500/30 flex items-center gap-3.5 shadow-sm">
-          <div className="w-10 h-10 rounded-2xl bg-brand-500/20 flex items-center justify-center shrink-0 text-xl">
-            🔔
+          <div className="w-10 h-10 rounded-2xl bg-brand-500/20 flex items-center justify-center shrink-0 text-brand-200">
+            <BellIcon className="w-5 h-5" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-black text-brand-200">Enable Reminders</p>
