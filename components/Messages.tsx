@@ -874,15 +874,12 @@ export default function Messages({
               </div>
             </div>
 
-            {/* Header Call Icons */}
+            {/* Header options */}
             <div className="flex items-center gap-2.5 shrink-0 text-ink-soft">
-              <button className="w-9 h-9 rounded-full bg-white/[0.04] hover:bg-white/10 active:scale-95 transition flex items-center justify-center">
-                📞
-              </button>
-              <button className="w-9 h-9 rounded-full bg-white/[0.04] hover:bg-white/10 active:scale-95 transition flex items-center justify-center">
-                📹
-              </button>
-              <button className="w-9 h-9 rounded-full bg-white/[0.04] hover:bg-white/10 active:scale-95 transition flex items-center justify-center">
+              <button
+                onClick={() => { if (activeDmId) setChatInfoOpen(true); }}
+                className="w-9 h-9 rounded-full bg-white/[0.04] hover:bg-white/10 active:scale-95 transition flex items-center justify-center"
+              >
                 ⋮
               </button>
             </div>
@@ -994,10 +991,15 @@ export default function Messages({
           {/* Input bar */}
           <div className="p-3.5 border-t border-white/[0.07] bg-[#0c0c0e]/95 pb-28 shrink-0">
             <div className="flex gap-2.5 items-center">
-              <button className="w-9 h-9 rounded-full bg-white/[0.04] hover:bg-white/10 flex items-center justify-center shrink-0">
-                📷
+              {/* Attachment */}
+              <button className="w-9 h-9 rounded-full bg-white/[0.04] hover:bg-white/10 flex items-center justify-center shrink-0 text-ink-soft active:scale-95 transition">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                </svg>
               </button>
-              <div className="flex-1 bg-[#1a1a1a] rounded-2xl px-3.5 py-1.5 flex items-center gap-2">
+
+              {/* Text bar */}
+              <div className="flex-1 bg-[#1a1a1a] rounded-2xl px-4 py-1.5 flex items-center gap-2">
                 <textarea
                   placeholder="Message…"
                   rows={1}
@@ -1011,8 +1013,8 @@ export default function Messages({
                   }}
                   className="bg-transparent text-sm text-white placeholder-white/40 focus:outline-none flex-grow resize-none max-h-24 py-1.5 align-middle"
                 />
-                
-                {msgInput.trim() ? (
+
+                {msgInput.trim() && (
                   <button
                     onClick={handleSend}
                     className="w-7 h-7 rounded-full bg-brand-500 hover:bg-brand-600 flex items-center justify-center shrink-0 active:scale-95 transition"
@@ -1021,12 +1023,6 @@ export default function Messages({
                       <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
                     </svg>
                   </button>
-                ) : (
-                  <div className="flex items-center gap-2 text-white/50 shrink-0 text-sm">
-                    <button className="hover:text-white transition">🎤</button>
-                    <button className="hover:text-white transition">🖼️</button>
-                    <button className="hover:text-white transition">😊</button>
-                  </div>
                 )}
               </div>
             </div>
