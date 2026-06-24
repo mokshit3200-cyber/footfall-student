@@ -1015,6 +1015,7 @@ function TimetableSheet({
   onClose: () => void;
 }) {
   const { data, update, uid } = useStore();
+  const { user } = useAuth();
   const [day, setDay] = useState<DayKey>("mon");
   const [subjectId, setSubjectId] = useState("");
   const [start, setStart] = useState("09:00");
