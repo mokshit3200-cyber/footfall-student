@@ -204,6 +204,7 @@ export default function Messages({
   // Sheets Open State
   const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const [profileUser, setProfileUser] = useState<any | null>(null);
+  const [chatInfoOpen, setChatInfoOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [actionsConvo, setActionsConvo] = useState<any | null>(null);
 
@@ -828,12 +829,7 @@ export default function Messages({
               </button>
 
               <div
-                onClick={() => {
-                  if (activePeer) {
-                    setProfileUser(activePeer);
-                    setProfileSheetOpen(true);
-                  }
-                }}
+                onClick={() => { if (activeDmId) setChatInfoOpen(true); }}
                 className="flex items-center gap-2.5 cursor-pointer min-w-0"
               >
                 {/* Avatars */}
@@ -1036,6 +1032,18 @@ export default function Messages({
             </div>
           </div>
         </div>
+      )}
+
+      {/* SCREEN 2.5 — CHAT INFO (full screen, Instagram-style) */}
+      {chatInfoOpen && activeDmId && (
+        <ChatInfoScreen
+          peer={activePeer}
+          convo={convos.find(c => c.group_id === activeDmId) ?? null}
+          messages={messages}
+          onBack={() => setChatInfoOpen(false)}
+          onSwitchTab={onSwitchTab}
+          onCreateGroup={() => { setChatInfoOpen(false); /* open compose */ }}
+        />
       )}
 
       {/* SCREEN 3 — PROFILE SHEET (bottom sheet) */}
@@ -1477,7 +1485,271 @@ function SwipeMessageBubble({
   );
 }
 
-// 2. DraggableProfileSheet
+// 2. ChatInfoScreen
+function ChatInfoScreen({
+  peer,
+  convo,
+  messages,
+  onBack,
+  onSwitchTab,
+  onCreateGroup,
+}: {
+  peer: any;
+  convo: any;
+  messages: Message[];
+  onBack: () => void;
+  onSwitchTab?: (tab: string) => void;
+  onCreateGroup: () => void;
+}) {
+  const [activeTab, setActiveTab] = useState<"media" | "links" | "files">("media");
+  const [muted, setMuted] = useState(false);
+  const [disappearing, setDisappearing] = useState(false);
+
+  const isGroup = convo?.type === "group";
+  const displayName = isGroup ? convo?.group_name : peer?.name;
+  const subtitle = isGroup
+    ? `${(convo?.members?.length ?? 0) + 1} members`
+    : peer?.username ? `@${peer.username}` : null;
+
+  const initials = (displayName || "?")
+    .trim()
+    .split(/\s+/)
+    .map((n: string) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  // Count shared media from messages (demo: 0)
+  const mediaCount = messages.filter(m => m.content.startsWith("http") || m.content.includes("img")).length;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black flex flex-col">
+      {/* Top nav bar */}
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.07] shrink-0 bg-[#0c0c0e]/95 backdrop-blur-md sticky top-0">
+        <button
+          onClick={onBack}
+          className="w-9 h-9 rounded-full bg-white/[0.05] hover:bg-white/10 active:scale-90 transition flex items-center justify-center shrink-0 text-white"
+        >
+          ←
+        </button>
+        <span className="font-bold text-sm text-ink">Chat Info</span>
+      </div>
+
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto no-scrollbar pb-28">
+        {/* Avatar + Name hero */}
+        <div className="flex flex-col items-center pt-8 pb-6 px-6">
+          {/* Avatar */}
+          <div className="relative mb-4">
+            {isGroup ? (
+              <div className="relative w-24 h-24">
+                <div className="absolute -top-1 -left-1 w-16 h-16 rounded-full bg-brand-500/20 text-brand-300 border-2 border-black flex items-center justify-center text-lg font-bold">
+                  {convo?.members?.[0]?.name[0] || "G"}
+                </div>
+                <div className="absolute -bottom-1 -right-1 w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-300 border-2 border-black flex items-center justify-center text-lg font-bold">
+                  {convo?.members?.[1]?.name[0] || "S"}
+                </div>
+              </div>
+            ) : peer?.avatar_url ? (
+              <img
+                src={peer.avatar_url}
+                alt={displayName}
+                className="w-24 h-24 rounded-full object-cover border border-white/10"
+              />
+            ) : (
+              <div className="w-24 h-24 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30 flex items-center justify-center font-bold text-3xl">
+                {initials}
+              </div>
+            )}
+            {!isGroup && peer?.is_online && (
+              <span className="absolute bottom-1 right-1 w-4 h-4 bg-brand-500 border-2 border-black rounded-full" />
+            )}
+          </div>
+
+          {/* Name */}
+          <h2 className="font-extrabold text-lg text-ink text-center leading-tight">{displayName}</h2>
+          {subtitle && <p className="text-xs text-brand-300 font-semibold mt-0.5">{subtitle}</p>}
+          {!isGroup && peer?.college && (
+            <p className="text-[11px] text-ink-mute mt-1 text-center">
+              {peer.college} {peer.course ? `• ${peer.course}` : ""}
+            </p>
+          )}
+          {!isGroup && peer?.signal && (
+            <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-500/10 border border-brand-500/20 text-[11px] text-brand-300 font-semibold">
+              <span>📡</span>
+              <span>{peer.signal}</span>
+            </div>
+          )}
+        </div>
+
+        {/* 4 Action icon buttons row */}
+        <div className="flex justify-around px-6 py-2 border-y border-white/[0.06] mb-2">
+          {[
+            { icon: "👤", label: "Profile", action: () => onSwitchTab?.("profile") },
+            { icon: "🔍", label: "Search", action: () => {} },
+            { icon: muted ? "🔕" : "🔔", label: muted ? "Unmute" : "Mute", action: () => setMuted(v => !v) },
+            { icon: "⋯", label: "Options", action: () => {} },
+          ].map(({ icon, label, action }) => (
+            <button
+              key={label}
+              onClick={action}
+              className="flex flex-col items-center gap-1.5 py-3 px-4 rounded-2xl hover:bg-white/[0.04] active:scale-95 transition select-none"
+            >
+              <span className="text-xl leading-none">{icon}</span>
+              <span className="text-[10px] font-semibold text-ink-mute">{label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Settings rows */}
+        <div className="px-4 mt-1 space-y-0.5">
+          {/* Theme */}
+          <button className="w-full flex items-center gap-3.5 px-3 py-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-left">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-base shrink-0">
+              🎨
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-ink">Theme</p>
+              <p className="text-[11px] text-ink-mute">Default</p>
+            </div>
+            <div className="w-4 h-4 rounded-full bg-brand-500 border-2 border-white/10 shrink-0" />
+          </button>
+
+          {/* Disappearing messages */}
+          <button
+            onClick={() => setDisappearing(v => !v)}
+            className="w-full flex items-center gap-3.5 px-3 py-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-left"
+          >
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-base shrink-0">
+              ⏰
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-ink">Disappearing messages</p>
+              <p className="text-[11px] text-ink-mute">{disappearing ? "On" : "Off"}</p>
+            </div>
+            <span className="text-ink-mute text-xs">›</span>
+          </button>
+
+          {/* Privacy and safety */}
+          <button className="w-full flex items-center gap-3.5 px-3 py-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-left">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center text-base shrink-0">
+              🔒
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-ink">Privacy and safety</p>
+            </div>
+            <span className="text-ink-mute text-xs">›</span>
+          </button>
+
+          {/* Nicknames */}
+          <button className="w-full flex items-center gap-3.5 px-3 py-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-left">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-500 to-brand-500 flex items-center justify-center text-base shrink-0">
+              😄
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-ink">Nicknames</p>
+            </div>
+            <span className="text-ink-mute text-xs">›</span>
+          </button>
+
+          {/* Create a group chat */}
+          <button
+            onClick={() => { onBack(); onCreateGroup(); }}
+            className="w-full flex items-center gap-3.5 px-3 py-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-left"
+          >
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-600 to-brand-500 flex items-center justify-center text-base shrink-0">
+              👥
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-ink">Create a group chat</p>
+            </div>
+            <span className="text-ink-mute text-xs">›</span>
+          </button>
+        </div>
+
+        {/* Shared Media / Links tabs */}
+        <div className="mt-5 px-4">
+          <div className="flex border-b border-white/[0.06] text-xs font-bold text-ink-soft mb-3">
+            {(["media", "links", "files"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setActiveTab(t)}
+                className={`flex-1 pb-2.5 border-b-2 capitalize transition ${
+                  activeTab === t ? "border-brand-500 text-ink" : "border-transparent text-ink-mute"
+                }`}
+              >
+                {t === "media" ? "Photos & Videos" : t === "links" ? "Links" : "Files"}
+              </button>
+            ))}
+          </div>
+
+          {activeTab === "media" && (
+            mediaCount > 0 ? (
+              <div className="grid grid-cols-3 gap-1.5">
+                {[...Array(mediaCount)].map((_, i) => (
+                  <div key={i} className="aspect-square rounded-lg bg-white/[0.05] border border-white/[0.06]" />
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center py-10 opacity-50">
+                <span className="text-3xl mb-2">🖼️</span>
+                <p className="text-xs text-ink-mute">No photos or videos yet</p>
+              </div>
+            )
+          )}
+
+          {activeTab === "links" && (
+            <div className="space-y-2">
+              <a
+                href="https://github.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2.5 p-3 rounded-xl bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.05] transition text-xs font-semibold"
+              >
+                <span className="text-lg">🐙</span>
+                <div className="min-w-0">
+                  <p className="text-ink truncate">GitHub Profile</p>
+                  <p className="text-brand-300 truncate text-[10px]">github.com</p>
+                </div>
+              </a>
+              <a
+                href="https://linkedin.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2.5 p-3 rounded-xl bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.05] transition text-xs font-semibold"
+              >
+                <span className="text-lg">💼</span>
+                <div className="min-w-0">
+                  <p className="text-ink truncate">LinkedIn Profile</p>
+                  <p className="text-brand-300 truncate text-[10px]">linkedin.com</p>
+                </div>
+              </a>
+            </div>
+          )}
+
+          {activeTab === "files" && (
+            <div className="flex flex-col items-center py-10 opacity-50">
+              <span className="text-3xl mb-2">📎</span>
+              <p className="text-xs text-ink-mute">No files shared yet</p>
+            </div>
+          )}
+        </div>
+
+        {/* Block / Report danger zone */}
+        <div className="mt-8 px-4 pb-4 space-y-0.5">
+          <button className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-bold text-red-400 hover:bg-red-500/[0.06] active:bg-red-500/10 transition">
+            🚫 Block {isGroup ? "Group" : peer?.name?.split(" ")[0]}
+          </button>
+          <button className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-bold text-red-400 hover:bg-red-500/[0.06] active:bg-red-500/10 transition">
+            ⚠️ Report
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 3. DraggableProfileSheet
 function DraggableProfileSheet({
   open,
   onClose,
