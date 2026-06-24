@@ -42,6 +42,16 @@ interface Message {
   reply_to?: { sender_name: string; content: string } | null;
 }
 
+// ── THEME CONSTANTS ──────────────────────────────────────────────────────────
+const THEMES = [
+  { id: "default", name: "Default Emerald", color: "#0F8F6F", bgClass: "bg-[#0F8F6F]", dotColor: "bg-[#0F8F6F]" },
+  { id: "ocean", name: "Ocean Blue", color: "#0ea5e9", bgClass: "bg-[#0ea5e9]", dotColor: "bg-[#0ea5e9]" },
+  { id: "sunset", name: "Sunset Pink", color: "#f43f5e", bgClass: "bg-[#f43f5e]", dotColor: "bg-[#f43f5e]" },
+  { id: "purple", name: "Royal Purple", color: "#8b5cf6", bgClass: "bg-[#8b5cf6]", dotColor: "bg-[#8b5cf6]" },
+  { id: "mono", name: "Graphite Mono", color: "#3f3f46", bgClass: "bg-[#3f3f46]", dotColor: "bg-[#3f3f46]" },
+  { id: "rose", name: "Rose Garden", color: "#db2777", bgClass: "bg-[#db2777]", dotColor: "bg-[#db2777]" },
+] as const;
+
 // ── DEMO CONSTANTS (as const) ─────────────────────────────────────────────────
 const DEMO_CONVOS = [
   { 
@@ -195,6 +205,17 @@ export default function Messages({
   const [msgLoading, setMsgLoading] = useState(false);
   const [replyToMsg, setReplyToMsg] = useState<any | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Chat Info Polish States
+  const [activeThemeBgClass, setActiveThemeBgClass] = useState("bg-brand-500");
+  const [disappearingMode, setDisappearingMode] = useState("off");
+  const [nicknameTrigger, setNicknameTrigger] = useState(0);
+
+  const getNickname = (userId: string, defaultName: string, groupId: string | null) => {
+    const _ = nicknameTrigger;
+    if (!groupId) return defaultName;
+    return localStorage.getItem(`chat_nickname_${groupId}_${userId}`) || defaultName;
+  };
 
   // Frequency Strip State
   const [mySignal, setMySignal] = useState("");
@@ -359,6 +380,14 @@ export default function Messages({
       setActiveGroupMembers(convo.members || []);
     }
 
+    // Load Chat Settings from LocalStorage
+    const savedTheme = localStorage.getItem(`chat_theme_${convo.group_id}`);
+    const foundTheme = THEMES.find(t => t.id === savedTheme);
+    setActiveThemeBgClass(foundTheme ? foundTheme.bgClass : "bg-brand-500");
+
+    const savedDisappearing = localStorage.getItem(`chat_disappearing_${convo.group_id}`) || "off";
+    setDisappearingMode(savedDisappearing);
+
     if (demo) {
       const demoMsgs = DEMO_MESSAGES[convo.group_id as keyof typeof DEMO_MESSAGES] ?? [];
       setMessages(demoMsgs.map(m => ({
@@ -413,7 +442,9 @@ export default function Messages({
 
     let finalContent = content;
     if (replyToMsg) {
-      const senderName = replyToMsg.sender_id === "me" || replyToMsg.sender_id === user?.id ? "You" : (activePeer?.name || "Student");
+      const senderName = replyToMsg.sender_id === "me" || replyToMsg.sender_id === user?.id 
+        ? getNickname("me", "You", activeDmId) 
+        : (activePeer ? getNickname(activePeer.id, activePeer.name, activeDmId) : "Student");
       finalContent = `> [Reply to ${senderName}]: ${replyToMsg.content}\n\n${content}`;
       setReplyToMsg(null);
     }
@@ -496,9 +527,14 @@ export default function Messages({
 
   // Filter conversations
   const filteredConvos = convos.filter(c => {
+    // Check if blocked
+    const blockedList = JSON.parse(localStorage.getItem("blocked_groups") || "[]");
+    if (blockedList.includes(c.group_id)) return false;
+
     const q = search.toLowerCase();
     if (c.type === "dm") {
-      return (c.peer?.name || "").toLowerCase().includes(q) || (c.peer?.username || "").toLowerCase().includes(q);
+      const peerDisplayName = c.peer ? getNickname(c.peer.id, c.peer.name, c.group_id) : "";
+      return peerDisplayName.toLowerCase().includes(q) || (c.peer?.username || "").toLowerCase().includes(q);
     }
     return (c.group_name || "").toLowerCase().includes(q);
   });
@@ -726,7 +762,9 @@ export default function Messages({
                 const unread = c.unread > 0;
                 
                 // Initials helper for peer
-                const peerName = isGroup ? c.group_name : c.peer?.name;
+                const peerName = isGroup 
+                  ? c.group_name 
+                  : (c.peer ? getNickname(c.peer.id, c.peer.name, c.group_id) : "Student");
                 const initials = (peerName || "?").trim().split(/\s+/).map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
 
                 // Gesture Longpress simulation helper
@@ -860,7 +898,9 @@ export default function Messages({
                 {/* Subtitle */}
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="font-bold text-ink text-sm truncate">{activePeer ? activePeer.name : selectedConvo?.group_name}</span>
+                    <span className="font-bold text-ink text-sm truncate">
+                      {activePeer ? getNickname(activePeer.id, activePeer.name, activeDmId) : selectedConvo?.group_name}
+                    </span>
                     {activePeer?.verified && (
                       <span className="inline-flex items-center justify-center w-3.5 h-3.5 bg-brand-500 text-white rounded-full p-0.5 text-[7px]" title="Verified">
                         <CheckIcon className="w-2.5 h-2.5" />
@@ -890,6 +930,15 @@ export default function Messages({
             style={{ touchAction: "pan-y" }}
             className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-4 bg-black flex flex-col"
           >
+            {disappearingMode !== "off" && (
+              <div className="w-full flex justify-center py-2 shrink-0">
+                <span className="bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1.5 animate-fade-in select-none">
+                  <span>⏰</span>
+                  <span>Disappearing messages: {disappearingMode === "24h" ? "24 hours" : disappearingMode === "7d" ? "7 days" : "90 days"}</span>
+                </span>
+              </div>
+            )}
+
             {msgLoading ? (
               <div className="flex flex-col items-center justify-center h-full space-y-2 opacity-50">
                 <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
@@ -935,7 +984,7 @@ export default function Messages({
                         {/* Member Stack Header label */}
                         {!mine && isFirstInCluster && !activePeer && (
                           <span className="absolute -top-3.5 left-10 text-[9px] text-brand-300 font-bold leading-none select-none">
-                            {activeGroupMembers.find(gm => gm.id === m.sender_id)?.name || "Member"}
+                            {getNickname(m.sender_id, activeGroupMembers.find(gm => gm.id === m.sender_id)?.name || "Member", activeDmId)}
                           </span>
                         )}
 
@@ -958,6 +1007,8 @@ export default function Messages({
                         <SwipeMessageBubble
                           msg={{ ...m, reply_to: replyQuote, content: cleanContent }}
                           mine={mine}
+                          themeBgClass={activeThemeBgClass}
+                          disappearingMode={disappearingMode}
                           onReply={() => setReplyToMsg(m)}
                           onReact={onMsgReact}
                         />
@@ -975,7 +1026,7 @@ export default function Messages({
             <div className="px-4 py-2 border-t border-white/[0.06] bg-[#0c0c0e] flex items-center justify-between z-10 shrink-0">
               <div className="border-l-2 border-brand-300 pl-2.5 py-0.5 min-w-0">
                 <p className="text-[10.5px] font-bold text-brand-300 truncate">
-                  Replying to {replyToMsg.sender_id === "me" || replyToMsg.sender_id === user?.id ? "You" : (activePeer?.name || "Student")}
+                  Replying to {replyToMsg.sender_id === "me" || replyToMsg.sender_id === user?.id ? getNickname("me", "You", activeDmId) : (activePeer ? getNickname(activePeer.id, activePeer.name, activeDmId) : "Student")}
                 </p>
                 <p className="text-xs text-ink-mute truncate">{parseMessageContent(replyToMsg.content).cleanContent}</p>
               </div>
@@ -1047,6 +1098,28 @@ export default function Messages({
             setChatInfoOpen(false);
             if (activePeer) setSelectedPeople([activePeer]);
             setComposeOpen(true);
+          }}
+          onUpdateSettings={() => {
+            const savedTheme = localStorage.getItem(`chat_theme_${activeDmId}`);
+            const foundTheme = THEMES.find(t => t.id === savedTheme);
+            setActiveThemeBgClass(foundTheme ? foundTheme.bgClass : "bg-brand-500");
+
+            const savedDisappearing = localStorage.getItem(`chat_disappearing_${activeDmId}`) || "off";
+            setDisappearingMode(savedDisappearing);
+            
+            setNicknameTrigger(prev => prev + 1);
+          }}
+          onBlock={() => {
+            const blocked = JSON.parse(localStorage.getItem("blocked_groups") || "[]");
+            if (!blocked.includes(activeDmId)) {
+              blocked.push(activeDmId);
+              localStorage.setItem("blocked_groups", JSON.stringify(blocked));
+            }
+            setChatInfoOpen(false);
+            setActiveDmId(null);
+            setActivePeer(null);
+            onChatOpen?.(false);
+            setConvos(prev => prev.filter(c => c.group_id !== activeDmId));
           }}
         />
       )}
@@ -1252,7 +1325,7 @@ export default function Messages({
           <div className="absolute bottom-0 inset-x-0 bg-[#0c0c0e] rounded-t-[32px] border-t border-white/[0.08] p-5 max-h-[85vh] z-10">
             <div className="flex items-center justify-between mb-4 border-b border-white/[0.05] pb-3">
               <h2 className="font-bold text-base text-ink">Options</h2>
-              <button
+<button
                 onClick={() => setActionsConvo(null)}
                 className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white"
               >
@@ -1302,11 +1375,15 @@ export default function Messages({
 function SwipeMessageBubble({
   msg,
   mine,
+  themeBgClass,
+  disappearingMode,
   onReply,
   onReact,
 }: {
   msg: any;
   mine: boolean;
+  themeBgClass?: string;
+  disappearingMode?: string;
   onReply: () => void;
   onReact: (emoji: string) => void;
 }) {
@@ -1445,7 +1522,7 @@ function SwipeMessageBubble({
         }}
         className={`relative group max-w-[85%] rounded-2xl px-4 py-2.5 text-xs md:text-sm ${
           mine
-            ? "bg-brand-500 text-white rounded-tr-none ml-auto"
+            ? `${themeBgClass || "bg-brand-500"} text-white rounded-tr-none ml-auto`
             : "bg-[#1e1e1e] border border-white/[0.06] text-ink rounded-tl-none mr-auto"
         }`}
       >
@@ -1471,8 +1548,13 @@ function SwipeMessageBubble({
         <p className="leading-relaxed break-words">{renderContent(msg.content)}</p>
 
         {/* Timestamp */}
-        <span className="text-[9.5px] text-white/50 block mt-1 text-right select-none">
-          {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+        <span className="text-[9.5px] text-white/50 block mt-1 text-right select-none flex items-center justify-end gap-1">
+          {disappearingMode && disappearingMode !== "off" && (
+            <span className="text-[8.5px] opacity-95 shrink-0" title="Disappearing message">⏳</span>
+          )}
+          <span>
+            {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          </span>
         </span>
 
         {/* Render reactions on bottom-right edge */}
@@ -1499,6 +1581,8 @@ function ChatInfoScreen({
   onSwitchTab,
   onViewProfile,
   onCreateGroup,
+  onUpdateSettings,
+  onBlock,
 }: {
   peer: any;
   convo: any;
@@ -1507,13 +1591,33 @@ function ChatInfoScreen({
   onSwitchTab?: (tab: string) => void;
   onViewProfile: (peer: any) => void;
   onCreateGroup: () => void;
+  onUpdateSettings: () => void;
+  onBlock: () => void;
 }) {
+  const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState<"media" | "links" | "files">("media");
   const [muted, setMuted] = useState(false);
-  const [disappearing, setDisappearing] = useState(false);
+
+  // Sub-screens/sheets state
+  const [themePickerOpen, setThemePickerOpen] = useState(false);
+  const [disappearingPickerOpen, setDisappearingPickerOpen] = useState(false);
+  const [nicknamesOpen, setNicknamesOpen] = useState(false);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
+  const [reportSheetOpen, setReportSheetOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
 
   const isGroup = convo?.type === "group";
-  const displayName = isGroup ? convo?.group_name : peer?.name;
+  const rawDisplayName = isGroup ? convo?.group_name : peer?.name;
+
+  // Nickname lookup
+  const getNickname = (userId: string, defaultName: string) => {
+    if (!convo) return defaultName;
+    return localStorage.getItem(`chat_nickname_${convo.group_id}_${userId}`) || defaultName;
+  };
+
+  const displayName = isGroup ? convo?.group_name : (peer ? getNickname(peer.id, peer.name) : "Student");
+
   const subtitle = isGroup
     ? `${(convo?.members?.length ?? 0) + 1} members`
     : peer?.username ? `@${peer.username}` : null;
@@ -1526,11 +1630,50 @@ function ChatInfoScreen({
     .slice(0, 2)
     .toUpperCase();
 
-  // Count shared media from messages (demo: 0)
+  // Load local settings
+  const savedTheme = convo ? localStorage.getItem(`chat_theme_${convo.group_id}`) : null;
+  const currentTheme = THEMES.find(t => t.id === savedTheme) || THEMES[0];
+
+  const disappearingVal = convo ? (localStorage.getItem(`chat_disappearing_${convo.group_id}`) || "off") : "off";
+  const disappearingLabel = disappearingVal === "off" ? "Off" : disappearingVal === "24h" ? "24 hours" : disappearingVal === "7d" ? "7 days" : "90 days";
+
+  // Scan links
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const links: { url: string; domain: string }[] = [];
+  messages.forEach(m => {
+    const found = m.content.match(urlRegex);
+    if (found) {
+      found.forEach(url => {
+        try {
+          const domain = new URL(url).hostname;
+          if (!links.some(l => l.url === url)) {
+            links.push({ url, domain });
+          }
+        } catch {
+          if (!links.some(l => l.url === url)) {
+            links.push({ url, domain: "link" });
+          }
+        }
+      });
+    }
+  });
+  const linksToShow = [...links].reverse();
+
+  // Count shared media
   const mediaCount = messages.filter(m => m.content.startsWith("http") || m.content.includes("img")).length;
 
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(""), 3000);
+  };
+
+  const handleReport = (reason: string) => {
+    setReportSheetOpen(false);
+    showToast(`Reported for "${reason}". Thanks, we'll review this.`);
+  };
+
   return (
-    <div className="fixed inset-0 z-50 bg-black flex flex-col">
+    <div className="fixed inset-0 z-50 bg-black flex flex-col text-white">
       {/* Top nav bar */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.07] shrink-0 bg-[#0c0c0e]/95 backdrop-blur-md sticky top-0">
         <button
@@ -1590,17 +1733,17 @@ function ChatInfoScreen({
         </div>
 
         {/* 4 Action icon buttons row */}
-        <div className="flex justify-around px-2 py-2 border-y border-white/[0.06] mb-2">
+        <div className="flex justify-around px-2 py-2 border-y border-white/[0.06] mb-2 select-none">
           {[
             { icon: "👤", label: "Profile", action: () => { if (peer) onViewProfile(peer); } },
-            { icon: "🔍", label: "Search", action: () => {} },
-            { icon: muted ? "🔕" : "🔔", label: muted ? "Unmute" : "Mute", action: () => setMuted(v => !v) },
-            { icon: "⋯", label: "Options", action: () => {} },
+            { icon: "🔍", label: "Search", action: () => showToast("Search features coming soon") },
+            { icon: muted ? "🔕" : "🔔", label: muted ? "Unmute" : "Mute", action: () => { setMuted(v => !v); showToast(muted ? "Unmuted notifications" : "Muted notifications"); } },
+            { icon: "🔒", label: "Privacy", action: () => setPrivacyOpen(true) },
           ].map(({ icon, label, action }) => (
             <button
               key={label}
               onClick={action}
-              className="flex-1 flex flex-col items-center gap-1.5 py-3 rounded-2xl hover:bg-white/[0.04] active:scale-95 transition select-none"
+              className="flex-1 flex flex-col items-center gap-1.5 py-3 rounded-2xl hover:bg-white/[0.04] active:scale-95 transition"
             >
               <span className="text-xl leading-none">{icon}</span>
               <span className="text-[10px] font-semibold text-ink-mute">{label}</span>
@@ -1609,22 +1752,25 @@ function ChatInfoScreen({
         </div>
 
         {/* Settings rows */}
-        <div className="px-4 mt-1 space-y-0.5">
+        <div className="px-4 mt-1 space-y-0.5 select-none">
           {/* Theme */}
-          <button className="w-full flex items-center gap-3.5 px-3 py-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-left">
+          <button
+            onClick={() => setThemePickerOpen(true)}
+            className="w-full flex items-center gap-3.5 px-3 py-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-left"
+          >
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-base shrink-0">
               🎨
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-ink">Theme</p>
-              <p className="text-[11px] text-ink-mute">Default</p>
+              <p className="text-[11px] text-ink-mute">{currentTheme.name}</p>
             </div>
-            <div className="w-4 h-4 rounded-full bg-brand-500 border-2 border-white/10 shrink-0" />
+            <div className={`w-4 h-4 rounded-full ${currentTheme.dotColor} border-2 border-white/10 shrink-0`} />
           </button>
 
           {/* Disappearing messages */}
           <button
-            onClick={() => setDisappearing(v => !v)}
+            onClick={() => setDisappearingPickerOpen(true)}
             className="w-full flex items-center gap-3.5 px-3 py-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-left"
           >
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-base shrink-0">
@@ -1632,13 +1778,16 @@ function ChatInfoScreen({
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-ink">Disappearing messages</p>
-              <p className="text-[11px] text-ink-mute">{disappearing ? "On" : "Off"}</p>
+              <p className="text-[11px] text-ink-mute">{disappearingLabel}</p>
             </div>
             <span className="text-ink-mute text-xs">›</span>
           </button>
 
           {/* Privacy and safety */}
-          <button className="w-full flex items-center gap-3.5 px-3 py-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-left">
+          <button
+            onClick={() => setPrivacyOpen(true)}
+            className="w-full flex items-center gap-3.5 px-3 py-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-left"
+          >
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center text-base shrink-0">
               🔒
             </div>
@@ -1649,7 +1798,10 @@ function ChatInfoScreen({
           </button>
 
           {/* Nicknames */}
-          <button className="w-full flex items-center gap-3.5 px-3 py-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-left">
+          <button
+            onClick={() => setNicknamesOpen(true)}
+            className="w-full flex items-center gap-3.5 px-3 py-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-left"
+          >
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-500 to-brand-500 flex items-center justify-center text-base shrink-0">
               😄
             </div>
@@ -1676,7 +1828,7 @@ function ChatInfoScreen({
 
         {/* Shared Media / Links tabs */}
         <div className="mt-5 px-4">
-          <div className="flex border-b border-white/[0.06] text-xs font-bold text-ink-soft mb-3">
+          <div className="flex border-b border-white/[0.06] text-xs font-bold text-ink-soft mb-3 select-none">
             {(["media", "links", "files"] as const).map((t) => (
               <button
                 key={t}
@@ -1694,11 +1846,13 @@ function ChatInfoScreen({
             mediaCount > 0 ? (
               <div className="grid grid-cols-3 gap-1.5">
                 {[...Array(mediaCount)].map((_, i) => (
-                  <div key={i} className="aspect-square rounded-lg bg-white/[0.05] border border-white/[0.06]" />
+                  <div key={i} className="aspect-square rounded-lg bg-white/[0.05] border border-white/[0.06] flex items-center justify-center text-lg text-white/10">
+                    🖼️
+                  </div>
                 ))}
               </div>
             ) : (
-              <div className="flex flex-col items-center py-10 opacity-50">
+              <div className="flex flex-col items-center py-10 opacity-50 select-none">
                 <span className="text-3xl mb-2">🖼️</span>
                 <p className="text-xs text-ink-mute">No photos or videos yet</p>
               </div>
@@ -1707,35 +1861,33 @@ function ChatInfoScreen({
 
           {activeTab === "links" && (
             <div className="space-y-2">
-              <a
-                href="https://github.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2.5 p-3 rounded-xl bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.05] transition text-xs font-semibold"
-              >
-                <span className="text-lg">🐙</span>
-                <div className="min-w-0">
-                  <p className="text-ink truncate">GitHub Profile</p>
-                  <p className="text-brand-300 truncate text-[10px]">github.com</p>
+              {linksToShow.length > 0 ? (
+                linksToShow.map((link, idx) => (
+                  <a
+                    key={idx}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2.5 p-3 rounded-xl bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.05] transition text-xs font-semibold"
+                  >
+                    <span className="text-lg">🔗</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-ink truncate font-bold">{link.domain}</p>
+                      <p className="text-brand-300 truncate text-[10px] mt-0.5">{link.url}</p>
+                    </div>
+                  </a>
+                ))
+              ) : (
+                <div className="flex flex-col items-center py-10 opacity-50 select-none">
+                  <span className="text-3xl mb-2">🔗</span>
+                  <p className="text-xs text-ink-mute">No links shared yet</p>
                 </div>
-              </a>
-              <a
-                href="https://linkedin.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2.5 p-3 rounded-xl bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.05] transition text-xs font-semibold"
-              >
-                <span className="text-lg">💼</span>
-                <div className="min-w-0">
-                  <p className="text-ink truncate">LinkedIn Profile</p>
-                  <p className="text-brand-300 truncate text-[10px]">linkedin.com</p>
-                </div>
-              </a>
+              )}
             </div>
           )}
 
           {activeTab === "files" && (
-            <div className="flex flex-col items-center py-10 opacity-50">
+            <div className="flex flex-col items-center py-10 opacity-50 select-none">
               <span className="text-3xl mb-2">📎</span>
               <p className="text-xs text-ink-mute">No files shared yet</p>
             </div>
@@ -1743,15 +1895,609 @@ function ChatInfoScreen({
         </div>
 
         {/* Block / Report danger zone */}
-        <div className="mt-8 px-4 pb-4 space-y-0.5">
-          <button className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-bold text-red-400 hover:bg-red-500/[0.06] active:bg-red-500/10 transition">
-            🚫 Block {isGroup ? "Group" : peer?.name?.split(" ")[0]}
+        <div className="mt-8 px-4 pb-4 space-y-0.5 select-none">
+          <button
+            onClick={() => setBlockConfirmOpen(true)}
+            className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-bold text-red-400 hover:bg-red-500/[0.06] active:bg-red-500/10 transition"
+          >
+            🚫 Block {isGroup ? "Group" : displayName?.split(" ")[0]}
           </button>
-          <button className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-bold text-red-400 hover:bg-red-500/[0.06] active:bg-red-500/10 transition">
+          <button
+            onClick={() => setReportSheetOpen(true)}
+            className="w-full text-left px-4 py-3.5 rounded-xl text-sm font-bold text-red-400 hover:bg-red-500/[0.06] active:bg-red-500/10 transition"
+          >
             ⚠️ Report
           </button>
         </div>
       </div>
+
+      {/* Toast Alert */}
+      {toastMessage && (
+        <div className="fixed bottom-6 inset-x-5 z-[70] flex justify-center pointer-events-none">
+          <div className="bg-[#1a1a1a] border border-white/10 text-white rounded-full px-5 py-2.5 text-xs font-semibold shadow-2xl animate-fade-in flex items-center gap-2">
+            <span>🛡️</span>
+            <span>{toastMessage}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Theme Picker Sheet */}
+      <ThemePickerSheet
+        open={themePickerOpen}
+        onClose={() => setThemePickerOpen(false)}
+        activeThemeId={savedTheme || "default"}
+        onSelectTheme={(themeId: string) => {
+          if (convo) {
+            localStorage.setItem(`chat_theme_${convo.group_id}`, themeId);
+            onUpdateSettings();
+            showToast("Theme updated");
+          }
+        }}
+      />
+
+      {/* Disappearing Picker Sheet */}
+      <DisappearingPickerSheet
+        open={disappearingPickerOpen}
+        onClose={() => setDisappearingPickerOpen(false)}
+        activeMode={disappearingVal}
+        onSelectMode={(mode: string) => {
+          if (convo) {
+            localStorage.setItem(`chat_disappearing_${convo.group_id}`, mode);
+            onUpdateSettings();
+            showToast(mode === "off" ? "Disappearing messages disabled" : `Messages disappear after ${mode === "24h" ? "24 hours" : mode === "7d" ? "7 days" : mode === "90 days"}`);
+          }
+        }}
+      />
+
+      {/* Nicknames Sheet */}
+      <NicknamesSheet
+        open={nicknamesOpen}
+        onClose={() => setNicknamesOpen(false)}
+        peerId={peer?.id || "peer"}
+        peerRealName={peer?.name || "Student"}
+        myRealName={profile?.name || "You"}
+        groupId={convo?.group_id || ""}
+        onSaveNicknames={() => {
+          onUpdateSettings();
+          showToast("Nicknames updated");
+        }}
+      />
+
+      {/* Privacy Sub Screen */}
+      <PrivacySubScreen
+        open={privacyOpen}
+        onBack={() => setPrivacyOpen(false)}
+        groupId={convo?.group_id || ""}
+        peerName={displayName}
+        isGroup={isGroup}
+        onBlock={() => {
+          setPrivacyOpen(false);
+          onBlock();
+        }}
+      />
+
+      {/* Block Confirmation Bottom Sheet */}
+      {blockConfirmOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[60] transition-opacity animate-fade-in">
+          <div className="absolute inset-0" onClick={() => setBlockConfirmOpen(false)} />
+          <div className="absolute bottom-0 inset-x-0 bg-[#0c0c0e] rounded-t-[32px] border-t border-white/[0.08] p-6 z-10 space-y-4">
+            <h3 className="font-bold text-base text-ink">Block {isGroup ? "Group" : displayName}?</h3>
+            <p className="text-xs text-ink-mute">
+              {isGroup 
+                ? "You will no longer receive messages from this group, and it will be removed from your inbox."
+                : `You will no longer receive messages or calls from ${displayName}, and this conversation will be removed from your inbox.`
+              }
+            </p>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setBlockConfirmOpen(false)}
+                className="flex-1 py-3 text-xs font-bold bg-white/[0.05] hover:bg-white/10 active:scale-95 transition rounded-xl text-white"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setBlockConfirmOpen(false);
+                  onBlock();
+                }}
+                className="flex-1 py-3 text-xs font-bold bg-red-500 hover:bg-red-600 active:scale-95 transition rounded-xl text-white"
+              >
+                Block
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Report Reason Picker Sheet (from row tap) */}
+      {reportSheetOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[60] transition-opacity animate-fade-in">
+          <div className="absolute inset-0" onClick={() => setReportSheetOpen(false)} />
+          <div className="absolute bottom-0 inset-x-0 bg-[#0c0c0e] rounded-t-[32px] border-t border-white/[0.08] p-5 max-h-[80vh] z-10 space-y-4 text-white">
+            <div className="flex items-center justify-between pb-3 border-b border-white/[0.05]">
+              <h3 className="font-bold text-base text-ink">Report Reason</h3>
+              <button
+                onClick={() => setReportSheetOpen(false)}
+                className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="space-y-1.5">
+              {["Spam", "Harassment or bullying", "Fake account", "Scam or fraud", "Other"].map((reason) => (
+                <button
+                  key={reason}
+                  onClick={() => handleReport(reason)}
+                  className="w-full text-left py-3 px-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-xs font-semibold block text-white"
+                >
+                  {reason}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── EXTRA SUBCOMPONENTS FOR CHAT INFO ────────────────────────────────────────
+
+function ThemePickerSheet({
+  open,
+  onClose,
+  activeThemeId,
+  onSelectTheme,
+}: {
+  open: boolean;
+  onClose: () => void;
+  activeThemeId: string;
+  onSelectTheme: (themeId: string) => void;
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] transition-opacity animate-fade-in">
+      <div className="absolute inset-0" onClick={onClose} />
+      <div className="absolute bottom-0 inset-x-0 bg-[#0c0c0e] rounded-t-[32px] border-t border-white/[0.08] p-5 max-h-[85vh] z-10 flex flex-col text-white">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4 border-b border-white/[0.05] pb-3">
+          <h2 className="font-bold text-base text-ink">Chat Theme</h2>
+          <button
+            onClick={onClose}
+            className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Options grid */}
+        <div className="grid grid-cols-3 gap-3 py-2">
+          {THEMES.map((theme) => {
+            const isSelected = theme.id === activeThemeId;
+            return (
+              <button
+                key={theme.id}
+                onClick={() => {
+                  onSelectTheme(theme.id);
+                  onClose();
+                }}
+                className={`p-3.5 rounded-2xl border flex flex-col items-center gap-2.5 transition active:scale-95 bg-white/[0.02] ${
+                  isSelected ? "border-brand-500 text-brand-300 font-extrabold" : "border-white/[0.06] text-ink-soft hover:bg-white/[0.04]"
+                }`}
+              >
+                <div className={`w-8 h-8 rounded-full ${theme.dotColor} border-2 border-white/20 shadow-md`} />
+                <span className="text-[10px] font-bold text-center leading-tight">{theme.name}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DisappearingPickerSheet({
+  open,
+  onClose,
+  activeMode,
+  onSelectMode,
+}: {
+  open: boolean;
+  onClose: () => void;
+  activeMode: string;
+  onSelectMode: (mode: string) => void;
+}) {
+  if (!open) return null;
+
+  const options = [
+    { id: "off", name: "Off", desc: "Keep all messages in the chat history." },
+    { id: "24h", name: "24 hours", desc: "New messages disappear 24 hours after they are sent." },
+    { id: "7d", name: "7 days", desc: "New messages disappear 7 days after they are sent." },
+    { id: "90d", name: "90 days", desc: "New messages disappear 90 days after they are sent." },
+  ];
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] transition-opacity animate-fade-in">
+      <div className="absolute inset-0" onClick={onClose} />
+      <div className="absolute bottom-0 inset-x-0 bg-[#0c0c0e] rounded-t-[32px] border-t border-white/[0.08] p-5 max-h-[85vh] z-10 flex flex-col text-white">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4 border-b border-white/[0.05] pb-3">
+          <h2 className="font-bold text-base text-ink">Disappearing Messages</h2>
+          <button
+            onClick={onClose}
+            className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Options list */}
+        <div className="space-y-1.5">
+          {options.map((opt) => {
+            const isSelected = opt.id === activeMode;
+            return (
+              <button
+                key={opt.id}
+                onClick={() => {
+                  onSelectMode(opt.id);
+                  onClose();
+                }}
+                className={`w-full text-left p-3.5 rounded-2xl border transition text-white flex items-center justify-between ${
+                  isSelected ? "bg-[#0F8F6F]/10 border-brand-500" : "bg-white/[0.01] border-white/[0.05] hover:bg-white/[0.03]"
+                }`}
+              >
+                <div className="min-w-0 pr-4">
+                  <p className="text-xs font-bold">{opt.name}</p>
+                  <p className="text-[10px] text-ink-mute mt-0.5 leading-normal">{opt.desc}</p>
+                </div>
+                <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                  isSelected ? "border-brand-500 text-brand-300 bg-brand-500/20" : "border-white/20"
+                }`}>
+                  {isSelected && <span className="text-[8px] font-extrabold">✓</span>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NicknamesSheet({
+  open,
+  onClose,
+  peerId,
+  peerRealName,
+  myRealName,
+  groupId,
+  onSaveNicknames,
+}: {
+  open: boolean;
+  onClose: () => void;
+  peerId: string;
+  peerRealName: string;
+  myRealName: string;
+  groupId: string;
+  onSaveNicknames: () => void;
+}) {
+  const [peerNick, setPeerNick] = useState("");
+  const [myNick, setMyNick] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setPeerNick(localStorage.getItem(`chat_nickname_${groupId}_${peerId}`) || "");
+      setMyNick(localStorage.getItem(`chat_nickname_${groupId}_me`) || "");
+    }
+  }, [open, groupId, peerId]);
+
+  if (!open) return null;
+
+  const handleSave = () => {
+    if (peerNick.trim()) {
+      localStorage.setItem(`chat_nickname_${groupId}_${peerId}`, peerNick.trim());
+    } else {
+      localStorage.removeItem(`chat_nickname_${groupId}_${peerId}`);
+    }
+
+    if (myNick.trim()) {
+      localStorage.setItem(`chat_nickname_${groupId}_me`, myNick.trim());
+    } else {
+      localStorage.removeItem(`chat_nickname_${groupId}_me`);
+    }
+
+    onSaveNicknames();
+    onClose();
+  };
+
+  const handleReset = (target: "peer" | "me") => {
+    if (target === "peer") {
+      setPeerNick("");
+      localStorage.removeItem(`chat_nickname_${groupId}_${peerId}`);
+    } else {
+      setMyNick("");
+      localStorage.removeItem(`chat_nickname_${groupId}_me`);
+    }
+    onSaveNicknames();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] transition-opacity animate-fade-in">
+      <div className="absolute inset-0" onClick={onClose} />
+      <div className="absolute bottom-0 inset-x-0 bg-[#0c0c0e] rounded-t-[32px] border-t border-white/[0.08] p-5 max-h-[85vh] z-10 flex flex-col text-white">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4 border-b border-white/[0.05] pb-3">
+          <h2 className="font-bold text-base text-ink">Set Nicknames</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Inputs */}
+        <div className="space-y-4">
+          {/* Peer Row */}
+          <div>
+            <div className="flex justify-between items-center mb-1">
+              <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide">{peerRealName}'s Nickname</label>
+              {localStorage.getItem(`chat_nickname_${groupId}_${peerId}`) && (
+                <button
+                  type="button"
+                  onClick={() => handleReset("peer")}
+                  className="text-[9px] font-bold text-red-400 hover:underline"
+                >
+                  Reset to original
+                </button>
+              )}
+            </div>
+            <input
+              type="text"
+              placeholder={`E.g. Arjun (original: ${peerRealName})`}
+              value={peerNick}
+              onChange={(e) => setPeerNick(e.target.value)}
+              className="input text-xs py-2.5"
+            />
+          </div>
+
+          {/* My Row */}
+          <div>
+            <div className="flex justify-between items-center mb-1">
+              <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide">Your Nickname</label>
+              {localStorage.getItem(`chat_nickname_${groupId}_me`) && (
+                <button
+                  type="button"
+                  onClick={() => handleReset("me")}
+                  className="text-[9px] font-bold text-red-400 hover:underline"
+                >
+                  Reset to original
+                </button>
+              )}
+            </div>
+            <input
+              type="text"
+              placeholder={`E.g. Me (original: ${myRealName})`}
+              value={myNick}
+              onChange={(e) => setMyNick(e.target.value)}
+              className="input text-xs py-2.5"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSave}
+            className="btn-primary w-full py-3.5 mt-4 rounded-xl text-xs font-bold"
+          >
+            Save Nicknames
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PrivacySubScreen({
+  open,
+  onBack,
+  groupId,
+  peerName,
+  isGroup,
+  onBlock,
+}: {
+  open: boolean;
+  onBack: () => void;
+  groupId: string;
+  peerName: string;
+  isGroup: boolean;
+  onBlock: () => void;
+}) {
+  const [readReceipts, setReadReceipts] = useState(true);
+  const [activityStatus, setActivityStatus] = useState(true);
+  const [restricted, setRestricted] = useState(false);
+  const [reportSheetOpen, setReportSheetOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setReadReceipts(localStorage.getItem(`privacy_read_receipts_${groupId}`) !== "off");
+      setActivityStatus(localStorage.getItem(`privacy_activity_status_${groupId}`) !== "off");
+      setRestricted(localStorage.getItem(`privacy_restricted_${groupId}`) === "on");
+    }
+  }, [open, groupId]);
+
+  if (!open) return null;
+
+  const toggleReadReceipts = () => {
+    const nextVal = !readReceipts;
+    setReadReceipts(nextVal);
+    localStorage.setItem(`privacy_read_receipts_${groupId}`, nextVal ? "on" : "off");
+  };
+
+  const toggleActivityStatus = () => {
+    const nextVal = !activityStatus;
+    setActivityStatus(nextVal);
+    localStorage.setItem(`privacy_activity_status_${groupId}`, nextVal ? "on" : "off");
+  };
+
+  const toggleRestricted = () => {
+    const nextVal = !restricted;
+    setRestricted(nextVal);
+    localStorage.setItem(`privacy_restricted_${groupId}`, nextVal ? "on" : "off");
+    showToast(nextVal ? "Account restricted" : "Account unrestricted");
+  };
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(""), 3000);
+  };
+
+  const handleReport = (reason: string) => {
+    setReportSheetOpen(false);
+    showToast(`Reported for "${reason}". Thanks, we'll review this.`);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black flex flex-col text-white animate-fade-in">
+      {/* Header */}
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.07] shrink-0 bg-[#0c0c0e]/95 backdrop-blur-md sticky top-0">
+        <button
+          onClick={onBack}
+          className="w-9 h-9 rounded-full bg-white/[0.05] hover:bg-white/10 active:scale-90 transition flex items-center justify-center shrink-0 text-white"
+        >
+          ←
+        </button>
+        <span className="font-bold text-sm text-ink">Privacy and safety</span>
+      </div>
+
+      <div className="flex-1 overflow-y-auto no-scrollbar p-5 space-y-6">
+        {/* Toggles Group */}
+        <div className="space-y-4">
+          <h3 className="text-[10px] font-bold text-ink-soft uppercase tracking-wide px-1">Permissions</h3>
+          
+          <div className="card p-4 space-y-4 bg-[#0c0c0e]/90 border border-white/[0.07] rounded-3xl">
+            {/* Read Receipts */}
+            <div className="flex items-center justify-between">
+              <div className="pr-4">
+                <p className="text-sm font-bold text-ink">Read receipts</p>
+                <p className="text-[11px] text-ink-mute leading-normal">Let others see when you've read their messages.</p>
+              </div>
+              <button
+                onClick={toggleReadReceipts}
+                className={`w-11 h-6 rounded-full transition-colors relative flex items-center shrink-0 ${
+                  readReceipts ? "bg-[#0F8F6F]" : "bg-white/10"
+                }`}
+              >
+                <span className={`w-5 h-5 bg-white rounded-full absolute transition-transform ${
+                  readReceipts ? "translate-x-5.5" : "translate-x-0.5"
+                }`} />
+              </button>
+            </div>
+
+            {/* Activity Status */}
+            <div className="flex items-center justify-between">
+              <div className="pr-4">
+                <p className="text-sm font-bold text-ink">Show activity status</p>
+                <p className="text-[11px] text-ink-mute leading-normal">Allow accounts you message to see when you're active.</p>
+              </div>
+              <button
+                onClick={toggleActivityStatus}
+                className={`w-11 h-6 rounded-full transition-colors relative flex items-center shrink-0 ${
+                  activityStatus ? "bg-[#0F8F6F]" : "bg-white/10"
+                }`}
+              >
+                <span className={`w-5 h-5 bg-white rounded-full absolute transition-transform ${
+                  activityStatus ? "translate-x-5.5" : "translate-x-0.5"
+                }`} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Account Status Group */}
+        <div className="space-y-4">
+          <h3 className="text-[10px] font-bold text-ink-soft uppercase tracking-wide px-1">Account Actions</h3>
+          
+          <div className="card p-4 space-y-4 bg-[#0c0c0e]/90 border border-white/[0.07] rounded-3xl">
+            {/* Restrict */}
+            <div className="flex items-center justify-between">
+              <div className="flex-1 pr-4">
+                <p className="text-sm font-bold text-ink">Restrict</p>
+                <p className="text-[11px] text-ink-mute leading-normal">Limit their interactions without them knowing. Their chats will move to requests.</p>
+              </div>
+              <button
+                onClick={toggleRestricted}
+                className={`w-11 h-6 rounded-full transition-colors relative flex items-center shrink-0 ${
+                  restricted ? "bg-[#0F8F6F]" : "bg-white/10"
+                }`}
+              >
+                <span className={`w-5 h-5 bg-white rounded-full absolute transition-transform ${
+                  restricted ? "translate-x-5.5" : "translate-x-0.5"
+                }`} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Danger zone */}
+        <div className="space-y-3 pt-4 select-none">
+          <button
+            onClick={onBlock}
+            className="w-full py-4 text-center text-sm font-bold text-red-400 bg-red-500/10 border border-red-500/20 rounded-2xl hover:bg-red-500/15 active:scale-95 transition"
+          >
+            🚫 Block {isGroup ? "Group" : peerName}
+          </button>
+          <button
+            onClick={() => setReportSheetOpen(true)}
+            className="w-full py-4 text-center text-sm font-bold text-white/80 bg-white/[0.05] border border-white/[0.08] rounded-2xl hover:bg-white/[0.08] active:scale-95 transition"
+          >
+            ⚠️ Report Chat
+          </button>
+        </div>
+      </div>
+
+      {/* Toast Alert */}
+      {toastMessage && (
+        <div className="fixed bottom-6 inset-x-5 z-[60] flex justify-center pointer-events-none">
+          <div className="bg-[#1a1a1a] border border-white/10 text-white rounded-full px-5 py-2.5 text-xs font-semibold shadow-2xl animate-fade-in flex items-center gap-2">
+            <span>🛡️</span>
+            <span>{toastMessage}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Report Reason Picker Sheet (inside privacy screen) */}
+      {reportSheetOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[60] transition-opacity animate-fade-in">
+          <div className="absolute inset-0" onClick={() => setReportSheetOpen(false)} />
+          <div className="absolute bottom-0 inset-x-0 bg-[#0c0c0e] rounded-t-[32px] border-t border-white/[0.08] p-5 max-h-[80vh] z-10 space-y-4 text-white">
+            <div className="flex items-center justify-between pb-3 border-b border-white/[0.05]">
+              <h3 className="font-bold text-base text-ink">Report Reason</h3>
+              <button
+                onClick={() => setReportSheetOpen(false)}
+                className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="space-y-1.5">
+              {["Spam", "Harassment or bullying", "Fake account", "Scam or fraud", "Other"].map((reason) => (
+                <button
+                  key={reason}
+                  onClick={() => handleReport(reason)}
+                  className="w-full text-left py-3 px-4 rounded-xl hover:bg-white/[0.03] active:bg-white/[0.05] transition text-xs font-semibold block text-white"
+                >
+                  {reason}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
