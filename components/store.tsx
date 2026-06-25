@@ -65,6 +65,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!loaded.current) return;
+    // Never persist the empty placeholder. A hydration rebuild can fire this
+    // effect with the initial emptyData reference right after a demo seed,
+    // which would clobber the seeded profile in localStorage (demo profile
+    // would then load blank — no name, no OG badges).
+    if (data === emptyData) return;
     try {
       localStorage.setItem(KEY, JSON.stringify(data));
     } catch {
