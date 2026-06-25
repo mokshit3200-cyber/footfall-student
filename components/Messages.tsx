@@ -22,6 +22,7 @@ import {
   SmileIcon,
   UsersIcon,
   ImageIcon,
+  VideoIcon,
   LinkIcon,
   FileIcon,
   BanIcon,
@@ -556,6 +557,32 @@ export default function Messages({
   const [replyToMsg, setReplyToMsg] = useState<any | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // Attachment states
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const clearSelectedFile = () => {
+    setSelectedFile(null);
+    if (filePreviewUrl) {
+      URL.revokeObjectURL(filePreviewUrl);
+      setFilePreviewUrl(null);
+    }
+    setUploadProgress(null);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (filePreviewUrl) {
+      URL.revokeObjectURL(filePreviewUrl);
+    }
+    setSelectedFile(file);
+    setFilePreviewUrl(URL.createObjectURL(file));
+    setUploadProgress(null);
+  };
+
   // Chat Info Polish States
   const [activeThemeBgClass, setActiveThemeBgClass] = useState("bg-brand-500");
   const [disappearingMode, setDisappearingMode] = useState("off");
@@ -663,8 +690,21 @@ export default function Messages({
         localStorage.setItem("demo_requests_seeded", "true");
       }
       
-      const localGroups = JSON.parse(localStorage.getItem("demo_groups") || "[]");
-      
+      // Drop any stale broken groups (e.g. dg-fake-undefined created by an
+      // older build where the peer id wasn't resolved) so they don't show as
+      // empty chats. Self-heals existing users on next load.
+      let localGroups = JSON.parse(localStorage.getItem("demo_groups") || "[]");
+      const cleaned = localGroups.filter((g: any) => g.group_id && !String(g.group_id).includes("undefined") && g.peer?.id);
+      if (cleaned.length !== localGroups.length) {
+        localGroups.forEach((g: any) => {
+          if (!g.peer?.id || String(g.group_id).includes("undefined")) {
+            localStorage.removeItem(`demo_messages_${g.group_id}`);
+          }
+        });
+        localStorage.setItem("demo_groups", JSON.stringify(cleaned));
+        localGroups = cleaned;
+      }
+
       // Merge localGroups into baseConvos (localGroups overrides baseConvos)
       const mergedList = [...baseConvos];
       for (const lg of localGroups) {
@@ -1078,6 +1118,7 @@ export default function Messages({
 
   // ── Open Chat View ─────────────────────────────────────────────────────────
   function handleOpenChat(convo: any) {
+    clearSelectedFile();
     setSelectedConvo(convo);
     setActiveDmId(convo.group_id);
     onChatOpen?.(true);
@@ -1153,9 +1194,13 @@ export default function Messages({
 
   // ── Send Message ───────────────────────────────────────────────────────────
   async function handleSend() {
-    if (!msgInput.trim() || !activeDmId) return;
+    if (!msgInput.trim() && !selectedFile) return;
+    if (!activeDmId) return;
     const content = msgInput.trim();
     setMsgInput("");
+
+    let fileToUpload = selectedFile;
+    clearSelectedFile();
 
     let finalContent = content;
     if (replyToMsg) {
@@ -1167,6 +1212,60 @@ export default function Messages({
     }
 
     if (demo) {
+      if (fileToUpload) {
+        const reader = new FileReader();
+        reader.readAsDataURL(fileToUpload);
+        reader.onload = () => {
+          const base64Url = reader.result as string;
+          let fileType: "image" | "video" | "file" = "file";
+          if (fileToUpload!.type.startsWith("image/")) fileType = "image";
+          else if (fileToUpload!.type.startsWith("video/")) fileType = "video";
+
+          let attachmentContent = "";
+          if (fileType === "image" || fileType === "video") {
+            attachmentContent = finalContent ? `${finalContent}|||${base64Url}` : base64Url;
+          } else {
+            attachmentContent = finalContent 
+              ? `${fileToUpload!.name}|||${base64Url}|||${finalContent}` 
+              : `${fileToUpload!.name}|||${base64Url}`;
+          }
+
+          const fakeMsg: Message = {
+            id: `m-fake-${Date.now()}`,
+            sender_id: "me",
+            content: attachmentContent,
+            created_at: new Date().toISOString(),
+            type: fileType,
+            reactions: [],
+          };
+          
+          const savedMsgs = JSON.parse(localStorage.getItem(`demo_messages_${activeDmId}`) || "[]");
+          const updatedMsgs = [...savedMsgs, fakeMsg];
+          localStorage.setItem(`demo_messages_${activeDmId}`, JSON.stringify(updatedMsgs));
+          setMessages(updatedMsgs);
+          
+          const displayTxt = fileType === "image" ? "📷 Photo" : fileType === "video" ? "🎥 Video" : "📁 File";
+          const updatedConvos = convos.map(c => {
+            if (c.group_id === activeDmId) {
+              return { ...c, last_message: `You: ${displayTxt}`, last_at: new Date().toISOString() };
+            }
+            return c;
+          });
+          setConvos(updatedConvos);
+          
+          const localGroups = JSON.parse(localStorage.getItem("demo_groups") || "[]");
+          localStorage.setItem("demo_groups", JSON.stringify(localGroups.map((g: any) => {
+            if (g.group_id === activeDmId) {
+              return { ...g, last_message: `You: ${displayTxt}`, last_at: new Date().toISOString() };
+            }
+            return g;
+          })));
+
+          setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+        };
+        return;
+      }
+
       const fakeMsg: Message = {
         id: `m-fake-${Date.now()}`,
         sender_id: "me",
@@ -1203,6 +1302,55 @@ export default function Messages({
 
     // Insert to Supabase
     try {
+      if (fileToUpload) {
+        const fileExt = fileToUpload.name.split('.').pop();
+        const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+        const filePath = `${user!.id}/${fileName}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from("chat-attachments")
+          .upload(filePath, fileToUpload, {
+            cacheControl: '3600',
+            upsert: false
+          });
+          
+        if (uploadError) throw uploadError;
+        
+        const { data: { publicUrl } } = supabase.storage
+          .from("chat-attachments")
+          .getPublicUrl(filePath);
+          
+        let fileType: "image" | "video" | "file" = "file";
+        if (fileToUpload.type.startsWith("image/")) fileType = "image";
+        else if (fileToUpload.type.startsWith("video/")) fileType = "video";
+
+        let attachmentContent = "";
+        if (fileType === "image" || fileType === "video") {
+          attachmentContent = finalContent ? `${finalContent}|||${publicUrl}` : publicUrl;
+        } else {
+          attachmentContent = finalContent 
+            ? `${fileToUpload.name}|||${publicUrl}|||${finalContent}` 
+            : `${fileToUpload.name}|||${publicUrl}`;
+        }
+
+        const { data } = await supabase
+          .from("messages")
+          .insert({
+            group_id: activeDmId,
+            sender_id: user!.id,
+            content: attachmentContent,
+            type: fileType,
+          })
+          .select();
+
+        if (data?.[0]) {
+          setMessages(prev => prev.some(m => m.id === data[0].id) ? prev : [...prev, data[0]]);
+          loadConvos();
+          setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+        }
+        return;
+      }
+
       const { data } = await supabase
         .from("messages")
         .insert({
@@ -1966,11 +2114,58 @@ export default function Messages({
             </div>
           )}
 
+          {/* File Selection Preview Bar */}
+          {selectedFile && (
+            <div className="px-4 py-2.5 border-t border-white/[0.06] bg-[#0c0c0e] flex items-center justify-between z-10 shrink-0 select-none animate-fade-in">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                {/* Thumbnail or Icon */}
+                {selectedFile.type.startsWith("image/") && filePreviewUrl ? (
+                  <img src={filePreviewUrl} alt="" className="w-10 h-10 rounded-lg object-cover border border-white/10 shrink-0" />
+                ) : selectedFile.type.startsWith("video/") && filePreviewUrl ? (
+                  <div className="relative w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                    <VideoIcon className="w-5 h-5 text-ink-soft" />
+                  </div>
+                ) : (
+                  <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                    <FileIcon className="w-5 h-5 text-ink-soft" />
+                  </div>
+                )}
+                
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-ink truncate">{selectedFile.name}</p>
+                  <p className="text-[10px] text-ink-mute">
+                    {(selectedFile.size / 1024).toFixed(1)} KB
+                    {uploadProgress !== null && ` • Uploading ${uploadProgress}%`}
+                  </p>
+                </div>
+              </div>
+              
+              <button
+                onClick={clearSelectedFile}
+                disabled={uploadProgress !== null}
+                className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 active:scale-90 transition shrink-0 disabled:opacity-40"
+              >
+                <XIcon className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* Input bar */}
           <div className="px-3.5 pt-2.5 border-t border-white/[0.07] bg-[#0c0c0e]/95 shrink-0 pb-[max(0.625rem,env(safe-area-inset-bottom))]">
             <div className="flex gap-2.5 items-center">
               {/* Attachment */}
-              <button className="w-10 h-10 rounded-full bg-white/[0.04] hover:bg-white/10 flex items-center justify-center shrink-0 text-ink-soft active:scale-95 transition">
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                onChange={handleFileChange}
+                accept="image/*,video/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/zip"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-10 h-10 rounded-full bg-white/[0.04] hover:bg-white/10 flex items-center justify-center shrink-0 text-ink-soft active:scale-95 transition"
+              >
                 <PaperclipIcon className="w-5 h-5" />
               </button>
 
@@ -1990,7 +2185,7 @@ export default function Messages({
                   className="bg-transparent text-sm text-white placeholder-white/40 focus:outline-none flex-grow resize-none max-h-24 py-2 leading-snug"
                 />
 
-                {msgInput.trim() && (
+                {(msgInput.trim() || selectedFile) && (
                   <button
                     onClick={handleSend}
                     className="w-8 h-8 rounded-full bg-brand-500 hover:bg-brand-600 flex items-center justify-center shrink-0 active:scale-95 transition text-white -mr-1.5"
@@ -2451,16 +2646,80 @@ function SwipeMessageBubble({
           </div>
         )}
 
-        {/* Message content — shared vibe renders as a card, else text */}
+        {/* Message content — shared vibe renders as a card, else text/attachments */}
         {(() => {
           const sharedVibe = parseVibeShare(msg.content);
-          return sharedVibe ? (
-            <div className="my-0.5">
-              <SharedVibeCard vibe={sharedVibe} />
-            </div>
-          ) : (
-            <p className="leading-relaxed break-words">{renderContent(msg.content)}</p>
-          );
+          if (sharedVibe) {
+            return (
+              <div className="my-0.5">
+                <SharedVibeCard vibe={sharedVibe} />
+              </div>
+            );
+          }
+
+          if (msg.type === "image") {
+            const parts = msg.content.split("|||");
+            const hasCaption = parts.length > 1;
+            const caption = hasCaption ? parts[0] : "";
+            const url = hasCaption ? parts[1] : parts[0];
+            return (
+              <div className="flex flex-col gap-1.5 max-w-[260px]">
+                <img
+                  src={url}
+                  alt="Shared Image"
+                  className="w-full max-h-60 object-cover rounded-lg border border-white/10 cursor-pointer"
+                  onClick={() => window.open(url, "_blank")}
+                />
+                {caption && <p className="leading-relaxed break-words px-1">{renderContent(caption)}</p>}
+              </div>
+            );
+          }
+
+          if (msg.type === "video") {
+            const parts = msg.content.split("|||");
+            const hasCaption = parts.length > 1;
+            const caption = hasCaption ? parts[0] : "";
+            const url = hasCaption ? parts[1] : parts[0];
+            return (
+              <div className="flex flex-col gap-1.5 max-w-[260px]">
+                <video
+                  src={url}
+                  controls
+                  className="w-full max-h-60 object-cover rounded-lg border border-white/10"
+                />
+                {caption && <p className="leading-relaxed break-words px-1">{renderContent(caption)}</p>}
+              </div>
+            );
+          }
+
+          if (msg.type === "file") {
+            const parts = msg.content.split("|||");
+            const filename = parts[0] || "File Attachment";
+            const url = parts[1] || "";
+            const caption = parts[2] || "";
+            return (
+              <div className="flex flex-col gap-1.5 max-w-[260px]">
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2.5 p-3 rounded-xl bg-black/35 border border-white/10 hover:bg-black/50 transition text-left"
+                >
+                  <div className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                    <FileIcon className="w-5 h-5 text-brand-300" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-ink truncate">{filename}</p>
+                    <p className="text-[10px] text-ink-mute">Download attachment</p>
+                  </div>
+                </a>
+                {caption && <p className="leading-relaxed break-words px-1">{renderContent(caption)}</p>}
+              </div>
+            );
+          }
+
+          // Fallback to text (or default type)
+          return <p className="leading-relaxed break-words">{renderContent(msg.content)}</p>;
         })()}
 
         {/* Timestamp */}
@@ -2799,22 +3058,34 @@ function ChatInfoScreen({
             ))}
           </div>
 
-          {activeTab === "media" && (
-            mediaCount > 0 ? (
+          {activeTab === "media" && (() => {
+            const sharedMedia = messages.filter(m => m.type === "image" || m.type === "video");
+            return sharedMedia.length > 0 ? (
               <div className="grid grid-cols-3 gap-1.5">
-                {[...Array(mediaCount)].map((_, i) => (
-                  <div key={i} className="aspect-square rounded-lg bg-white/[0.05] border border-white/[0.06] flex items-center justify-center text-white/20">
-                    <ImageIcon className="w-5 h-5" />
-                  </div>
-                ))}
+                {sharedMedia.map((m) => {
+                  const parts = m.content.split("|||");
+                  const url = parts.length > 1 ? parts[1] : parts[0];
+                  const isVideo = m.type === "video";
+                  return (
+                    <div key={m.id} className="aspect-square rounded-lg bg-white/[0.03] border border-white/[0.06] overflow-hidden relative group cursor-pointer" onClick={() => window.open(url, "_blank")}>
+                      {isVideo ? (
+                        <div className="w-full h-full flex items-center justify-center bg-black/25">
+                          <VideoIcon className="w-6 h-6 text-white/70" />
+                        </div>
+                      ) : (
+                        <img src={url} alt="" className="w-full h-full object-cover" />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div className="flex flex-col items-center py-10 opacity-50 select-none">
                 <ImageIcon className="w-12 h-12 text-white/10 mb-3" />
                 <p className="text-xs text-ink-mute">No photos or videos yet</p>
               </div>
-            )
-          )}
+            );
+          })()}
 
           {activeTab === "links" && (
             <div className="space-y-2">
@@ -2843,12 +3114,38 @@ function ChatInfoScreen({
             </div>
           )}
 
-          {activeTab === "files" && (
-            <div className="flex flex-col items-center py-10 opacity-50 select-none">
-              <FileIcon className="w-12 h-12 text-white/10 mb-3" />
-              <p className="text-xs text-ink-mute">No files shared yet</p>
-            </div>
-          )}
+          {activeTab === "files" && (() => {
+            const sharedFiles = messages.filter(m => m.type === "file");
+            return sharedFiles.length > 0 ? (
+              <div className="space-y-2">
+                {sharedFiles.map((m) => {
+                  const parts = m.content.split("|||");
+                  const filename = parts[0] || "Shared File";
+                  const url = parts[1] || "";
+                  return (
+                    <a
+                      key={m.id}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2.5 p-3 rounded-xl bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.05] transition text-xs font-semibold"
+                    >
+                      <FileIcon className="w-5 h-5 text-brand-300 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-ink truncate font-bold">{filename}</p>
+                        <p className="text-brand-300 truncate text-[10px] mt-0.5">Click to view/download</p>
+                      </div>
+                    </a>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center py-10 opacity-50 select-none">
+                <FileIcon className="w-12 h-12 text-white/10 mb-3" />
+                <p className="text-xs text-ink-mute">No files shared yet</p>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Danger zone */}
