@@ -3282,15 +3282,13 @@ function SwipeMessageBubble({
           return <p className="leading-relaxed break-words">{renderContent(msg.content)}</p>;
         })()}
 
-        {/* Timestamp */}
-        <span className="text-[9.5px] text-white/50 mt-1 text-right select-none flex items-center justify-end gap-1 whitespace-nowrap">
-          {disappearingMode && disappearingMode !== "off" && (
-            <ClockIcon className="w-3 h-3 opacity-60 text-white shrink-0" />
-          )}
-          <span>
-            {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+        {/* No inline time — swipe the chat left to reveal timestamps (Instagram-style).
+            Only the disappearing-message indicator stays visible. */}
+        {disappearingMode && disappearingMode !== "off" && (
+          <span className="mt-1 flex items-center justify-end select-none">
+            <ClockIcon className="w-3 h-3 opacity-50 text-white shrink-0" />
           </span>
-        </span>
+        )}
 
         {/* Render reactions on bottom edge */}
         {msg.reactions && msg.reactions.length > 0 && (() => {
