@@ -55,11 +55,11 @@ export default function PWA() {
   return (
     <div className="fixed bottom-[88px] inset-x-0 z-50 mx-auto max-w-[440px] px-4 animate-fade-up">
       <div className="card p-3.5 flex items-center gap-3 shadow-lg">
-        <div className="w-10 h-10 rounded-xl brand-gradient flex items-center justify-center shrink-0">
-          <span className="text-white font-bold">F</span>
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ring-1 ring-white/10 overflow-hidden" style={{ backgroundColor: "#1A1D1B" }}>
+          <img src="/brand/mark-white.png" alt="Cmpus" className="w-7 h-7 object-contain" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-ink">Install Footfall</p>
+          <p className="text-sm font-bold text-ink">Install Cmpus</p>
           <p className="text-[11px] text-ink-mute">
             Add to your home screen for one-tap access
           </p>
@@ -76,4 +76,17 @@ export default function PWA() {
       </div>
     </div>
   );
+}
+
+// Push notification stubs — real VAPID key not yet configured.
+// When ready: generate a keypair with web-push, set NEXT_PUBLIC_VAPID_PUBLIC_KEY env var,
+// and replace these stubs with the real subscription logic.
+
+export async function subscribeUserToPush(_userId: string): Promise<boolean> {
+  console.warn("Push notifications not yet configured (VAPID key missing).");
+  return false;
+}
+
+export async function unsubscribeUserFromPush(_userId: string): Promise<void> {
+  // no-op until push is configured
 }

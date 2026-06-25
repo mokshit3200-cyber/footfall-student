@@ -22,7 +22,7 @@ const CONFIG = {
       "Student sellers: merch, food, products",
       "Freelancers: design, photos, tutoring",
       "Local shops & cafés near you",
-      "Pay safely through Footfall",
+      "Pay safely through Cmpus",
     ],
   },
 };

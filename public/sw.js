@@ -1,5 +1,5 @@
 /* Cmpus — minimal offline service worker */
-const CACHE = "cmpus-v2";
+const CACHE = "cmpus-v3";
 const PRECACHE = ["/", "/manifest.webmanifest", "/icon-192.png", "/brand/mark-white.png"];
 
 self.addEventListener("install", (event) => {

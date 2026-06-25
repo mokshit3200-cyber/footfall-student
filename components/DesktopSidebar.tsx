@@ -30,12 +30,12 @@ export default function DesktopSidebar({
     <aside className="hidden md:flex md:flex-col md:w-[244px] md:shrink-0 md:h-screen md:sticky md:top-0 border-r border-white/10 bg-[#0e0e0e] px-4 py-6">
       {/* brand */}
       <div className="flex items-center gap-2.5 px-2 mb-8">
-        <div className="w-9 h-9 rounded-xl brand-gradient flex items-center justify-center shadow-md shadow-brand-500/20">
-          <span className="text-white font-bold">F</span>
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-md shadow-black/30 ring-1 ring-white/10 overflow-hidden" style={{ backgroundColor: "#1A1D1B" }}>
+          <img src="/brand/mark-white.png" alt="Cmpus" className="w-6 h-6 object-contain" />
         </div>
         <div className="leading-tight">
-          <p className="text-[15px] font-bold text-ink">Footfall</p>
-          <p className="text-[11px] text-ink-mute">Student</p>
+          <p className="text-[15px] font-bold text-ink">Cmpus</p>
+          <p className="text-[11px] text-ink-mute">Your campus, sorted</p>
         </div>
       </div>
 

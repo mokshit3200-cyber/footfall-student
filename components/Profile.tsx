@@ -262,7 +262,10 @@ export default function Profile({
       <div className="mb-4 pl-1 text-left">
         <h1 className="text-base font-bold text-ink leading-tight">{profile.name || "Student Name"}</h1>
         {profile.username && (
-          <p className="text-xs text-brand-300 font-medium mt-0.5">@{profile.username}</p>
+          <p className="text-xs text-brand-300 font-medium mt-0.5 flex items-center gap-2">
+            @{profile.username}
+            <span className="px-1.5 py-0.5 rounded-full bg-brand-500/20 text-brand-300 text-[9px] font-black tracking-widest uppercase border border-brand-500/30">BETA</span>
+          </p>
         )}
         <p className="text-xs text-ink-soft mt-1.5 flex items-center gap-1.5 font-semibold">
           <span>🎓</span>
@@ -510,7 +513,10 @@ export default function Profile({
           <div className="card divide-y divide-white/[0.04] shadow-sm">
             <div className="flex items-center justify-between p-3.5">
               <span className="text-sm text-ink-soft font-semibold">App version</span>
-              <span className="text-xs text-ink-mute font-bold">Cmpus v1.0</span>
+              <span className="text-xs text-ink-mute font-bold flex items-center gap-1.5">
+                Cmpus v1.0
+                <span className="px-1.5 py-0.5 rounded-full bg-brand-500/20 text-brand-300 text-[8px] font-black tracking-widest uppercase border border-brand-500/30">BETA</span>
+              </span>
             </div>
             <a href="/terms" className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]">
               <span className="text-sm text-ink-soft font-semibold">Terms of Service</span>
@@ -553,8 +559,15 @@ export default function Profile({
         </div>
       </div>
 
-      <p className="text-center text-ink-mute text-[10px] mt-2 mb-8">
+      <p className="text-center text-ink-mute text-[10px] mt-2 mb-1">
         Powered by <span className="font-semibold text-brand-500">Footfall &amp; Co</span>
+      </p>
+      <p className="text-center text-ink-mute/60 text-[9px] mb-8 tracking-wide">
+        <span className="font-bold text-brand-400">BETA</span>
+        {" · "}
+        {process.env.NEXT_PUBLIC_BUILD_TIME
+          ? `Build ${new Date(process.env.NEXT_PUBLIC_BUILD_TIME).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`
+          : "Build —"}
       </p>
 
       {/* SHEETS & DIALOGS */}
@@ -1905,6 +1918,11 @@ function RemindersSheet({
         <button onClick={save} className="btn-primary w-full py-2.5">
           Save Settings
         </button>
+        <p className="text-center text-[10px] text-ink-mute mt-4 opacity-60 tracking-wide">
+          BETA · Build {process.env.NEXT_PUBLIC_BUILD_TIME
+            ? new Date(process.env.NEXT_PUBLIC_BUILD_TIME).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
+            : "—"}
+        </p>
       </div>
     </Sheet>
   );

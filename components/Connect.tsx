@@ -26,7 +26,8 @@ import {
   SparklesIcon,
   BellIcon,
   CameraIcon,
-  PlusIcon
+  PlusIcon,
+  ChevronRight
 } from "./icons";
 
 // Helper to compute expires_at timestamp
@@ -225,6 +226,10 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
   const [dmInboxConvos, setDmInboxConvos] = useState<any[]>([]);
   const [dmInboxLoading, setDmInboxLoading] = useState(false);
   const [dmUnreadCount, setDmUnreadCount] = useState(0);
+
+  // Follow requests
+  const [followRequests, setFollowRequests] = useState<any[]>([]);
+  const [requestsSheetOpen, setRequestsSheetOpen] = useState(false);
 
   // Bookmarks
   const [bookmarkedSignals, setBookmarkedSignals] = useState<Set<string>>(new Set());
@@ -477,6 +482,21 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
     }
   }
 
+  async function acceptRequest(followerId: string) {
+    if (!demo) {
+      await supabase.from("follows").update({ status: "accepted" }).eq("follower_id", followerId).eq("following_id", user!.id);
+    }
+    setFollowRequests(prev => prev.filter(r => r.follower_id !== followerId));
+    showToast("Request accepted");
+  }
+
+  async function declineRequest(followerId: string) {
+    if (!demo) {
+      await supabase.from("follows").delete().eq("follower_id", followerId).eq("following_id", user!.id);
+    }
+    setFollowRequests(prev => prev.filter(r => r.follower_id !== followerId));
+  }
+
   // Lock reach selector to campus if free intent is selected
   useEffect(() => {
     if (broadcastIntent === "free") {
@@ -517,6 +537,22 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
     // Demo DM inbox
     setDmUnreadCount(2);
   }, [demo]);
+
+  // ── Load follow requests ─────────────────────────────────
+  useEffect(() => {
+    if (demo) {
+      setFollowRequests(DEMO_REQUESTS.map(r => ({ follower_id: r.follower_id, profiles: r.profiles })));
+      return;
+    }
+    if (!user) return;
+    supabase.from("follows")
+      .select("follower_id, profiles!follows_follower_id_fkey(id, name, username, avatar_url, college, course, year, verified)")
+      .eq("following_id", user.id)
+      .eq("status", "pending")
+      .then(({ data }) => {
+        setFollowRequests((data ?? []).map((r: any) => ({ follower_id: r.follower_id, profiles: r.profiles })));
+      });
+  }, [user, demo]);
 
   // ── Load stories bar ───────────────────────────────────────
   useEffect(() => {
@@ -1194,6 +1230,37 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
     );
   }
 
+  const visibleSignals = useMemo(() => {
+    let list = [...signals];
+
+    // Filter out expired signals
+    list = list.filter((sig: any) => !sig.expires_at || new Date(sig.expires_at).getTime() > Date.now());
+
+    // 1. Filter by scope
+    if (scope === "campus") {
+      if (demo) {
+        list = list.filter((s: any) => {
+          const p = s.profiles ?? s;
+          return p.college === "IIIT Hyderabad";
+        });
+      } else {
+        list = list.filter((s: any) => {
+          const p = s.profiles ?? s;
+          return p.college === profile?.college;
+        });
+      }
+    } else {
+      list = list.filter((s: any) => s.reach === "all");
+    }
+
+    // 2. Filter by intent category tabs
+    if (activeFilter !== "all") {
+      list = list.filter((s: any) => s.intent === activeFilter);
+    }
+
+    return list;
+  }, [signals, scope, activeFilter, profile, demo, ticker]);
+
   // ── Profile sheet ────────────────────────────────────────
   if (viewProfile) {
     const p = viewProfile;
@@ -1336,37 +1403,6 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
     );
   }
 
-  const visibleSignals = useMemo(() => {
-    let list = [...signals];
-    
-    // Filter out expired signals
-    list = list.filter((sig: any) => !sig.expires_at || new Date(sig.expires_at).getTime() > Date.now());
-
-    // 1. Filter by scope
-    if (scope === "campus") {
-      if (demo) {
-        list = list.filter((s: any) => {
-          const p = s.profiles ?? s;
-          return p.college === "IIIT Hyderabad";
-        });
-      } else {
-        list = list.filter((s: any) => {
-          const p = s.profiles ?? s;
-          return p.college === profile?.college;
-        });
-      }
-    } else {
-      list = list.filter((s: any) => s.reach === "all");
-    }
-    
-    // 2. Filter by intent category tabs
-    if (activeFilter !== "all") {
-      list = list.filter((s: any) => s.intent === activeFilter);
-    }
-    
-    return list;
-  }, [signals, scope, activeFilter, profile, demo, ticker]);
-
   const showingSearch = search.trim().length > 0;
 
   return (
@@ -1444,6 +1480,28 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
         </div>
       ) : (
         <div className="px-5 animate-fade-in">
+          {/* ── Follow Requests Banner ── */}
+          {followRequests.length > 0 && (
+            <button
+              onClick={() => setRequestsSheetOpen(true)}
+              className="w-full mb-4 flex items-center justify-between p-4 rounded-3xl bg-brand-500/[0.06] border border-brand-500/20 hover:border-brand-500/35 active:scale-[0.98] transition-all"
+            >
+              <div className="flex items-center gap-3">
+                <div className="relative w-9 h-9 rounded-full bg-brand-500/20 flex items-center justify-center shrink-0">
+                  <BellIcon className="w-4 h-4 text-brand-400" />
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center px-1">{followRequests.length}</span>
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-bold text-ink">{followRequests.length} Follow Request{followRequests.length > 1 ? "s" : ""}</p>
+                  <p className="text-[11px] text-ink-mute truncate max-w-[200px]">
+                    {followRequests[0]?.profiles?.name}{followRequests.length > 1 ? ` and ${followRequests.length - 1} others want to follow you` : " wants to follow you"}
+                  </p>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-ink-mute shrink-0" />
+            </button>
+          )}
+
           {/* ── Stories Bar ── */}
           <div className="mb-5 -mx-5 px-5">
             <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1 select-none">
@@ -1652,7 +1710,7 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
                 const countdown = sig.expires_at ? getCountdown(sig.expires_at) : null;
 
                 return (
-                  <div key={sig.id} onClick={() => openViewProfile(sig)}
+                  <div key={sig.id} onClick={() => openViewProfile({ ...sig.profiles, id: sig.user_id, content: sig.content, created_at: sig.created_at })}
                     className={`rounded-3xl border p-5 cursor-pointer transition-all active:scale-[0.98] ${
                       isCampus
                         ? "bg-brand-500/[0.04] border-brand-500/15 hover:border-brand-500/25"
@@ -1965,6 +2023,69 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
               className="hidden"
               onChange={handleStoryUpload}
             />
+          </div>
+        </div>
+      )}
+
+      {/* ── Follow Requests Sheet ── */}
+      {requestsSheetOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity animate-fade-in flex items-end">
+          <div className="absolute inset-0" onClick={() => setRequestsSheetOpen(false)} />
+          <div className="relative w-full bg-[#0c0c0e] rounded-t-[32px] border-t border-white/[0.08] p-5 pb-8 max-h-[80vh] overflow-y-auto z-10 animate-slide-up">
+            <div className="flex items-center justify-between mb-5 border-b border-white/[0.05] pb-3 select-none">
+              <h2 className="font-bold text-base text-ink flex items-center gap-2">
+                <BellIcon className="w-5 h-5 text-brand-400" />
+                <span>Follow Requests</span>
+              </h2>
+              <button onClick={() => setRequestsSheetOpen(false)} className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-95 transition flex items-center justify-center text-ink-soft hover:text-white">
+                <XIcon className="w-4 h-4" />
+              </button>
+            </div>
+            {followRequests.length === 0 ? (
+              <div className="text-center py-12 opacity-60">
+                <CheckIcon className="w-10 h-10 text-white/10 mx-auto mb-3" />
+                <p className="text-sm font-bold text-ink">All caught up</p>
+                <p className="text-xs text-ink-mute">No pending follow requests</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {followRequests.map((req: any) => {
+                  const p = req.profiles;
+                  if (!p) return null;
+                  const initials = (p.name || "?").trim().split(/\s+/).map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+                  return (
+                    <div key={req.follower_id} className="flex items-center gap-3 p-3 bg-white/[0.02] border border-white/[0.05] rounded-2xl">
+                      <button
+                        onClick={() => { setRequestsSheetOpen(false); openViewProfile({ ...p, id: p.id }); }}
+                        className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                      >
+                        {p.avatar_url ? (
+                          <img src={p.avatar_url} alt={p.name} className="w-10 h-10 rounded-full object-cover border border-white/10 shrink-0" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30 flex items-center justify-center text-xs font-bold shrink-0">{initials}</div>
+                        )}
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1">
+                            <p className="text-sm font-bold text-ink truncate">{p.name}</p>
+                            {p.verified && <span className="inline-flex items-center justify-center w-3.5 h-3.5 bg-brand-500 text-white rounded-full text-[7px]"><CheckIcon className="w-2.5 h-2.5" /></span>}
+                          </div>
+                          {p.username && <p className="text-[11px] text-brand-300 truncate">@{p.username}</p>}
+                          {p.college && <p className="text-[11px] text-ink-mute truncate">{p.college}</p>}
+                        </div>
+                      </button>
+                      <div className="flex gap-2 shrink-0">
+                        <button onClick={() => acceptRequest(req.follower_id)} className="px-3 py-1.5 rounded-xl bg-brand-500 text-white text-[11px] font-bold active:scale-95 transition">
+                          Accept
+                        </button>
+                        <button onClick={() => declineRequest(req.follower_id)} className="px-3 py-1.5 rounded-xl bg-white/[0.06] text-ink-soft border border-white/[0.08] text-[11px] font-bold active:scale-95 transition">
+                          Decline
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}

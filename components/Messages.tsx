@@ -47,6 +47,8 @@ import {
   HandRaiseIcon
 } from "./icons";
 
+import { playChime } from "./ui";
+
 // ── TYPES & INTERFACES ────────────────────────────────────────────────────────
 interface Peer {
   id: string;
@@ -683,6 +685,88 @@ export default function Messages({
     loadLiveSignals();
   }, [user]);
 
+  // Global Realtime background inbox messages listener
+  useEffect(() => {
+    if (demo || !user) return;
+
+    const channel = supabase
+      .channel("global-inbox-inserts")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+        },
+        (payload) => {
+          const newMsg = payload.new;
+          if (newMsg.sender_id === user.id) return;
+
+          setConvos((prevConvos) => {
+            const hasGroup = prevConvos.some(c => c.group_id === newMsg.group_id);
+            if (!hasGroup) {
+              // Refresh full inbox list for new chats or invites
+              loadConvos();
+              return prevConvos;
+            }
+
+            // Skip updating unread counts if we are actively viewing this thread
+            if (activeDmId === newMsg.group_id) return prevConvos;
+
+            // Play background notification sound
+            playChime();
+
+            return prevConvos.map((c) => {
+              if (c.group_id === newMsg.group_id) {
+                return {
+                  ...c,
+                  last_message: newMsg.content,
+                  last_at: newMsg.created_at,
+                  unread: (c.unread || 0) + 1,
+                };
+              }
+              return c;
+            }).sort((a, b) => new Date(b.last_at).getTime() - new Date(a.last_at).getTime());
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, activeDmId, demo]);
+
+  // Synchronize activeDmId with URL query parameters for deep linking
+  useEffect(() => {
+    if (convos.length > 0 && !activeDmId) {
+      const params = new URLSearchParams(window.location.search);
+      const chatParam = params.get("chat");
+      if (chatParam) {
+        const found = convos.find(c => c.group_id === chatParam);
+        if (found) {
+          setActiveDmId(found.group_id);
+          setActivePeer(found.peer || null);
+          setActiveGroupMembers(found.members || []);
+          onChatOpen?.(true);
+        }
+      }
+    }
+  }, [convos]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (activeDmId) {
+      params.set("chat", activeDmId);
+    } else {
+      params.delete("chat");
+    }
+    const newUrl = `${window.location.pathname}?${params.toString()}`;
+    if (window.location.search !== `?${params.toString()}`) {
+      window.history.replaceState(null, "", newUrl);
+    }
+  }, [activeDmId]);
+
   async function loadConvos() {
     setLoading(true);
     try {
@@ -700,7 +784,7 @@ export default function Messages({
 
       const { data: allMembers } = await supabase
         .from("group_members")
-        .select("group_id, user_id, role, joined_at, profiles(id, name, username, avatar_url, verified, college, course, year, bio, links)")
+        .select("group_id, user_id, role, joined_at, nickname, profiles(id, name, username, avatar_url, verified, college, course, year, bio, links)")
         .in("group_id", groupIds);
 
       const { data: lastMsgs } = await supabase
@@ -711,8 +795,37 @@ export default function Messages({
 
       const { data: groupsInfo } = await supabase
         .from("groups")
-        .select("id, name, type, avatar, request_status, requested_by, origin_signal_id, signals(content)")
+        .select("id, name, type, avatar, request_status, requested_by, origin_signal_id, theme, disappearing_mode, signals(content)")
         .in("id", groupIds);
+
+      // Fetch user's blocked users
+      let blockedUserIds: string[] = [];
+      if (!isDemo() && user) {
+        const { data: blocksData } = await supabase
+          .from("blocks")
+          .select("blocked_id")
+          .eq("blocker_id", user.id);
+        if (blocksData) {
+          blockedUserIds = blocksData.map(b => b.blocked_id);
+        }
+      }
+
+      // Populate local nicknames cache
+      for (const m of allMembers ?? []) {
+        if (m.nickname) {
+          localStorage.setItem(`chat_nickname_${m.group_id}_${m.user_id}`, m.nickname);
+        }
+      }
+
+      // Populate local themes and disappearing mode cache
+      for (const g of groupsInfo ?? []) {
+        if (g.theme) {
+          localStorage.setItem(`chat_theme_${g.id}`, g.theme);
+        }
+        if (g.disappearing_mode) {
+          localStorage.setItem(`chat_disappearing_${g.id}`, g.disappearing_mode);
+        }
+      }
 
       const lastByGroup: Record<string, any> = {};
       for (const m of lastMsgs ?? []) {
@@ -727,6 +840,9 @@ export default function Messages({
         if (!membersByGroup[m.group_id]) membersByGroup[m.group_id] = [];
         membersByGroup[m.group_id].push(m);
       }
+
+      const blockedList = JSON.parse(localStorage.getItem("blocked_groups") || "[]");
+      let blockedUpdated = false;
 
       const list = Object.keys(membersByGroup).map((gid) => {
         const groupInfo = groupsMap[gid];
@@ -751,6 +867,14 @@ export default function Messages({
           };
         } else {
           const peer = groupMembers.find(m => m.user_id !== user!.id)?.profiles;
+          
+          if (peer && blockedUserIds.includes(peer.id)) {
+            if (!blockedList.includes(gid)) {
+              blockedList.push(gid);
+              blockedUpdated = true;
+            }
+          }
+
           return {
             group_id: gid,
             type: "dm",
@@ -765,6 +889,10 @@ export default function Messages({
           };
         }
       }).sort((a: any, b: any) => new Date(b.last_at).getTime() - new Date(a.last_at).getTime());
+
+      if (blockedUpdated) {
+        localStorage.setItem("blocked_groups", JSON.stringify(blockedList));
+      }
 
       setConvos(list);
     } catch (err) {
@@ -1637,7 +1765,7 @@ export default function Messages({
 
       {/* SCREEN 2 — CHAT SCREEN */}
       {activeDmId && (
-        <div className="flex flex-col h-screen max-h-screen bg-black text-white overflow-hidden">
+        <div className="fixed inset-0 z-50 flex flex-col bg-black text-white overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.07] shrink-0 bg-[#0c0c0e]/90 backdrop-blur-md sticky top-0 z-40 select-none">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -1713,7 +1841,7 @@ export default function Messages({
 
           {/* Messages area */}
           <div
-            style={{ touchAction: "pan-y" }}
+            style={{ touchAction: "pan-y", overscrollBehavior: "contain" }}
             className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-4 bg-black flex flex-col"
           >
             {disappearingMode !== "off" && (
@@ -1790,14 +1918,21 @@ export default function Messages({
                         )}
 
                         {/* Interactive Swipe components */}
-                        <SwipeMessageBubble
-                          msg={{ ...m, reply_to: replyQuote, content: cleanContent }}
-                          mine={mine}
-                          themeBgClass={activeThemeBgClass}
-                          disappearingMode={disappearingMode}
-                          onReply={() => setReplyToMsg(m)}
-                          onReact={onMsgReact}
-                        />
+                        <div className="flex flex-col items-end">
+                          <SwipeMessageBubble
+                            msg={{ ...m, reply_to: replyQuote, content: cleanContent }}
+                            mine={mine}
+                            themeBgClass={activeThemeBgClass}
+                            disappearingMode={disappearingMode}
+                            onReply={() => setReplyToMsg(m)}
+                            onReact={onMsgReact}
+                          />
+                          {mine && idx === messages.length - 1 && (
+                            <span className="text-[9px] text-brand-300 font-bold mt-1 mr-1 select-none animate-fade-in">
+                              Seen
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -1891,17 +2026,38 @@ export default function Messages({
             
             setNicknameTrigger(prev => prev + 1);
           }}
-          onBlock={() => {
+          onBlock={async () => {
             const blocked = JSON.parse(localStorage.getItem("blocked_groups") || "[]");
             if (!blocked.includes(activeDmId)) {
               blocked.push(activeDmId);
               localStorage.setItem("blocked_groups", JSON.stringify(blocked));
             }
+
+            const currentConvo = convos.find(c => c.group_id === activeDmId);
+            if (!isDemo() && user && activeDmId) {
+              if (currentConvo?.type === "group") {
+                // Leave group
+                await supabase
+                  .from("group_members")
+                  .delete()
+                  .eq("group_id", activeDmId)
+                  .eq("user_id", user.id);
+              } else {
+                // Block peer
+                if (activePeer) {
+                  await supabase
+                    .from("blocks")
+                    .insert({ blocker_id: user.id, blocked_id: activePeer.id });
+                }
+              }
+            }
+
             setChatInfoOpen(false);
             setActiveDmId(null);
             setActivePeer(null);
             onChatOpen?.(false);
             setConvos(prev => prev.filter(c => c.group_id !== activeDmId));
+            loadConvos();
           }}
         />
       )}
@@ -2337,7 +2493,7 @@ function ChatInfoScreen({
   onUpdateSettings: () => void;
   onBlock: () => void;
 }) {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const [activeTab, setActiveTab] = useState<"media" | "links" | "files">("media");
   const [muted, setMuted] = useState(false);
 
@@ -2754,6 +2910,7 @@ function ChatInfoScreen({
         peerId={peer?.id || "peer"}
         peerRealName={peer?.name || "Student"}
         myRealName={profile?.name || "You"}
+        myId={user?.id || "me"}
         groupId={convo?.group_id || ""}
         onSaveNicknames={() => {
           onUpdateSettings();
@@ -2970,6 +3127,7 @@ function NicknamesSheet({
   peerId,
   peerRealName,
   myRealName,
+  myId,
   groupId,
   onSaveNicknames,
 }: {
@@ -2978,46 +3136,80 @@ function NicknamesSheet({
   peerId: string;
   peerRealName: string;
   myRealName: string;
+  myId: string;
   groupId: string;
   onSaveNicknames: () => void;
 }) {
   const [peerNick, setPeerNick] = useState("");
   const [myNick, setMyNick] = useState("");
+  const { user } = useAuth();
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
       setPeerNick(localStorage.getItem(`chat_nickname_${groupId}_${peerId}`) || "");
-      setMyNick(localStorage.getItem(`chat_nickname_${groupId}_me`) || "");
+      setMyNick(localStorage.getItem(`chat_nickname_${groupId}_${myId}`) || "");
     }
-  }, [open, groupId, peerId]);
+  }, [open, groupId, peerId, myId]);
 
   if (!open) return null;
 
-  const handleSave = () => {
-    if (peerNick.trim()) {
-      localStorage.setItem(`chat_nickname_${groupId}_${peerId}`, peerNick.trim());
-    } else {
-      localStorage.removeItem(`chat_nickname_${groupId}_${peerId}`);
-    }
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      if (peerNick.trim()) {
+        localStorage.setItem(`chat_nickname_${groupId}_${peerId}`, peerNick.trim());
+      } else {
+        localStorage.removeItem(`chat_nickname_${groupId}_${peerId}`);
+      }
 
-    if (myNick.trim()) {
-      localStorage.setItem(`chat_nickname_${groupId}_me`, myNick.trim());
-    } else {
-      localStorage.removeItem(`chat_nickname_${groupId}_me`);
-    }
+      if (myNick.trim()) {
+        localStorage.setItem(`chat_nickname_${groupId}_${myId}`, myNick.trim());
+      } else {
+        localStorage.removeItem(`chat_nickname_${groupId}_${myId}`);
+      }
 
-    onSaveNicknames();
-    onClose();
+      if (!isDemo() && user) {
+        await Promise.all([
+          supabase
+            .from("group_members")
+            .update({ nickname: peerNick.trim() || null })
+            .eq("group_id", groupId)
+            .eq("user_id", peerId),
+          supabase
+            .from("group_members")
+            .update({ nickname: myNick.trim() || null })
+            .eq("group_id", groupId)
+            .eq("user_id", myId)
+        ]);
+      }
+
+      onSaveNicknames();
+      onClose();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleReset = (target: "peer" | "me") => {
+  const handleReset = async (target: "peer" | "me") => {
+    const targetId = target === "peer" ? peerId : myId;
     if (target === "peer") {
       setPeerNick("");
-      localStorage.removeItem(`chat_nickname_${groupId}_${peerId}`);
     } else {
       setMyNick("");
-      localStorage.removeItem(`chat_nickname_${groupId}_me`);
     }
+    localStorage.removeItem(`chat_nickname_${groupId}_${targetId}`);
+
+    if (!isDemo() && user) {
+      await supabase
+        .from("group_members")
+        .update({ nickname: null })
+        .eq("group_id", groupId)
+        .eq("user_id", targetId);
+    }
+
     onSaveNicknames();
   };
 
@@ -3066,7 +3258,7 @@ function NicknamesSheet({
           <div>
             <div className="flex justify-between items-center mb-1">
               <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide">Your Nickname</label>
-              {localStorage.getItem(`chat_nickname_${groupId}_me`) && (
+              {localStorage.getItem(`chat_nickname_${groupId}_${myId}`) && (
                 <button
                   type="button"
                   onClick={() => handleReset("me")}
@@ -3088,9 +3280,10 @@ function NicknamesSheet({
           <button
             type="button"
             onClick={handleSave}
-            className="btn-primary w-full py-3.5 mt-4 rounded-xl text-xs font-bold"
+            disabled={saving}
+            className="btn-primary w-full py-3.5 mt-4 rounded-xl text-xs font-bold disabled:opacity-40"
           >
-            Save Nicknames
+            {saving ? "Saving..." : "Save Nicknames"}
           </button>
         </div>
       </div>
