@@ -1,5 +1,5 @@
 /* Cmpus — minimal offline service worker */
-const CACHE = "cmpus-v3";
+const CACHE = "cmpus-v4";
 const PRECACHE = ["/", "/manifest.webmanifest", "/icon-192.png", "/brand/mark-white.png"];
 
 self.addEventListener("install", (event) => {
@@ -37,21 +37,43 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Cache-first for same-origin static assets.
   const url = new URL(request.url);
-  if (url.origin === self.location.origin) {
+  if (url.origin !== self.location.origin) return;
+
+  // App code (JS/CSS, incl. Next.js build chunks): NETWORK-FIRST so a new
+  // deploy is always picked up immediately. Cache is only an offline fallback.
+  // Cache-first here caused version skew — fresh HTML loading stale chunks —
+  // which surfaced as "Application error: a client-side exception has occurred".
+  const isAppCode =
+    url.pathname.startsWith("/_next/") ||
+    url.pathname.endsWith(".js") ||
+    url.pathname.endsWith(".css");
+
+  if (isAppCode) {
     event.respondWith(
-      caches.match(request).then(
-        (cached) =>
-          cached ||
-          fetch(request).then((res) => {
-            const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(request, copy));
-            return res;
-          })
-      )
+      fetch(request)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(request, copy));
+          return res;
+        })
+        .catch(() => caches.match(request))
     );
+    return;
   }
+
+  // Other static assets (images, fonts, manifest): cache-first is safe.
+  event.respondWith(
+    caches.match(request).then(
+      (cached) =>
+        cached ||
+        fetch(request).then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(request, copy));
+          return res;
+        })
+    )
+  );
 });
 
 self.addEventListener("push", (event) => {
