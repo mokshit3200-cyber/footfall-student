@@ -86,6 +86,7 @@ interface Message {
   created_at: string;
   reactions?: { emoji: string; from: string }[];
   reply_to?: { sender_name: string; content: string } | null;
+  type?: string;
 }
 
 // ── THEME CONSTANTS ──────────────────────────────────────────────────────────
@@ -152,6 +153,19 @@ const DEMO_CONVOS = [
     last_at: new Date(Date.now() - 86400000).toISOString(), 
     unread: 0 
   },
+  { 
+    group_id: "dg4", 
+    type: "group", 
+    group_name: "OG Lounge - IIIT Hyderabad", 
+    members: [
+      { id: "dp1", name: "Arjun Sharma", username: "arjun_s", avatar_url: null, is_ambassador: true, ambassador_role: "Event Manager" },
+      { id: "dp2", name: "Priya Nair", username: "priya.n", avatar_url: null }
+    ], 
+    last_message: "Arjun: We are launching the feature voting round today.", 
+    last_at: new Date(Date.now() - 1200000).toISOString(), 
+    unread: 1,
+    is_announcement: true,
+  },
 ] as const;
 
 const DEMO_MESSAGES = {
@@ -168,6 +182,11 @@ const DEMO_MESSAGES = {
   ],
   dg3: [
     { id: "m8", sender_id: "me", content: "chai run tomorrow?", created_at: new Date(Date.now() - 86400000).toISOString(), reactions: [] },
+  ],
+  dg4: [
+    { id: "m-og-1", sender_id: "dp1", content: "Hey everyone! Welcome to the IIIT Hyderabad OG Lounge. 🎖️ Only Cmpus Crew can post announcements here.", created_at: new Date(Date.now() - 3600000).toISOString(), reactions: [] },
+    { id: "m-og-2", sender_id: "dp1", content: "Exciting news: The first 999 members get Campus Silver OG status badges with priority ticket booking, discount vouchers, and voting privileges! Click on your profile badge to see details.", created_at: new Date(Date.now() - 2400000).toISOString(), reactions: [] },
+    { id: "m-og-3", sender_id: "dp1", content: "We are launching the feature voting round today. You can choose which feature we build next directly from your Perks page!", created_at: new Date(Date.now() - 1200000).toISOString(), reactions: [] },
   ],
 } as const;
 
@@ -557,6 +576,68 @@ export default function Messages({
   const [replyToMsg, setReplyToMsg] = useState<any | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  const selectedConvoObj = convos.find(c => c.group_id === activeDmId);
+  const isLoungeGroup = !!(selectedConvoObj?.is_announcement || (selectedConvoObj?.type === "group" && selectedConvoObj?.group_name?.startsWith("OG Lounge")));
+  const isAmbassador = demo ? false : (profile?.is_ambassador === true);
+  const canPostInLounge = isAmbassador || (selectedConvoObj?.members?.find((m: any) => m.id === (demo ? "me" : user?.id))?.role === "admin");
+
+  // Beta mode engine state
+  const [betaMode, setBetaMode] = useState(false);
+  const [hapticToast, setHapticToast] = useState<string | null>(null);
+  const [shakeReportOpen, setShakeReportOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setBetaMode(localStorage.getItem("cmpus_beta_mode") === "true");
+      const handler = () => setBetaMode(localStorage.getItem("cmpus_beta_mode") === "true");
+      window.addEventListener("storage", handler);
+      window.addEventListener("cmpus_beta_toggle", handler);
+      return () => {
+        window.removeEventListener("storage", handler);
+        window.removeEventListener("cmpus_beta_toggle", handler);
+      };
+    }
+  }, []);
+
+  const showHapticToast = (msg: string) => {
+    setHapticToast(msg);
+    setTimeout(() => setHapticToast(null), 2000);
+  };
+
+  // Swipe to reveal timestamps state
+  const [swipeTimeOffset, setSwipeTimeOffset] = useState(0);
+  const listTouchStart = useRef(0);
+  const isSwipingTime = useRef(false);
+
+  const handleListTouchStart = (e: React.TouchEvent) => {
+    listTouchStart.current = e.touches[0].clientX;
+    isSwipingTime.current = true;
+  };
+
+  const handleListTouchMove = (e: React.TouchEvent) => {
+    if (!isSwipingTime.current) return;
+    const diffX = e.touches[0].clientX - listTouchStart.current;
+    if (diffX < -5) {
+      setSwipeTimeOffset(Math.max(diffX, -65));
+    } else {
+      setSwipeTimeOffset(0);
+    }
+  };
+
+  const handleListTouchEnd = () => {
+    isSwipingTime.current = false;
+    setSwipeTimeOffset(0);
+  };
+
+  // Long press options menu states
+  const [selectedMenuMsg, setSelectedMenuMsg] = useState<Message | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
+  // Active DM convo header menu states
+  const [convoMenuOpen, setConvoMenuOpen] = useState(false);
+  const [convoDeleteConfirmOpen, setConvoDeleteConfirmOpen] = useState(false);
+  const [convoBlockConfirmOpen, setConvoBlockConfirmOpen] = useState(false);
+
   // Attachment states
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
@@ -837,7 +918,7 @@ export default function Messages({
 
       const { data: groupsInfo } = await supabase
         .from("groups")
-        .select("id, name, type, avatar, request_status, requested_by, origin_signal_id, theme, disappearing_mode, signals(content)")
+        .select("id, name, type, avatar, request_status, requested_by, origin_signal_id, theme, disappearing_mode, is_announcement, signals(content)")
         .in("id", groupIds);
 
       // Fetch user's blocked users
@@ -906,6 +987,7 @@ export default function Messages({
             unread: 0,
             request_status: groupInfo?.request_status ?? "accepted",
             requested_by: groupInfo?.requested_by,
+            is_announcement: groupInfo?.is_announcement || false,
           };
         } else {
           const peer = groupMembers.find(m => m.user_id !== user!.id)?.profiles;
@@ -1178,11 +1260,17 @@ export default function Messages({
 
     const channel = supabase
       .channel(`msgs-${activeDmId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `group_id=eq.${activeDmId}` }, (payload) => {
-        setMessages((prev) => {
-          if (prev.some(m => m.id === payload.new.id)) return prev;
-          return [...prev, payload.new as Message];
-        });
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages", filter: `group_id=eq.${activeDmId}` }, (payload) => {
+        if (payload.eventType === "INSERT") {
+          setMessages((prev) => {
+            if (prev.some(m => m.id === payload.new.id)) return prev;
+            return [...prev, payload.new as Message];
+          });
+        } else if (payload.eventType === "UPDATE") {
+          setMessages((prev) => prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new } : m));
+        } else if (payload.eventType === "DELETE") {
+          setMessages((prev) => prev.filter(m => m.id === payload.old.id));
+        }
         setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
       })
       .subscribe();
@@ -1372,16 +1460,106 @@ export default function Messages({
   }
 
   // ── Reaction Handler ───────────────────────────────────────────────────────
-  function handleToggleReaction(msgId: string, emoji: string) {
+  async function handleToggleReaction(msgId: string, emoji: string) {
+    const fromId = demo ? "me" : user!.id;
+    const fromName = demo ? "me" : (profile?.name || "User");
+
     setMessages(prev => prev.map(m => {
       if (m.id !== msgId) return m;
       const reactions = m.reactions || [];
-      const exists = reactions.some(r => r.emoji === emoji && r.from === "me");
+      const exists = reactions.some(r => r.emoji === emoji && r.from === fromId);
       const updated = exists
-        ? reactions.filter(r => !(r.emoji === emoji && r.from === "me"))
-        : [...reactions, { emoji, from: "me" }];
+        ? reactions.filter(r => !(r.emoji === emoji && r.from === fromId))
+        : [...reactions, { emoji, from: fromId, name: fromName }];
       return { ...m, reactions: updated };
     }));
+
+    if (demo) {
+      const saved = JSON.parse(localStorage.getItem(`demo_messages_${activeDmId}`) || "[]");
+      const updated = saved.map((m: any) => {
+        if (m.id !== msgId) return m;
+        const reactions = m.reactions || [];
+        const exists = reactions.some((r: any) => r.emoji === emoji && r.from === "me");
+        const nextReactions = exists
+          ? reactions.filter((r: any) => !(r.emoji === emoji && r.from === "me"))
+          : [...reactions, { emoji, from: "me", name: "me" }];
+        return { ...m, reactions: nextReactions };
+      });
+      localStorage.setItem(`demo_messages_${activeDmId}`, JSON.stringify(updated));
+    } else {
+      const target = messages.find(m => m.id === msgId);
+      if (target) {
+        const reactions = target.reactions || [];
+        const exists = reactions.some(r => r.emoji === emoji && r.from === fromId);
+        const updated = exists
+          ? reactions.filter(r => !(r.emoji === emoji && r.from === fromId))
+          : [...reactions, { emoji, from: fromId, name: fromName }];
+        
+        await supabase.from("messages").update({ reactions: updated }).eq("id", msgId);
+      }
+    }
+  }
+
+  async function handleDeleteMessage(msgId: string) {
+    setMessages(prev => prev.filter(m => m.id !== msgId));
+
+    if (demo) {
+      const saved = JSON.parse(localStorage.getItem(`demo_messages_${activeDmId}`) || "[]");
+      localStorage.setItem(`demo_messages_${activeDmId}`, JSON.stringify(saved.filter((m: any) => m.id !== msgId)));
+      
+      const displayTxt = "Message deleted";
+      const updatedConvos = convos.map(c => {
+        if (c.group_id === activeDmId) {
+          return { ...c, last_message: displayTxt, last_at: new Date().toISOString() };
+        }
+        return c;
+      });
+      setConvos(updatedConvos);
+      
+      const localGroups = JSON.parse(localStorage.getItem("demo_groups") || "[]");
+      localStorage.setItem("demo_groups", JSON.stringify(localGroups.map((g: any) => {
+        if (g.group_id === activeDmId) {
+          return { ...g, last_message: displayTxt, last_at: new Date().toISOString() };
+        }
+        return g;
+      })));
+    } else {
+      await supabase.from("messages").delete().eq("id", msgId);
+      loadConvos();
+    }
+  }
+
+  async function handleDeleteConversation(groupId: string) {
+    if (demo) {
+      const localGroups = JSON.parse(localStorage.getItem("demo_groups") || "[]");
+      const filteredGroups = localGroups.filter((g: any) => g.group_id !== groupId);
+      localStorage.setItem("demo_groups", JSON.stringify(filteredGroups));
+      localStorage.removeItem(`demo_messages_${groupId}`);
+      setConvos(filteredGroups);
+    } else {
+      await supabase.from("groups").delete().eq("id", groupId);
+      loadConvos();
+    }
+    setActiveDmId(null);
+    setActivePeer(null);
+    onChatOpen?.(false);
+  }
+
+  async function handleBlockConvoUser(peerId: string) {
+    if (!demo && user) {
+      await supabase.from("blocks").insert({ blocker_id: user.id, blocked_id: peerId });
+    } else if (demo) {
+      const localGroups = JSON.parse(localStorage.getItem("demo_groups") || "[]");
+      const filteredGroups = localGroups.filter((g: any) => g.peer?.id !== peerId);
+      localStorage.setItem("demo_groups", JSON.stringify(filteredGroups));
+      setConvos(filteredGroups);
+    }
+    setActiveDmId(null);
+    setActivePeer(null);
+    onChatOpen?.(false);
+    if (!demo) {
+      loadConvos();
+    }
   }
 
   // ── Compose Fetch Users ───────────────────────────────────────────────────
@@ -1558,7 +1736,8 @@ export default function Messages({
   });
 
   return (
-    <div className="flex flex-col min-h-screen bg-black text-white max-w-2xl mx-auto border-x border-white/[0.04]">
+    <>
+      <div className="flex flex-col min-h-screen bg-black text-white max-w-2xl mx-auto border-x border-white/[0.04]">
       {/* SCREEN 1 — INBOX (default view) */}
       {!activeDmId && !viewRequestsScreen && (
         <div className="flex flex-col flex-1 pb-28 pt-8 px-5">
@@ -1985,7 +2164,7 @@ export default function Messages({
             {/* Header options */}
             <div className="flex items-center gap-2.5 shrink-0 text-ink-soft">
               <button
-                onClick={() => { if (activeDmId) setChatInfoOpen(true); }}
+                onClick={() => { if (activeDmId) { setConvoMenuOpen(true); setConvoDeleteConfirmOpen(false); setConvoBlockConfirmOpen(false); } }}
                 className="w-9 h-9 rounded-full bg-white/[0.04] hover:bg-white/10 active:scale-95 transition flex items-center justify-center"
               >
                 <DotsIcon className="w-5 h-5 text-ink-soft hover:text-ink transition-colors" />
@@ -1996,6 +2175,9 @@ export default function Messages({
           {/* Messages area */}
           <div
             style={{ touchAction: "pan-y", overscrollBehavior: "contain" }}
+            onTouchStart={handleListTouchStart}
+            onTouchMove={handleListTouchMove}
+            onTouchEnd={handleListTouchEnd}
             className="flex-1 overflow-y-auto no-scrollbar p-4 space-y-4 bg-black flex flex-col"
           >
             {disappearingMode !== "off" && (
@@ -2048,7 +2230,22 @@ export default function Messages({
                       )}
 
                       {/* Message Bubble Cluster container */}
-                      <div className="flex items-end gap-2.5 max-w-[80%] relative">
+                      <div 
+                        className="flex items-end gap-2.5 max-w-[80%] relative transition-transform duration-75"
+                        style={{
+                          transform: `translateX(${swipeTimeOffset}px)`,
+                        }}
+                      >
+                        {/* Hidden Swipe Timestamp */}
+                        <div
+                          className="absolute right-[-65px] top-1/2 -translate-y-1/2 text-[10px] text-ink-mute font-bold select-none transition-opacity duration-100 pointer-events-none whitespace-nowrap"
+                          style={{
+                            opacity: swipeTimeOffset < -15 ? 1 : 0,
+                          }}
+                        >
+                          {new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </div>
+
                         {/* Member Stack Header label */}
                         {!mine && isFirstInCluster && !activePeer && (
                           <span className="absolute -top-3.5 left-10 text-[9px] text-brand-300 font-bold leading-none select-none">
@@ -2080,6 +2277,13 @@ export default function Messages({
                             disappearingMode={disappearingMode}
                             onReply={() => setReplyToMsg(m)}
                             onReact={onMsgReact}
+                            onLongPress={() => {
+                              setSelectedMenuMsg(m);
+                              setDeleteConfirmOpen(false);
+                            }}
+                            currentUserId={demo ? "me" : user?.id}
+                            betaMode={betaMode}
+                            onHapticToast={showHapticToast}
                           />
                           {mine && idx === messages.length - 1 && (
                             <span className="text-[9px] text-brand-300 font-bold mt-1 mr-1 select-none animate-fade-in">
@@ -2150,52 +2354,76 @@ export default function Messages({
             </div>
           )}
 
-          {/* Input bar */}
-          <div className="px-3.5 pt-2.5 border-t border-white/[0.07] bg-[#0c0c0e]/95 shrink-0 pb-[max(0.625rem,env(safe-area-inset-bottom))]">
-            <div className="flex gap-2.5 items-center">
-              {/* Attachment */}
-              <input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                onChange={handleFileChange}
-                accept="image/*,video/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/zip"
-              />
+          {/* Beta Engine Banner */}
+          {betaMode && activeDmId && (
+            <div className="px-4 py-2 border-t border-brand-500/15 bg-brand-500/[0.04] flex items-center justify-between shrink-0 select-none animate-fade-in">
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 bg-brand-500 rounded-full animate-ping" />
+                <span className="text-[10px] font-bold text-brand-400 tracking-wide uppercase">🧪 Neumorphic Beta Engine Active</span>
+              </div>
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-10 h-10 rounded-full bg-white/[0.04] hover:bg-white/10 flex items-center justify-center shrink-0 text-ink-soft active:scale-95 transition"
+                onClick={() => setShakeReportOpen(true)}
+                className="text-[10px] font-bold text-brand-300 bg-brand-500/10 hover:bg-brand-500/20 active:scale-95 transition-all px-2.5 py-1 rounded-full border border-brand-500/20"
               >
-                <PaperclipIcon className="w-5 h-5" />
+                📱 Test Shake
               </button>
+            </div>
+          )}
 
-              {/* Text bar */}
-              <div className="flex-1 bg-[#1a1a1a] rounded-full px-4 min-h-[40px] flex items-center gap-2">
-                <textarea
-                  placeholder="Message…"
-                  rows={1}
-                  value={msgInput}
-                  onChange={(e) => setMsgInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSend();
-                    }
-                  }}
-                  className="bg-transparent text-sm text-white placeholder-white/40 focus:outline-none flex-grow resize-none max-h-24 py-2 leading-snug"
+          {/* Input bar */}
+          {isLoungeGroup && !canPostInLounge ? (
+            <div className="px-5 py-4 border-t border-white/[0.07] bg-[#0c0c0e]/95 text-center text-xs font-bold text-ink-mute shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))] flex items-center justify-center gap-2 select-none">
+              <LockIcon className="w-4.5 h-4.5 text-brand-400" />
+              <span>Only Cmpus Crew can post announcements in this group.</span>
+            </div>
+          ) : (
+            <div className="px-3.5 pt-2.5 border-t border-white/[0.07] bg-[#0c0c0e]/95 shrink-0 pb-[max(0.625rem,env(safe-area-inset-bottom))]">
+              <div className="flex gap-2.5 items-center">
+                {/* Attachment */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  onChange={handleFileChange}
+                  accept="image/*,video/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/zip"
                 />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-10 h-10 rounded-full bg-white/[0.04] hover:bg-white/10 flex items-center justify-center shrink-0 text-ink-soft active:scale-95 transition"
+                >
+                  <PaperclipIcon className="w-5 h-5" />
+                </button>
 
-                {(msgInput.trim() || selectedFile) && (
-                  <button
-                    onClick={handleSend}
-                    className="w-8 h-8 rounded-full bg-brand-500 hover:bg-brand-600 flex items-center justify-center shrink-0 active:scale-95 transition text-white -mr-1.5"
-                  >
-                    <SendIcon className="w-4 h-4" />
-                  </button>
-                )}
+                {/* Text bar */}
+                <div className="flex-1 bg-[#1a1a1a] rounded-full px-4 min-h-[40px] flex items-center gap-2">
+                  <textarea
+                    placeholder="Message…"
+                    rows={1}
+                    value={msgInput}
+                    onChange={(e) => setMsgInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSend();
+                      }
+                    }}
+                    className="bg-transparent text-sm text-white placeholder-white/40 focus:outline-none flex-grow resize-none max-h-24 py-2 leading-snug"
+                  />
+
+                  {(msgInput.trim() || selectedFile) && (
+                    <button
+                      onClick={handleSend}
+                      className="w-8 h-8 rounded-full bg-brand-500 hover:bg-brand-600 flex items-center justify-center shrink-0 active:scale-95 transition text-white -mr-1.5"
+                    >
+                      <SendIcon className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
@@ -2467,7 +2695,336 @@ export default function Messages({
           </div>
         </div>
       )}
+
+      {/* Convo Header Options Bottom Sheet */}
+      {convoMenuOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity animate-fade-in flex items-end justify-center">
+          <div 
+            className="absolute inset-0" 
+            onClick={() => { 
+              setConvoMenuOpen(false); 
+              setConvoDeleteConfirmOpen(false); 
+              setConvoBlockConfirmOpen(false); 
+            }} 
+          />
+          <div className="relative w-full max-w-md bg-[#0c0c0e]/95 border-t border-white/[0.08] rounded-t-[32px] p-5 pb-8 space-y-5 z-10 shadow-2xl animate-slide-in-up">
+            {/* Handle bar */}
+            <div className="w-12 h-1 bg-white/20 rounded-full mx-auto -mt-2 mb-2" />
+
+            {convoDeleteConfirmOpen ? (
+              // Delete Convo Confirmation
+              <div className="space-y-4 py-2 text-center animate-fade-in">
+                <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto text-red-500">
+                  <TrashIcon className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-ink">Delete entire chat?</h3>
+                  <p className="text-xs text-ink-mute">This will permanently delete this conversation and all its messages. This cannot be undone.</p>
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => setConvoDeleteConfirmOpen(false)}
+                    className="flex-1 py-3.5 text-xs font-bold bg-white/[0.05] hover:bg-white/10 active:scale-95 transition rounded-2xl text-white border border-white/10"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (activeDmId) {
+                        await handleDeleteConversation(activeDmId);
+                      }
+                      setConvoMenuOpen(false);
+                      setConvoDeleteConfirmOpen(false);
+                    }}
+                    className="flex-1 py-3.5 text-xs font-bold bg-red-500 hover:bg-red-600 active:scale-95 transition rounded-2xl text-white shadow-lg shadow-red-500/10"
+                  >
+                    Delete Chat
+                  </button>
+                </div>
+              </div>
+            ) : convoBlockConfirmOpen ? (
+              // Block User Confirmation
+              <div className="space-y-4 py-2 text-center animate-fade-in">
+                <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto text-red-500">
+                  <BanIcon className="w-6 h-6 text-red-500" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-ink">Block {activePeer?.name || "User"}?</h3>
+                  <p className="text-xs text-ink-mute">They won't be able to message you or see your campus signals.</p>
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => setConvoBlockConfirmOpen(false)}
+                    className="flex-1 py-3.5 text-xs font-bold bg-white/[0.05] hover:bg-white/10 active:scale-95 transition rounded-2xl text-white border border-white/10"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (activePeer) {
+                        await handleBlockConvoUser(activePeer.id);
+                      }
+                      setConvoMenuOpen(false);
+                      setConvoBlockConfirmOpen(false);
+                    }}
+                    className="flex-1 py-3.5 text-xs font-bold bg-red-500 hover:bg-red-600 active:scale-95 transition rounded-2xl text-white shadow-lg shadow-red-500/10"
+                  >
+                    Block User
+                  </button>
+                </div>
+              </div>
+            ) : (
+              // Main Actions
+              <div className="space-y-1.5 animate-fade-in">
+                <div className="px-4 py-2 text-center">
+                  <p className="text-sm font-bold text-ink truncate">
+                    {activePeer ? activePeer.name : "Group Options"}
+                  </p>
+                  <p className="text-xs text-ink-mute truncate">
+                    {activePeer ? `@${activePeer.username}` : "Manage group"}
+                  </p>
+                </div>
+                
+                <button
+                  onClick={() => {
+                    setConvoMenuOpen(false);
+                    if (activeDmId) setChatInfoOpen(true);
+                  }}
+                  className="w-full inline-flex items-center gap-3 py-3.5 px-4 rounded-2xl hover:bg-white/[0.03] active:bg-white/[0.05] active:scale-[0.98] transition text-sm font-bold text-ink text-left"
+                >
+                  <UserIcon className="w-4 h-4 text-ink-soft" />
+                  View Chat Info & Shared Media
+                </button>
+
+                {activePeer && (
+                  <button
+                    onClick={() => {
+                      setConvoBlockConfirmOpen(true);
+                    }}
+                    className="w-full inline-flex items-center gap-3 py-3.5 px-4 rounded-2xl hover:bg-red-500/10 active:bg-red-500/20 active:scale-[0.98] transition text-sm font-bold text-red-400 text-left border border-transparent hover:border-red-500/10"
+                  >
+                    <BanIcon className="w-4 h-4 text-red-400" />
+                    Block User
+                  </button>
+                )}
+
+                <button
+                  onClick={() => {
+                    setConvoDeleteConfirmOpen(true);
+                  }}
+                  className="w-full inline-flex items-center gap-3 py-3.5 px-4 rounded-2xl hover:bg-red-500/10 active:bg-red-500/20 active:scale-[0.98] transition text-sm font-bold text-red-400 text-left border border-transparent hover:border-red-500/10"
+                >
+                  <TrashIcon className="w-4 h-4 text-red-400" />
+                  Delete Conversation
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Message Options Bottom Sheet */}
+      {selectedMenuMsg && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity animate-fade-in flex items-end justify-center">
+          <div 
+            className="absolute inset-0" 
+            onClick={() => { 
+              setSelectedMenuMsg(null); 
+              setDeleteConfirmOpen(false); 
+            }} 
+          />
+          <div className="relative w-full max-w-md bg-[#0c0c0e]/95 border-t border-white/[0.08] rounded-t-[32px] p-5 pb-8 space-y-5 z-10 shadow-2xl animate-slide-in-up">
+            {/* Handle bar */}
+            <div className="w-12 h-1 bg-white/20 rounded-full mx-auto -mt-2 mb-2" />
+            
+            {/* Quick Reactions Bar */}
+            <div className="flex justify-between items-center bg-white/[0.03] border border-white/[0.06] rounded-2xl p-3 shadow-inner">
+              {["❤️", "🙌", "🔥", "👏", "😢", "😮", "😍", "😂", "👍"].map((emoji) => {
+                const fromId = demo ? "me" : user?.id;
+                const userReacted = selectedMenuMsg.reactions?.some((r: any) => r.emoji === emoji && r.from === fromId);
+                return (
+                  <button
+                    key={emoji}
+                    onClick={() => {
+                      handleToggleReaction(selectedMenuMsg.id, emoji);
+                      setSelectedMenuMsg(null);
+                    }}
+                    className={`text-2xl hover:scale-125 active:scale-95 transition-all p-1 rounded-xl ${
+                      userReacted ? "bg-brand-500/20 border border-brand-500/30 scale-110" : "hover:bg-white/[0.04]"
+                    }`}
+                  >
+                    {emoji}
+                  </button>
+                );
+              })}
+            </div>
+
+            {deleteConfirmOpen ? (
+              // Delete Confirmation View
+              <div className="space-y-4 py-2 text-center animate-fade-in">
+                <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto text-red-500">
+                  <TrashIcon className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-ink">Delete this message?</h3>
+                  <p className="text-xs text-ink-mute">This will remove the message for everyone in this chat.</p>
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => setDeleteConfirmOpen(false)}
+                    className="flex-1 py-3.5 text-xs font-bold bg-white/[0.05] hover:bg-white/10 active:scale-95 transition rounded-2xl text-white border border-white/10"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      await handleDeleteMessage(selectedMenuMsg.id);
+                      setSelectedMenuMsg(null);
+                      setDeleteConfirmOpen(false);
+                    }}
+                    className="flex-1 py-3.5 text-xs font-bold bg-red-500 hover:bg-red-600 active:scale-95 transition rounded-2xl text-white shadow-lg shadow-red-500/10"
+                  >
+                    Delete for everyone
+                  </button>
+                </div>
+              </div>
+            ) : (
+              // Main Actions
+              <div className="space-y-1.5 animate-fade-in">
+                <button
+                  onClick={() => {
+                    setReplyToMsg(selectedMenuMsg);
+                    setSelectedMenuMsg(null);
+                  }}
+                  className="w-full inline-flex items-center gap-3 py-3.5 px-4 rounded-2xl hover:bg-white/[0.03] active:bg-white/[0.05] active:scale-[0.98] transition text-sm font-bold text-ink text-left"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4 text-ink-soft">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                  </svg>
+                  Reply
+                </button>
+
+                {/* Copy Text Option */}
+                {(() => {
+                  const hasText = selectedMenuMsg.type === undefined || selectedMenuMsg.type === "text" || selectedMenuMsg.content.includes("|||");
+                  if (!hasText) return null;
+                  return (
+                    <button
+                      onClick={() => {
+                        let textToCopy = selectedMenuMsg.content;
+                        if (selectedMenuMsg.content.includes("|||")) {
+                          const parts = selectedMenuMsg.content.split("|||");
+                          textToCopy = parts[0] || "";
+                        }
+                        navigator.clipboard.writeText(textToCopy);
+                        setSelectedMenuMsg(null);
+                      }}
+                      className="w-full inline-flex items-center gap-3 py-3.5 px-4 rounded-2xl hover:bg-white/[0.03] active:bg-white/[0.05] active:scale-[0.98] transition text-sm font-bold text-ink text-left"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4 text-ink-soft">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H5.25m11.9-3.664A2.251 2.251 0 0 0 15 2.25h-3a2.251 2.251 0 0 0-2.15 1.586m5.8 0c.065.21.1.433.1.664v.75h-6V4.5c0-.231.035-.454.1-.664M6.75 7.5H4.875c-.621 0-1.125.504-1.125 1.125v12c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V16.5a9 9 0 0 0-9-9Z" />
+                      </svg>
+                      Copy Text
+                    </button>
+                  );
+                })()}
+
+                {/* Delete Option (only if message is sent by me) */}
+                {(selectedMenuMsg.sender_id === "me" || selectedMenuMsg.sender_id === user?.id) && (
+                  <button
+                    onClick={() => {
+                      setDeleteConfirmOpen(true);
+                    }}
+                    className="w-full inline-flex items-center gap-3 py-3.5 px-4 rounded-2xl hover:bg-red-500/10 active:bg-red-500/20 active:scale-[0.98] transition text-sm font-bold text-red-400 text-left border border-transparent hover:border-red-500/10"
+                  >
+                    <TrashIcon className="w-4 h-4 text-red-400" />
+                    Delete Message
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
+
+      {/* Haptic Toast Notification */}
+      {hapticToast && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[100] animate-slide-in-up">
+          <div className="bg-[#1a1a1e] border border-brand-500/30 rounded-2xl px-5 py-3 shadow-2xl shadow-brand-500/10 flex items-center gap-2.5">
+            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+            <span className="text-xs font-bold text-ink whitespace-nowrap">{hapticToast}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Shake-to-Report Bug Modal */}
+      {shakeReportOpen && (
+        <div
+          className="fixed inset-0 z-[70] flex flex-col justify-end"
+          onClick={() => setShakeReportOpen(false)}
+        >
+          <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" />
+          <div
+            className="relative bg-[#0c0c0e] border-t border-white/[0.08] rounded-t-[32px] p-6 pb-10 space-y-5 max-h-[70vh] overflow-y-auto z-10 animate-slide-in-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-1 bg-white/20 rounded-full mx-auto -mt-2 mb-2" />
+            <div className="text-center space-y-2">
+              <div className="inline-flex p-3 rounded-full bg-red-500/10 border border-red-500/20 mb-1">
+                <span className="text-3xl">🐛</span>
+              </div>
+              <h3 className="text-base font-bold text-ink">Shake-to-Report</h3>
+              <p className="text-xs text-ink-mute">Beta diagnostic telemetry captured</p>
+            </div>
+            <div className="bg-[#141416] border border-white/[0.06] rounded-2xl p-4 space-y-3">
+              <div className="flex justify-between text-[11px]">
+                <span className="text-ink-mute font-medium">Device</span>
+                <span className="text-ink font-bold">{typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 30) + "…" : "Browser"}</span>
+              </div>
+              <div className="flex justify-between text-[11px]">
+                <span className="text-ink-mute font-medium">Screen</span>
+                <span className="text-ink font-bold">{typeof window !== "undefined" ? `${window.innerWidth}×${window.innerHeight}` : "N/A"}</span>
+              </div>
+              <div className="flex justify-between text-[11px]">
+                <span className="text-ink-mute font-medium">Beta Engine</span>
+                <span className="text-brand-400 font-bold">Neumorphic v0.1</span>
+              </div>
+              <div className="flex justify-between text-[11px]">
+                <span className="text-ink-mute font-medium">Active Chat</span>
+                <span className="text-ink font-bold">{activeDmId || "None"}</span>
+              </div>
+              <div className="flex justify-between text-[11px]">
+                <span className="text-ink-mute font-medium">Timestamp</span>
+                <span className="text-ink font-bold">{new Date().toLocaleString()}</span>
+              </div>
+            </div>
+            <textarea
+              placeholder="Describe the bug or feedback…"
+              rows={3}
+              className="w-full bg-white/[0.03] border border-white/[0.08] focus:border-brand-500/60 rounded-2xl px-4 py-3 text-sm text-ink outline-none focus:bg-white/[0.05] transition-all placeholder-white/25 resize-none"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShakeReportOpen(false)}
+                className="flex-1 py-3 bg-white/[0.05] hover:bg-white/10 active:scale-95 transition text-white text-xs font-bold rounded-2xl border border-white/10"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShakeReportOpen(false);
+                  showHapticToast("✅ Bug report submitted to devs!");
+                }}
+                className="flex-1 py-3 bg-brand-500 hover:bg-brand-600 active:scale-95 transition text-white text-xs font-bold rounded-2xl shadow-lg shadow-brand-500/15"
+              >
+                Submit Report
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -2481,6 +3038,10 @@ function SwipeMessageBubble({
   disappearingMode,
   onReply,
   onReact,
+  onLongPress,
+  currentUserId,
+  betaMode,
+  onHapticToast,
 }: {
   msg: any;
   mine: boolean;
@@ -2488,6 +3049,10 @@ function SwipeMessageBubble({
   disappearingMode?: string;
   onReply: () => void;
   onReact: (emoji: string) => void;
+  onLongPress: () => void;
+  currentUserId?: string;
+  betaMode?: boolean;
+  onHapticToast?: (msg: string) => void;
 }) {
   const [dragX, setDragX] = useState(0);
   const touchStartX = useRef(0);
@@ -2495,7 +3060,20 @@ function SwipeMessageBubble({
   const isSwiping = useRef(false);
   const pressTimer = useRef<NodeJS.Timeout | null>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
-  const [showReactionsMenu, setShowReactionsMenu] = useState(false);
+  const [showHeartBurst, setShowHeartBurst] = useState(false);
+  const lastTap = useRef<number>(0);
+
+  const handleBubbleClick = (e: React.MouseEvent) => {
+    const now = Date.now();
+    if (now - lastTap.current < 300) {
+      e.stopPropagation();
+      onReact("❤️");
+      setShowHeartBurst(true);
+      setTimeout(() => setShowHeartBurst(false), 700);
+      if (betaMode && onHapticToast) onHapticToast("📳 Haptic React: Double-tap registered");
+    }
+    lastTap.current = now;
+  };
 
   // Swipe gesture touchstart
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -2505,7 +3083,7 @@ function SwipeMessageBubble({
 
     if (pressTimer.current) clearTimeout(pressTimer.current);
     pressTimer.current = setTimeout(() => {
-      setShowReactionsMenu(true);
+      onLongPress();
     }, 500);
   };
 
@@ -2545,7 +3123,7 @@ function SwipeMessageBubble({
   const handleMouseDown = () => {
     if (pressTimer.current) clearTimeout(pressTimer.current);
     pressTimer.current = setTimeout(() => {
-      setShowReactionsMenu(true);
+      onLongPress();
     }, 500);
   };
 
@@ -2580,35 +3158,6 @@ function SwipeMessageBubble({
 
   return (
     <div className="relative flex flex-col min-w-0">
-      {/* Reactions floating overlay row */}
-      {showReactionsMenu && (
-        <div
-          className={`absolute -top-12 z-50 bg-[#1e1e1e] border border-white/15 rounded-full px-3 py-1.5 flex gap-2.5 shadow-2xl animate-fade-in ${
-            mine ? "right-0" : "left-0"
-          }`}
-        >
-          {["❤️", "😂", "😮", "😢", "😡", "👍"].map((emoji) => (
-            <button
-              key={emoji}
-              onClick={(e) => {
-                e.stopPropagation();
-                onReact(emoji);
-                setShowReactionsMenu(false);
-              }}
-              className="text-lg hover:scale-125 active:scale-95 transition"
-            >
-              {emoji}
-            </button>
-          ))}
-          <button
-            onClick={() => setShowReactionsMenu(false)}
-            className="flex items-center justify-center hover:text-white transition shrink-0 pl-1"
-          >
-            <XIcon className="w-3 h-3 text-white/50 hover:text-white" />
-          </button>
-        </div>
-      )}
-
       {/* Bubble */}
       <div
         ref={bubbleRef}
@@ -2618,16 +3167,27 @@ function SwipeMessageBubble({
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onClick={handleBubbleClick}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onLongPress();
+        }}
         style={{
           transform: `translateX(${dragX}px)`,
           transition: dragX === 0 ? "transform 0.2s ease-out" : "none",
         }}
-        className={`relative group max-w-full w-fit rounded-2xl px-4 py-2.5 text-xs md:text-sm ${
+        className={`relative group max-w-full w-fit rounded-2xl px-4 py-2.5 text-xs md:text-sm select-none ${
           mine
-            ? `${themeBgClass || "bg-brand-500"} text-white rounded-tr-none`
-            : "bg-[#1e1e1e] border border-white/[0.06] text-ink rounded-tl-none"
+            ? `${themeBgClass || "bg-gradient-to-br from-brand-600 to-brand-500"} text-white rounded-tr-none border border-brand-500/20 ${betaMode ? "shadow-[4px_4px_12px_rgba(124,58,237,0.25),-3px_-3px_10px_rgba(255,255,255,0.04)]" : "shadow-md shadow-brand-500/5"}`
+            : `${betaMode ? "bg-[#1a1a1e] border border-white/[0.1] shadow-[4px_4px_12px_rgba(0,0,0,0.6),-3px_-3px_10px_rgba(255,255,255,0.03)]" : "bg-[#161618] border border-white/[0.06] shadow-sm"} text-ink rounded-tl-none`
         }`}
       >
+        {/* Heart Burst Overlay */}
+        {showHeartBurst && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30 animate-heart-burst">
+            <span className="text-4xl drop-shadow-[0_4px_12px_rgba(239,68,68,0.5)] select-none">❤️</span>
+          </div>
+        )}
         {/* Swipe Reply curved arrow */}
         {dragX > 0 && (
           <div
@@ -2732,16 +3292,46 @@ function SwipeMessageBubble({
           </span>
         </span>
 
-        {/* Render reactions on bottom-right edge */}
-        {msg.reactions && msg.reactions.length > 0 && (
-          <div className="absolute -bottom-2.5 right-2.5 bg-[#1a1a1a] border border-white/10 rounded-full px-2 py-0.5 flex gap-0.5 shadow z-10 scale-[0.85]">
-            {msg.reactions.map((r: any, idx: number) => (
-              <span key={idx} title={`Reacted by ${r.from}`}>
-                {r.emoji}
-              </span>
-            ))}
-          </div>
-        )}
+        {/* Render reactions on bottom edge */}
+        {msg.reactions && msg.reactions.length > 0 && (() => {
+          const counts: { [emoji: string]: number } = {};
+          msg.reactions.forEach((r: any) => {
+            if (r.emoji) counts[r.emoji] = (counts[r.emoji] || 0) + 1;
+          });
+          const uniqueEmojis = Object.keys(counts);
+          if (uniqueEmojis.length === 0) return null;
+          const totalCount = msg.reactions.length;
+          return (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                // Toggle the first reaction of the user
+                const myReact = msg.reactions.find((r: any) => r.from === currentUserId);
+                if (myReact) {
+                  onReact(myReact.emoji);
+                } else {
+                  onReact(uniqueEmojis[0]);
+                }
+              }}
+              className={`absolute -bottom-2.5 bg-[#161618]/90 backdrop-blur-md border border-white/10 rounded-full px-2 py-0.5 flex items-center gap-1 shadow-md shadow-black/30 z-10 hover:scale-105 active:scale-95 transition-all select-none ${
+                mine ? "right-3" : "left-3"
+              }`}
+            >
+              <div className="flex gap-0.5">
+                {uniqueEmojis.map((emoji) => (
+                  <span key={emoji} className="text-xs">
+                    {emoji}
+                  </span>
+                ))}
+              </div>
+              {totalCount > 1 && (
+                <span className="text-[9px] text-white/70 font-semibold pr-0.5">
+                  {totalCount}
+                </span>
+              )}
+            </button>
+          );
+        })()}
       </div>
     </div>
   );

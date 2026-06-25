@@ -56,7 +56,7 @@ const DEMO_SIGNALS = [
     reach: "campus",
     expires_at: new Date(Date.now() + 7200000).toISOString(),
     created_at: new Date(Date.now()-7200000).toISOString(), 
-    profiles:{ name:"Arjun Sharma",  username:"arjun_s",  course:"B.Tech CSE", year:2, college:"IIIT Hyderabad",    verified:true,  is_private:false, avatar_url:null },
+    profiles:{ name:"Arjun Sharma",  username:"arjun_s",  course:"B.Tech CSE", year:2, college:"IIIT Hyderabad",    verified:true,  is_private:false, avatar_url:null, is_ambassador:true, ambassador_role:"Event Manager", global_signup_rank:42, campus_signup_rank:2 },
     signal_raises: [
       { user_id: "dp2", profiles: { name: "Priya Nair", avatar_url: null } },
       { user_id: "dp4", profiles: { name: "Sneha Rao", avatar_url: null } },
@@ -70,7 +70,7 @@ const DEMO_SIGNALS = [
     reach: "campus",
     expires_at: new Date(Date.now() + 10800000).toISOString(),
     created_at: new Date(Date.now()-1800000).toISOString(), 
-    profiles:{ name:"Priya Nair",    username:"priya.n",  course:"B.Tech ECE", year:3, college:"IIIT Hyderabad",    verified:false, is_private:true,  avatar_url:null },
+    profiles:{ name:"Priya Nair",    username:"priya.n",  course:"B.Tech ECE", year:3, college:"IIIT Hyderabad",    verified:false, is_private:true,  avatar_url:null, is_ambassador:false, global_signup_rank:87, campus_signup_rank:5 },
     signal_raises: [
       { user_id: "dp1", profiles: { name: "Arjun Sharma", avatar_url: null } }
     ]
@@ -83,7 +83,7 @@ const DEMO_SIGNALS = [
     reach: "all",
     expires_at: new Date(Date.now() + 14400000).toISOString(),
     created_at: new Date(Date.now()-18000000).toISOString(),
-    profiles:{ name:"Rohan Mehta",   username:"rohanm",   course:"B.Com",      year:1, college:"Osmania University",verified:false, is_private:false, avatar_url:null },
+    profiles:{ name:"Rohan Mehta",   username:"rohanm",   course:"B.Com",      year:1, college:"Osmania University",verified:false, is_private:false, avatar_url:null, is_ambassador:false, global_signup_rank:1042, campus_signup_rank:12 },
     signal_raises: [
       { user_id: "dp4", profiles: { name: "Sneha Rao", avatar_url: null } },
       { user_id: "dp5", profiles: { name: "Karan Patel", avatar_url: null } }
@@ -97,7 +97,7 @@ const DEMO_SIGNALS = [
     reach: "all",
     expires_at: new Date(Date.now() + 3600000).toISOString(),
     created_at: new Date(Date.now()-3600000).toISOString(), 
-    profiles:{ name:"Sneha Rao",     username:"sneha.r",  course:"MBA",        year:2, college:"BITS Pilani Hyd",  verified:true,  is_private:false, avatar_url:null },
+    profiles:{ name:"Sneha Rao",     username:"sneha.r",  course:"MBA",        year:2, college:"BITS Pilani Hyd",  verified:true,  is_private:false, avatar_url:null, is_ambassador:true, ambassador_role:"Finance Lead", global_signup_rank:5, campus_signup_rank:1 },
     signal_raises: [
       { user_id: "dp2", profiles: { name: "Priya Nair", avatar_url: null } }
     ]
@@ -110,7 +110,7 @@ const DEMO_SIGNALS = [
     reach: "campus",
     expires_at: new Date(Date.now() + 5400000).toISOString(),
     created_at: new Date(Date.now()-900000).toISOString(),  
-    profiles:{ name:"Karan Patel",   username:"karanp",   course:"B.Tech Mech",year:3, college:"IIIT Hyderabad",   verified:false, is_private:false, avatar_url:null },
+    profiles:{ name:"Karan Patel",   username:"karanp",   course:"B.Tech Mech",year:3, college:"IIIT Hyderabad",   verified:false, is_private:false, avatar_url:null, is_ambassador:false, global_signup_rank:98, campus_signup_rank:4 },
     signal_raises: []
   },
   { 
@@ -643,7 +643,7 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
 
   async function loadFeed() {
     setFeedLoading(true);
-    const [feedRes, mySignalRes, savesRes] = await Promise.all([
+    const [feedRes, mySignalRes, savesRes, blocksRes] = await Promise.all([
       supabase.from("signals")
         .select("*, profiles!signals_user_id_fkey(name,username,course,year,college,verified,is_private,avatar_url), signal_raises(user_id, profiles(name,avatar_url))")
         .gt("expires_at", new Date().toISOString())
@@ -657,10 +657,17 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
         .maybeSingle(),
       supabase.from("signal_saves")
         .select("signal_id")
-        .eq("user_id", user!.id)
+        .eq("user_id", user!.id),
+      supabase.from("blocks")
+        .select("blocked_id")
+        .eq("blocker_id", user!.id)
     ]);
 
     let data = feedRes.data ?? [];
+    const blockedIds = new Set((blocksRes?.data ?? []).map((b: any) => b.blocked_id));
+    if (blockedIds.size > 0) {
+      data = data.filter((s: any) => !blockedIds.has(s.user_id));
+    }
     
     // Sort campus-first (optional fallback if needed)
     if (profile?.college) {
@@ -970,6 +977,7 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
   async function sendQuickReply() {
     if (!replyVibe || !replyText.trim() || replySending) return;
     const { sig, peer } = replyVibe;
+    if (!peer?.id) { showToast("Couldn't send — try again"); return; }
     const text = replyText.trim();
     setReplySending(true);
 
