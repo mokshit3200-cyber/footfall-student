@@ -543,14 +543,20 @@ export default function Home({ onSwitchTab }: { onSwitchTab?: (tab: any) => void
               {/* Classmate avatar row */}
               {followedClassmates.length > 0 && (
                 <div className="flex justify-center gap-3.5 mb-5">
-                  {followedClassmates.slice(0, 5).map((c) => (
-                    <div key={c.id} className="flex flex-col items-center gap-1">
-                      <div className="w-11 h-11 rounded-full bg-white/15 border-2 border-white/20 flex items-center justify-center text-xl">
-                        {c.avatar}
+                  {followedClassmates.slice(0, 5).map((c) => {
+                    const hasImage = c.avatar && (c.avatar.startsWith("http") || c.avatar.startsWith("data:"));
+                    const imgSrc = hasImage ? c.avatar : "/default_avatar.png";
+                    return (
+                      <div key={c.id} className="flex flex-col items-center gap-1">
+                        <img 
+                          src={imgSrc} 
+                          alt={c.name} 
+                          className="w-11 h-11 rounded-full object-cover border-2 border-white/20 shrink-0" 
+                        />
+                        <span className="text-[9px] text-white/40 font-medium">{c.name.split(" ")[0]}</span>
                       </div>
-                      <span className="text-[9px] text-white/40 font-medium">{c.name.split(" ")[0]}</span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
@@ -997,12 +1003,12 @@ function NotificationsSheet({
             return (
               <div key={req.follower_id} className="p-3 bg-brand-500/[0.04] border border-brand-500/20 rounded-2xl flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden border border-white/[0.08]">
-                    {req.profiles.avatar_url ? (
-                      <img src={req.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <span>{initials}</span>
-                    )}
+                  <div className="w-9 h-9 rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center shrink-0 overflow-hidden border border-white/[0.08]">
+                    <img 
+                      src={req.profiles.avatar_url && (req.profiles.avatar_url.startsWith("http") || req.profiles.avatar_url.startsWith("data:")) ? req.profiles.avatar_url : "/default_avatar.png"} 
+                      alt="" 
+                      className="w-full h-full object-cover" 
+                    />
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs font-bold text-ink truncate">{req.profiles.name}</p>

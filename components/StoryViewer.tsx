@@ -230,17 +230,11 @@ export default function StoryViewer({ storyUsers, startIndex, onClose, onNavigat
         {/* ── User info bar ── */}
         <div className="flex items-center justify-between">
           <button onClick={handleProfileTap} className="flex items-center gap-2.5 active:opacity-70 transition-opacity">
-            {currentUser.profile.avatar_url ? (
-              <img
-                src={currentUser.profile.avatar_url}
-                alt={currentUser.profile.name}
-                className="w-9 h-9 rounded-full object-cover border-2 border-white/30"
-              />
-            ) : (
-              <div className="w-9 h-9 rounded-full bg-brand-500/30 text-brand-200 flex items-center justify-center text-xs font-bold border-2 border-white/30">
-                {initials}
-              </div>
-            )}
+            <img
+              src={currentUser.profile.avatar_url && (currentUser.profile.avatar_url.startsWith("http") || currentUser.profile.avatar_url.startsWith("data:")) ? currentUser.profile.avatar_url : "/default_avatar.png"}
+              alt={currentUser.profile.name}
+              className="w-9 h-9 rounded-full object-cover border-2 border-white/30"
+            />
             <div>
               <p className="text-white text-sm font-bold leading-tight">{currentUser.profile.name}</p>
               <p className="text-white/50 text-[11px] leading-tight">{storyTimeAgo(currentStory.created_at)}</p>

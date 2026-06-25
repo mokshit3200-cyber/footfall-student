@@ -75,6 +75,8 @@ export async function dbUpdateProfile(
     business_name: string;
     business_type: "sell" | "service" | "club";
     business_contact: string;
+    username: string;
+    username_changed_at: string[];
   }>
 ) {
   await supabase.from("profiles").update(fields).eq("id", userId);
@@ -107,6 +109,12 @@ export async function dbLoadAll(
       d.profile.bio = p.bio ?? d.profile.bio;
       d.profile.skills = p.skills ?? d.profile.skills;
       d.profile.links = (p.links as typeof d.profile.links) ?? d.profile.links;
+      d.profile.username = p.username ?? d.profile.username;
+      d.profile.username_changed_at = p.username_changed_at ?? [];
+      d.profile.is_ambassador = p.is_ambassador ?? d.profile.is_ambassador;
+      d.profile.ambassador_role = p.ambassador_role ?? d.profile.ambassador_role;
+      d.profile.global_signup_rank = p.global_signup_rank ?? d.profile.global_signup_rank;
+      d.profile.campus_signup_rank = p.campus_signup_rank ?? d.profile.campus_signup_rank;
       d.profile.onboarded = true;
     }
 

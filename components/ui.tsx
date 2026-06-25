@@ -169,9 +169,17 @@ export function triggerConfetti() {
   update();
 }
 
+let sharedAudioCtx: AudioContext | null = null;
+
 function getAudioContext(): AudioContext {
-  const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-  return new AudioContextClass();
+  if (!sharedAudioCtx) {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    sharedAudioCtx = new AudioContextClass();
+  }
+  if (sharedAudioCtx.state === "suspended") {
+    sharedAudioCtx.resume().catch(() => {});
+  }
+  return sharedAudioCtx;
 }
 
 export function playTick() {

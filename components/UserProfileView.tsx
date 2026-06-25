@@ -83,12 +83,11 @@ const DEMO_PROFILES_EXT: Record<string, any> = {
 
 function Avatar({ person, size = 10 }: { person: any; size?: number }) {
   const name = person.name || person.business_name || "?";
-  const initials = name.trim().split(/\s+/).map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
-  const cls = `w-${size} h-${size} rounded-full flex items-center justify-center font-bold text-sm shrink-0`;
+  const cls = `w-${size} h-${size} rounded-full flex items-center justify-center shrink-0 overflow-hidden`;
   const url = person.avatar_url || person.avatar;
-  return url
-    ? <img src={url} alt={name} className={`${cls} object-cover border border-white/10`} />
-    : <div className={`${cls} bg-brand-500/20 text-brand-300 border border-brand-500/30 text-xs`}>{initials}</div>;
+  const hasImage = url && (url.startsWith("http") || url.startsWith("data:"));
+  const imgSrc = hasImage ? url : "/default_avatar.png";
+  return <img src={imgSrc} alt={name} className={`${cls} object-cover border border-white/10`} />;
 }
 
 interface UserProfileViewProps {
@@ -414,7 +413,7 @@ export default function UserProfileView({
                   }}
                   className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-extrabold text-emerald-400 flex items-center gap-1 hover:bg-emerald-500/20 active:scale-95 transition-all"
                 >
-                  🏆 Campus Crew: {resolvedProfile.ambassador_role || "Crew Member"}
+                  Campus Crew: {resolvedProfile.ambassador_role || "Crew Member"}
                 </button>
               )}
               {resolvedProfile.global_signup_rank && resolvedProfile.global_signup_rank <= 999 && (
@@ -427,7 +426,7 @@ export default function UserProfileView({
                   }}
                   className="px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-[9px] font-extrabold text-amber-400 flex items-center gap-1 hover:bg-amber-500/20 active:scale-95 transition-all"
                 >
-                  🎖️ Global OG #{resolvedProfile.global_signup_rank}
+                  Global OG #{resolvedProfile.global_signup_rank}
                 </button>
               )}
               {resolvedProfile.campus_signup_rank && resolvedProfile.campus_signup_rank <= 999 && (
@@ -440,7 +439,7 @@ export default function UserProfileView({
                   }}
                   className="px-2.5 py-0.5 rounded-full bg-slate-300/10 border border-slate-300/20 text-[9px] font-extrabold text-slate-300 flex items-center gap-1 hover:bg-slate-300/20 active:scale-95 transition-all"
                 >
-                  🎖️ Campus OG #{resolvedProfile.campus_signup_rank}
+                  Campus OG #{resolvedProfile.campus_signup_rank}
                 </button>
               )}
             </div>
@@ -755,13 +754,9 @@ export default function UserProfileView({
             {/* Header */}
             <div className="text-center space-y-1.5 pb-4 border-b border-white/[0.05]">
               <div className="inline-flex p-3 rounded-full bg-white/[0.03] border border-white/[0.06] mb-1">
-                {perksType === "gold" ? (
-                  <span className="text-3xl">🎖️</span>
-                ) : perksType === "silver" ? (
-                  <span className="text-3xl">🎖️</span>
-                ) : (
-                  <span className="text-3xl">🏆</span>
-                )}
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-8 h-8 ${perksType === "gold" ? "text-amber-400" : perksType === "silver" ? "text-slate-400" : "text-emerald-400"}`}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21a3.745 3.745 0 01-3.068-.957 3.745 3.745 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.745 3.745 0 013.296-1.043A3.745 3.745 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.745 3.745 0 013.296 1.043 3.745 3.745 0 011.043 3.296A3.745 3.745 0 0121 12z" />
+                </svg>
               </div>
               <h3 className="text-base font-bold text-ink">
                 {perksType === "gold" && `Global Gold OG Member #${perksValue}`}

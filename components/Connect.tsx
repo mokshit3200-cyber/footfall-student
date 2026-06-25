@@ -154,11 +154,12 @@ function timeAgo(iso: string) {
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
 function Avatar({ person, size = 10 }: { person: any; size?: number }) {
-  const initials = (person.name || "?").trim().split(/\s+/).map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
-  const cls = `w-${size} h-${size} rounded-full flex items-center justify-center font-bold text-sm shrink-0`;
-  return person.avatar_url
-    ? <img src={person.avatar_url} alt={person.name} className={`${cls} object-cover border border-white/10`} />
-    : <div className={`${cls} bg-brand-500/20 text-brand-300 border border-brand-500/30 text-xs`}>{initials}</div>;
+  const name = person.name || "?";
+  const cls = `w-${size} h-${size} rounded-full flex items-center justify-center shrink-0 overflow-hidden`;
+  const url = person.avatar_url || person.avatar;
+  const hasImage = url && (url.startsWith("http") || url.startsWith("data:"));
+  const imgSrc = hasImage ? url : "/default_avatar.png";
+  return <img src={imgSrc} alt={name} className={`${cls} object-cover border border-white/10`} />;
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -1496,11 +1497,11 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
               >
                 <div className="relative">
                   <div className="w-[60px] h-[60px] rounded-full bg-white/[0.06] border-2 border-dashed border-white/20 flex items-center justify-center group-hover:border-brand-400/50 transition-colors">
-                    {profile?.avatar_url ? (
-                      <img src={profile.avatar_url} alt="Me" className="w-full h-full rounded-full object-cover opacity-60" />
-                    ) : (
-                      <span className="text-lg font-bold text-white/30">{profile?.name?.[0]?.toUpperCase() || "?"}</span>
-                    )}
+                    <img 
+                      src={profile?.avatar_url && (profile.avatar_url.startsWith("http") || profile.avatar_url.startsWith("data:")) ? profile.avatar_url : "/default_avatar.png"} 
+                      alt="Me" 
+                      className="w-full h-full rounded-full object-cover opacity-60" 
+                    />
                   </div>
                   <span className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-brand-500 flex items-center justify-center border-2 border-black">
                     <PlusIcon className="w-3 h-3 text-white" />
@@ -1521,11 +1522,11 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
                   >
                     <div className={`w-[60px] h-[60px] rounded-full p-[3px] ${allViewed ? "bg-gradient-to-br from-white/10 to-white/5" : "bg-gradient-to-br from-green-400 to-emerald-500"}`}>
                       <div className="w-full h-full rounded-full bg-black flex items-center justify-center overflow-hidden border-2 border-black">
-                        {su.profile.avatar_url ? (
-                          <img src={su.profile.avatar_url} alt={su.profile.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="text-xs font-bold text-brand-300">{initials}</span>
-                        )}
+                        <img 
+                          src={su.profile.avatar_url && (su.profile.avatar_url.startsWith("http") || su.profile.avatar_url.startsWith("data:")) ? su.profile.avatar_url : "/default_avatar.png"} 
+                          alt={su.profile.name} 
+                          className="w-full h-full object-cover" 
+                        />
                       </div>
                     </div>
                     <span className="text-[10px] font-semibold text-ink-mute truncate max-w-[60px]">{su.profile.name.split(" ")[0]}</span>
@@ -1551,13 +1552,11 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
             <div className="flex items-center gap-4">
               <div className="relative w-12 h-12 rounded-full flex items-center justify-center shrink-0">
                 <div className="w-full h-full rounded-full bg-white/[0.05] border border-white/[0.12] flex items-center justify-center overflow-hidden">
-                  {profile?.avatar_url ? (
-                    <img src={profile.avatar_url} alt="Me" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-base font-bold text-brand-300">
-                      {profile?.name?.[0]?.toUpperCase() || "?"}
-                    </span>
-                  )}
+                  <img 
+                    src={profile?.avatar_url && (profile.avatar_url.startsWith("http") || profile.avatar_url.startsWith("data:")) ? profile.avatar_url : "/default_avatar.png"} 
+                    alt="Me" 
+                    className="w-full h-full object-cover" 
+                  />
                 </div>
                 {mySignal && (
                   <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-brand-500 rounded-full border border-black flex items-center justify-center">
@@ -1764,11 +1763,11 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
                             const initials = (r.profiles?.name || "?").trim().split(/\s+/).map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
                             return (
                               <div key={idx} className="w-5 h-5 rounded-full border border-[#141416] overflow-hidden bg-brand-500/20 flex items-center justify-center text-[7px] font-bold text-white shrink-0">
-                                {r.profiles?.avatar_url ? (
-                                  <img src={r.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
-                                ) : (
-                                  <span>{initials}</span>
-                                )}
+                                <img 
+                                  src={r.profiles?.avatar_url && (r.profiles.avatar_url.startsWith("http") || r.profiles.avatar_url.startsWith("data:")) ? r.profiles.avatar_url : "/default_avatar.png"} 
+                                  alt="" 
+                                  className="w-full h-full object-cover" 
+                                />
                               </div>
                             );
                           })}
@@ -1896,11 +1895,11 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-8 h-8 rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden border border-white/[0.08]">
-                          {friend.avatar_url ? (
-                            <img src={friend.avatar_url} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            <span>{initials}</span>
-                          )}
+                          <img 
+                            src={friend.avatar_url && (friend.avatar_url.startsWith("http") || friend.avatar_url.startsWith("data:")) ? friend.avatar_url : "/default_avatar.png"} 
+                            alt="" 
+                            className="w-full h-full object-cover" 
+                          />
                         </div>
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-ink truncate">{friend.name}</p>
@@ -2102,11 +2101,11 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
                         onClick={() => { setRequestsSheetOpen(false); openViewProfile({ ...p, id: p.id }); }}
                         className="flex items-center gap-3 flex-1 min-w-0 text-left"
                       >
-                        {p.avatar_url ? (
-                          <img src={p.avatar_url} alt={p.name} className="w-10 h-10 rounded-full object-cover border border-white/10 shrink-0" />
-                        ) : (
-                          <div className="w-10 h-10 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30 flex items-center justify-center text-xs font-bold shrink-0">{initials}</div>
-                        )}
+                        <img 
+                          src={p.avatar_url && (p.avatar_url.startsWith("http") || p.avatar_url.startsWith("data:")) ? p.avatar_url : "/default_avatar.png"} 
+                          alt={p.name} 
+                          className="w-10 h-10 rounded-full object-cover border border-white/10 shrink-0" 
+                        />
                         <div className="min-w-0">
                           <div className="flex items-center gap-1">
                             <p className="text-sm font-bold text-ink truncate">{p.name}</p>
@@ -2175,13 +2174,11 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
                       }}
                       className="w-full flex items-center gap-3 p-3 rounded-2xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.05] active:scale-[0.98] transition-all text-left"
                     >
-                      {peer.avatar_url ? (
-                        <img src={peer.avatar_url} alt={peer.name} className="w-10 h-10 rounded-full object-cover border border-white/10 shrink-0" />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30 flex items-center justify-center text-xs font-bold shrink-0">
-                          {peerInitials}
-                        </div>
-                      )}
+                      <img 
+                        src={peer.avatar_url && (peer.avatar_url.startsWith("http") || peer.avatar_url.startsWith("data:")) ? peer.avatar_url : "/default_avatar.png"} 
+                        alt={peer.name} 
+                        className="w-10 h-10 rounded-full object-cover border border-white/10 shrink-0" 
+                      />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-ink truncate">{peer.name}</p>
                         <p className="text-[11px] text-ink-mute truncate mt-0.5">{convo.last_message || "Start chatting…"}</p>
@@ -2229,13 +2226,12 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
                   <div className="w-full bg-[#141416] border border-white/[0.08] rounded-3xl p-5 relative text-left">
                     <div className="flex items-start gap-3.5">
                       <div className="relative shrink-0">
-                        {profile?.avatar_url ? (
-                          <img src={profile.avatar_url} alt={profile.name} className="w-10 h-10 rounded-full object-cover border border-white/10" style={{ borderColor: intentInfo.color }} />
-                        ) : (
-                          <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs shrink-0 bg-brand-500/20 text-brand-300 border-2" style={{ borderColor: intentInfo.color }}>
-                            {initials}
-                          </div>
-                        )}
+                        <img 
+                          src={profile?.avatar_url && (profile.avatar_url.startsWith("http") || profile.avatar_url.startsWith("data:")) ? profile.avatar_url : "/default_avatar.png"} 
+                          alt={profile?.name || ""} 
+                          className="w-10 h-10 rounded-full object-cover border border-white/10" 
+                          style={{ borderColor: intentInfo.color }} 
+                        />
                         <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-brand-500 rounded-full border-2 border-black flex items-center justify-center">
                           <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
                         </span>

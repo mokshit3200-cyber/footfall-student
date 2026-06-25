@@ -10,7 +10,7 @@ import { isDemo } from "@/lib/config";
 import { subscribeUserToPush, unsubscribeUserFromPush } from "./PWA";
 import { overallStats } from "@/lib/attendance";
 import { Sheet, SectionHeader, playPop, triggerConfetti } from "./ui";
-import { ChevronRight, SparkIcon, XIcon, CheckIcon, TrashIcon, ArrowLeftIcon, LockIcon, SignalIcon } from "./icons";
+import { ChevronRight, SparkIcon, XIcon, CheckIcon, TrashIcon, ArrowLeftIcon, LockIcon, SignalIcon, GearIcon } from "./icons";
 
 export default function Profile({
   onOpenBusiness,
@@ -75,6 +75,8 @@ export default function Profile({
   const [remindersOpen, setRemindersOpen] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
 
   // Social sheets & custom modals states
   const [socialSheetOpen, setSocialSheetOpen] = useState(false);
@@ -231,6 +233,17 @@ export default function Profile({
 
   return (
     <div className="px-5 pt-12 pb-28 min-h-screen flex flex-col no-scrollbar">
+      {/* TOP HEADER BAR */}
+      <div className="flex items-center justify-between mb-4 border-b border-white/[0.04] pb-3 shrink-0">
+        <h2 className="text-[17px] font-black text-ink select-none tracking-tight">@{activeProfile.username || "student"}</h2>
+        <button
+          onClick={() => setSettingsOpen(true)}
+          className="p-2 -mr-2 rounded-full hover:bg-white/[0.05] active:scale-95 transition text-ink-soft hover:text-ink shrink-0"
+        >
+          <GearIcon className="w-5.5 h-5.5" />
+        </button>
+      </div>
+
       {/* INSTAGRAM-STYLE PROFILE HEADER */}
       <div className="flex items-center justify-between mb-5">
         <div className="relative shrink-0">
@@ -238,11 +251,11 @@ export default function Profile({
             onClick={() => setEditProfileOpen(true)}
             className="w-20 h-20 rounded-full bg-white/[0.07] border border-white/[0.14] flex items-center justify-center cursor-pointer active:scale-95 transition overflow-hidden"
           >
-            {profile.avatar && profile.avatar.startsWith("data:") ? (
-              <img src={profile.avatar} alt="Avatar" className="w-full h-full object-cover rounded-full" />
-            ) : (
-              <span className="text-3xl">{profile.avatar || "👨‍💻"}</span>
-            )}
+            <img 
+              src={profile.avatar && (profile.avatar.startsWith("data:") || profile.avatar.startsWith("http")) ? profile.avatar : "/default_avatar.png"} 
+              alt="Avatar" 
+              className="w-full h-full object-cover rounded-full" 
+            />
           </div>
         </div>
 
@@ -312,7 +325,7 @@ export default function Profile({
               }}
               className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-extrabold text-emerald-400 flex items-center gap-1 hover:bg-emerald-500/20 active:scale-95 transition-all"
             >
-              🏆 Campus Crew: {activeProfile.ambassador_role || "Crew Member"}
+              Campus Crew: {activeProfile.ambassador_role || "Crew Member"}
             </button>
           )}
           {activeProfile.global_signup_rank && activeProfile.global_signup_rank <= 999 && (
@@ -325,7 +338,7 @@ export default function Profile({
               }}
               className="px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-[9px] font-extrabold text-amber-400 flex items-center gap-1 hover:bg-amber-500/20 active:scale-95 transition-all"
             >
-              🎖️ Global OG #{activeProfile.global_signup_rank}
+              Global OG #{activeProfile.global_signup_rank}
             </button>
           )}
           {activeProfile.campus_signup_rank && activeProfile.campus_signup_rank <= 999 && (
@@ -338,7 +351,7 @@ export default function Profile({
               }}
               className="px-2.5 py-0.5 rounded-full bg-slate-300/10 border border-slate-300/20 text-[9px] font-extrabold text-slate-300 flex items-center gap-1 hover:bg-slate-300/20 active:scale-95 transition-all"
             >
-              🎖️ Campus OG #{activeProfile.campus_signup_rank}
+              Campus OG #{activeProfile.campus_signup_rank}
             </button>
           )}
         </div>
@@ -475,165 +488,7 @@ export default function Profile({
         </button>
       )}
 
-      {/* GROUPED SETTINGS */}
-      <SectionHeader title="Settings" />
-      <div className="space-y-6 mb-6 text-left">
-        {/* Account Group */}
-        <div>
-          <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider mb-2 pl-1">Account</p>
-          <div className="card divide-y divide-white/[0.04] shadow-sm">
-            <button onClick={() => setEditProfileOpen(true)} className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]">
-              <span className="text-sm text-ink-soft font-semibold">Edit Profile</span>
-              <ChevronRight className="w-4 h-4 text-ink-mute" />
-            </button>
-            <div className="w-full flex items-center justify-between p-3.5">
-              <div>
-                <span className="text-sm text-ink-soft font-semibold block">Private Account</span>
-                <span className="text-[10px] text-ink-mute">Approval needed for new followers</span>
-              </div>
-              <button
-                onClick={togglePrivacy}
-                className={`w-10 h-5 rounded-full transition-colors relative shrink-0 ${isPrivate ? "bg-brand-500" : "bg-white/10"}`}
-              >
-                <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all ${isPrivate ? "left-5.5" : "left-0.5"}`} />
-              </button>
-            </div>
-            {!profile?.verified && (
-              <button onClick={() => setVerifyOpen(true)} className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]">
-                <span className="text-sm text-brand-300 font-semibold">🛡️ Verify Student ID</span>
-                <ChevronRight className="w-4 h-4 text-brand-300" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Academic Group */}
-        <div>
-          <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider mb-2 pl-1">Academic</p>
-          <div className="card divide-y divide-white/[0.04] shadow-sm">
-            <button onClick={() => setAcademicSettingsOpen(true)} className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]">
-              <span className="text-sm text-ink-soft font-semibold">Attendance target</span>
-              <span className="flex items-center gap-1 text-sm font-bold text-ink">
-                {Math.round(profile.attendanceTarget * 100) + "%"}
-                <ChevronRight className="w-4 h-4 text-ink-mute" />
-              </span>
-            </button>
-            <button onClick={() => setAcademicSettingsOpen(true)} className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]">
-              <span className="text-sm text-ink-soft font-semibold">Grade system</span>
-              <span className="flex items-center gap-1 text-sm font-bold text-ink">
-                {profile.gradeSystem === "percentage" ? "Percentage" : "10-point GPA"}
-                <ChevronRight className="w-4 h-4 text-ink-mute" />
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {/* Money Group */}
-        <div>
-          <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider mb-2 pl-1">Money</p>
-          <div className="card shadow-sm">
-            <button onClick={() => setMoneySettingsOpen(true)} className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]">
-              <span className="text-sm text-ink-soft font-semibold">Monthly budget</span>
-              <span className="flex items-center gap-1 text-sm font-bold text-ink">
-                {profile.monthlyBudget ? "₹" + profile.monthlyBudget : "Not set"}
-                <ChevronRight className="w-4 h-4 text-ink-mute" />
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {/* Notifications Group */}
-        <div>
-          <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider mb-2 pl-1">Notifications & Sound</p>
-          <div className="card divide-y divide-white/[0.04] shadow-sm">
-            <button onClick={() => setRemindersOpen(true)} className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]">
-              <span className="text-sm text-ink-soft font-semibold">Reminders</span>
-              <span className="flex items-center gap-1 text-sm font-bold text-ink">
-                {data.reminders?.enabled ? "On" : "Off"}
-                <ChevronRight className="w-4 h-4 text-ink-mute" />
-              </span>
-            </button>
-            <div className="w-full flex items-center justify-between p-3.5">
-              <div>
-                <span className="text-sm text-ink-soft font-semibold block">Sound Effects</span>
-                <span className="text-[10px] text-ink-mute">Audio haptics for interactions</span>
-              </div>
-              <button
-                onClick={() => {
-                  update((d) => {
-                    d.profile.soundEnabled = d.profile.soundEnabled === false ? true : false;
-                  });
-                }}
-                className={`w-10 h-5 rounded-full transition-colors relative shrink-0 ${profile.soundEnabled !== false ? "bg-brand-500" : "bg-white/10"}`}
-              >
-                <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all ${profile.soundEnabled !== false ? "left-5.5" : "left-0.5"}`} />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* About Group */}
-        <div>
-          <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider mb-2 pl-1">About</p>
-          <div className="card divide-y divide-white/[0.04] shadow-sm">
-            <div className="flex items-center justify-between p-3.5">
-              <span className="text-sm text-ink-soft font-semibold">App version</span>
-              <span className="text-xs text-ink-mute font-bold flex items-center gap-1.5">
-                Cmpus v1.0
-                <span className="px-1.5 py-0.5 rounded-full bg-brand-500/20 text-brand-300 text-[8px] font-black tracking-widest uppercase border border-brand-500/30">BETA</span>
-              </span>
-            </div>
-            <a href="/terms" className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]">
-              <span className="text-sm text-ink-soft font-semibold">Terms of Service</span>
-              <ChevronRight className="w-4 h-4 text-ink-mute" />
-            </a>
-            <a href="/privacy" className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]">
-              <span className="text-sm text-ink-soft font-semibold">Privacy Policy</span>
-              <ChevronRight className="w-4 h-4 text-ink-mute" />
-            </a>
-          </div>
-        </div>
-
-        {/* Danger Zone */}
-        <div>
-          <p className="text-[10px] font-bold text-red-500/80 uppercase tracking-wider mb-2 pl-1">Danger Zone</p>
-          <div className="card divide-y divide-white/[0.04] border border-red-500/10 shadow-sm">
-            <button
-              onClick={async () => {
-                if (confirm("Are you sure you want to sign out?")) {
-                  await signOut();
-                }
-              }}
-              className="w-full p-3.5 text-left active:bg-white/[0.04] text-red-400 font-semibold text-sm flex items-center justify-between"
-            >
-              <span>Sign Out</span>
-              <ChevronRight className="w-4 h-4 text-red-400" />
-            </button>
-            <button
-              onClick={() => {
-                if (confirm("Reset all data? This clears everything on this device.")) {
-                  reset();
-                }
-              }}
-              className="w-full p-3.5 text-left active:bg-white/[0.04] text-red-500 font-bold text-sm flex items-center justify-between"
-            >
-              <span>Reset all data</span>
-              <ChevronRight className="w-4 h-4 text-red-500" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <p className="text-center text-ink-mute text-[10px] mt-2 mb-1">
-        Powered by <span className="font-semibold text-brand-500">Footfall &amp; Co</span>
-      </p>
-      <p className="text-center text-ink-mute/60 text-[9px] mb-8 tracking-wide">
-        <span className="font-bold text-brand-400">BETA</span>
-        {" · "}
-        {process.env.NEXT_PUBLIC_BUILD_TIME
-          ? `Build ${new Date(process.env.NEXT_PUBLIC_BUILD_TIME).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`
-          : "Build —"}
-      </p>
+      {/* Settings section has been relocated to top bar gear menu sheet */}
 
       {/* SHEETS & DIALOGS */}
       <RemindersSheet
@@ -658,6 +513,213 @@ export default function Profile({
         name={profile?.name || ""}
         college={profile?.college || ""}
         onVerified={() => refreshProfile()}
+      />
+
+      {/* SETTINGS SHEET */}
+      <Sheet open={settingsOpen} onClose={() => setSettingsOpen(false)} title="Settings">
+        <div className="space-y-6 text-left my-2">
+          {/* Account Group */}
+          <div>
+            <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider mb-2 pl-1">Account</p>
+            <div className="card divide-y divide-white/[0.04] shadow-sm">
+              <button
+                onClick={() => {
+                  setSettingsOpen(false);
+                  setEditProfileOpen(true);
+                }}
+                className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]"
+              >
+                <span className="text-sm text-ink-soft font-semibold">Edit Profile</span>
+                <ChevronRight className="w-4 h-4 text-ink-mute" />
+              </button>
+              <div className="w-full flex items-center justify-between p-3.5">
+                <div>
+                  <span className="text-sm text-ink-soft font-semibold block">Private Account</span>
+                  <span className="text-[10px] text-ink-mute">Approval needed for new followers</span>
+                </div>
+                <button
+                  onClick={togglePrivacy}
+                  className={`w-10 h-5 rounded-full transition-colors relative shrink-0 ${isPrivate ? "bg-brand-500" : "bg-white/10"}`}
+                >
+                  <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all ${isPrivate ? "left-5.5" : "left-0.5"}`} />
+                </button>
+              </div>
+              {!profile?.verified && (
+                <button
+                  onClick={() => {
+                    setSettingsOpen(false);
+                    setVerifyOpen(true);
+                  }}
+                  className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]"
+                >
+                  <span className="text-sm text-brand-300 font-semibold">Verify Student ID</span>
+                  <ChevronRight className="w-4 h-4 text-brand-300" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Academic Group */}
+          <div>
+            <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider mb-2 pl-1">Academic</p>
+            <div className="card divide-y divide-white/[0.04] shadow-sm">
+              <button
+                onClick={() => {
+                  setSettingsOpen(false);
+                  setAcademicSettingsOpen(true);
+                }}
+                className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]"
+              >
+                <span className="text-sm text-ink-soft font-semibold">Attendance target</span>
+                <span className="flex items-center gap-1 text-sm font-bold text-ink">
+                  {Math.round(profile.attendanceTarget * 100) + "%"}
+                  <ChevronRight className="w-4 h-4 text-ink-mute" />
+                </span>
+              </button>
+              <button
+                onClick={() => {
+                  setSettingsOpen(false);
+                  setAcademicSettingsOpen(true);
+                }}
+                className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]"
+              >
+                <span className="text-sm text-ink-soft font-semibold">Grade system</span>
+                <span className="flex items-center gap-1 text-sm font-bold text-ink">
+                  {profile.gradeSystem === "percentage" ? "Percentage" : "10-point GPA"}
+                  <ChevronRight className="w-4 h-4 text-ink-mute" />
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Money Group */}
+          <div>
+            <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider mb-2 pl-1">Money</p>
+            <div className="card shadow-sm">
+              <button
+                onClick={() => {
+                  setSettingsOpen(false);
+                  setMoneySettingsOpen(true);
+                }}
+                className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]"
+              >
+                <span className="text-sm text-ink-soft font-semibold">Monthly budget</span>
+                <span className="flex items-center gap-1 text-sm font-bold text-ink">
+                  {profile.monthlyBudget ? "₹" + profile.monthlyBudget : "Not set"}
+                  <ChevronRight className="w-4 h-4 text-ink-mute" />
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Notifications Group */}
+          <div>
+            <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider mb-2 pl-1">Notifications & Sound</p>
+            <div className="card divide-y divide-white/[0.04] shadow-sm">
+              <button
+                onClick={() => {
+                  setSettingsOpen(false);
+                  setRemindersOpen(true);
+                }}
+                className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]"
+              >
+                <span className="text-sm text-ink-soft font-semibold">Reminders</span>
+                <span className="flex items-center gap-1 text-sm font-bold text-ink">
+                  {data.reminders?.enabled ? "On" : "Off"}
+                  <ChevronRight className="w-4 h-4 text-ink-mute" />
+                </span>
+              </button>
+              <div className="w-full flex items-center justify-between p-3.5">
+                <div>
+                  <span className="text-sm text-ink-soft font-semibold block">Sound Effects</span>
+                  <span className="text-[10px] text-ink-mute">Audio haptics for interactions</span>
+                </div>
+                <button
+                  onClick={() => {
+                    update((d) => {
+                      d.profile.soundEnabled = d.profile.soundEnabled === false ? true : false;
+                    });
+                  }}
+                  className={`w-10 h-5 rounded-full transition-colors relative shrink-0 ${profile.soundEnabled !== false ? "bg-brand-500" : "bg-white/10"}`}
+                >
+                  <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all ${profile.soundEnabled !== false ? "left-5.5" : "left-0.5"}`} />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* About Group */}
+          <div>
+            <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider mb-2 pl-1">About</p>
+            <div className="card divide-y divide-white/[0.04] shadow-sm">
+              <div className="flex items-center justify-between p-3.5">
+                <span className="text-sm text-ink-soft font-semibold">App version</span>
+                <span className="text-xs text-ink-mute font-bold flex items-center gap-1.5">
+                  Cmpus v1.0
+                  <span className="px-1.5 py-0.5 rounded-full bg-brand-500/20 text-brand-300 text-[8px] font-black tracking-widest uppercase border border-brand-500/30">BETA</span>
+                </span>
+              </div>
+              <a href="/terms" className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]">
+                <span className="text-sm text-ink-soft font-semibold">Terms of Service</span>
+                <ChevronRight className="w-4 h-4 text-ink-mute" />
+              </a>
+              <a href="/privacy" className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]">
+                <span className="text-sm text-ink-soft font-semibold">Privacy Policy</span>
+                <ChevronRight className="w-4 h-4 text-ink-mute" />
+              </a>
+            </div>
+          </div>
+
+          {/* Danger Zone */}
+          <div>
+            <p className="text-[10px] font-bold text-red-500/80 uppercase tracking-wider mb-2 pl-1">Danger Zone</p>
+            <div className="card divide-y divide-white/[0.04] border border-red-500/10 shadow-sm">
+              <button
+                onClick={async () => {
+                  if (confirm("Are you sure you want to sign out?")) {
+                    await signOut();
+                  }
+                }}
+                className="w-full p-3.5 text-left active:bg-white/[0.04] text-red-400 font-semibold text-sm flex items-center justify-between"
+              >
+                <span>Sign Out</span>
+                <ChevronRight className="w-4 h-4 text-red-400" />
+              </button>
+              <button
+                onClick={() => {
+                  setSettingsOpen(false);
+                  setResetConfirmOpen(true);
+                }}
+                className="w-full p-3.5 text-left active:bg-white/[0.04] text-red-500 font-bold text-sm flex items-center justify-between"
+              >
+                <span>Reset all data</span>
+                <ChevronRight className="w-4 h-4 text-red-500" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <p className="text-center text-ink-mute text-[10px] mt-6 mb-1">
+          Powered by <span className="font-semibold text-brand-500">Footfall &amp; Co</span>
+        </p>
+        <p className="text-center text-ink-mute/60 text-[9px] mb-4 tracking-wide">
+          <span className="font-bold text-brand-400">BETA</span>
+          {" · "}
+          {process.env.NEXT_PUBLIC_BUILD_TIME
+            ? `Build ${new Date(process.env.NEXT_PUBLIC_BUILD_TIME).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`
+            : "Build —"}
+        </p>
+      </Sheet>
+
+      {/* RESET DATA CONFIRMATION SHEET */}
+      <ResetConfirmSheet
+        open={resetConfirmOpen}
+        onClose={() => setResetConfirmOpen(false)}
+        username={activeProfile.username || "student"}
+        onConfirm={() => {
+          reset();
+          setResetConfirmOpen(false);
+        }}
       />
       <SocialListSheet
         open={socialSheetOpen}
@@ -716,13 +778,9 @@ export default function Profile({
             {/* Header */}
             <div className="text-center space-y-1.5 pb-4 border-b border-white/[0.05]">
               <div className="inline-flex p-3 rounded-full bg-white/[0.03] border border-white/[0.06] mb-1">
-                {perksType === "gold" ? (
-                  <span className="text-3xl">🎖️</span>
-                ) : perksType === "silver" ? (
-                  <span className="text-3xl">🎖️</span>
-                ) : (
-                  <span className="text-3xl">🏆</span>
-                )}
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={`w-8 h-8 ${perksType === "gold" ? "text-amber-400" : perksType === "silver" ? "text-slate-400" : "text-emerald-400"}`}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21a3.745 3.745 0 01-3.068-.957 3.745 3.745 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.745 3.745 0 013.296-1.043A3.745 3.745 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.745 3.745 0 013.296 1.043 3.745 3.745 0 011.043 3.296A3.745 3.745 0 0121 12z" />
+                </svg>
               </div>
               <h3 className="text-base font-bold text-ink">
                 {perksType === "gold" && `Global Gold OG Member #${perksValue}`}
@@ -984,7 +1042,16 @@ function EditProfileSheet({
   const [portfolio, setPortfolio] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
 
-  const emojis = ["👨‍💻", "👩‍💻", "🎓", "🌟", "🎨", "🚀", "🍕", "🎸", "🐱", "🦁", "🥤", "🛹"];
+  const usernameChangesThisMonth = useMemo(() => {
+    const changes = data.profile?.username_changed_at || [];
+    const now = new Date();
+    return changes.filter((t: string) => {
+      const d = new Date(t);
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    }).length;
+  }, [data.profile?.username_changed_at]);
+
+  const isUsernameLimitExceeded = usernameChangesThisMonth >= 2 && username !== (data.profile?.username || "");
 
   useEffect(() => {
     if (open && data.profile) {
@@ -1069,6 +1136,14 @@ function EditProfileSheet({
       }
     }
 
+    const usernameChanged = username !== (data.profile?.username || "");
+    const canChange = !isUsernameLimitExceeded && (usernameStatus === "available" || usernameStatus === "idle");
+    let nextChangedAt = data.profile?.username_changed_at || [];
+    if (usernameChanged && canChange) {
+      const nowStr = new Date().toISOString();
+      nextChangedAt = [...nextChangedAt, nowStr];
+    }
+
     update((d) => {
       d.profile.name = name.trim();
       d.profile.college = college.trim() || undefined;
@@ -1078,6 +1153,10 @@ function EditProfileSheet({
       d.profile.bio = trimmedBio;
       d.profile.skills = trimmedSkills;
       d.profile.links = hasLinks ? links : undefined;
+      if (usernameChanged && canChange) {
+        d.profile.username = username;
+        d.profile.username_changed_at = nextChangedAt;
+      }
     });
 
     if (!isDemo() && user) {
@@ -1091,10 +1170,9 @@ function EditProfileSheet({
         links: hasLinks ? (links as Record<string, string>) : {},
         avatar_url: finalAvatar,
       };
-      // Save username if changed and valid
-      const usernameChanged = username !== (data.profile?.username || "");
-      if (usernameChanged && (usernameStatus === "available" || usernameStatus === "idle")) {
+      if (usernameChanged && canChange) {
         profileUpdate.username = username || undefined;
+        profileUpdate.username_changed_at = nextChangedAt;
       }
       dbUpdateProfile(user.id, profileUpdate);
     }
@@ -1116,59 +1194,46 @@ function EditProfileSheet({
 
   return (
     <Sheet open={open} onClose={onClose} title="Edit Profile">
-      <div className="space-y-4 text-left">
-        {/* Username */}
-        <div>
-          <label className="text-[11px] font-bold text-ink-soft uppercase tracking-wide block mb-1">
-            Username
-          </label>
+      <div className="space-y-5 text-left pb-4">
+        {/* Profile Picture (Instagram Style) */}
+        <div className="flex flex-col items-center justify-center py-2 gap-2">
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-mute text-sm font-medium select-none">@</span>
-            <input
-              className={`input text-sm pl-8 pr-10 transition-colors ${
-                usernameStatus === "available" ? "border-green-500/40 focus:border-green-500/60" :
-                usernameStatus === "taken" ? "border-red-500/40 focus:border-red-500/60" :
-                usernameStatus === "invalid" ? "border-amber-500/40 focus:border-amber-500/60" :
-                ""
-              }`}
-              placeholder="your_username"
-              value={username}
-              onChange={(e) => handleUsernameChange(e.target.value)}
-              maxLength={20}
-            />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2">
-              {usernameStatus === "checking" && (
-                <span className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin inline-block" />
-              )}
-              {usernameStatus === "available" && (
-                <span className="w-5 h-5 rounded-full bg-green-500/20 text-green-400 inline-flex items-center justify-center text-[10px]">✓</span>
-              )}
-              {usernameStatus === "taken" && (
-                <span className="w-5 h-5 rounded-full bg-red-500/20 text-red-400 inline-flex items-center justify-center text-[10px] font-bold">!</span>
-              )}
-              {usernameStatus === "invalid" && (
-                <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 inline-flex items-center justify-center text-[10px] font-bold">⚠</span>
-              )}
-            </span>
+            <div className="w-24 h-24 rounded-full bg-white/[0.07] border border-white/[0.14] flex items-center justify-center overflow-hidden">
+              <img 
+                src={avatar && (avatar.startsWith("data:") || avatar.startsWith("http")) ? avatar : "/default_avatar.png"} 
+                alt="Avatar Preview" 
+                className="w-full h-full object-cover rounded-full" 
+              />
+            </div>
+            {/* Tiny camera overlay badge */}
+            <label
+              htmlFor="avatar-file-upload-sheet"
+              className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-brand-500 hover:bg-brand-600 border-2 border-black flex items-center justify-center cursor-pointer active:scale-95 transition-all text-white shadow-lg shadow-black/40"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
+              </svg>
+            </label>
           </div>
-          <p className={`text-[10px] mt-1 font-medium transition-colors ${
-            usernameStatus === "available" ? "text-green-400" :
-            usernameStatus === "taken" ? "text-red-400" :
-            usernameStatus === "invalid" ? "text-amber-400" :
-            usernameStatus === "checking" ? "text-ink-mute" :
-            "text-transparent"
-          }`}>
-            {usernameStatus === "checking" && "Checking availability…"}
-            {usernameStatus === "available" && "Username is available!"}
-            {usernameStatus === "taken" && "Username is already taken"}
-            {usernameStatus === "invalid" && "3–20 chars: lowercase, numbers, underscores only"}
-            {usernameStatus === "idle" && "\u200b"}
-          </p>
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            id="avatar-file-upload-sheet"
+            onChange={handlePhotoUpload}
+          />
+          <label
+            htmlFor="avatar-file-upload-sheet"
+            className="text-xs font-bold text-brand-400 hover:text-brand-300 cursor-pointer active:scale-95 transition-all"
+          >
+            Change profile photo
+          </label>
         </div>
 
-        {/* Name */}
+        {/* Display Name */}
         <div>
-          <label className="text-[11px] font-bold text-ink-soft uppercase tracking-wide block mb-1">
+          <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide block mb-1">
             Display Name
           </label>
           <input
@@ -1179,50 +1244,77 @@ function EditProfileSheet({
           />
         </div>
 
-        {/* College */}
+        {/* Username */}
         <div>
-          <label className="text-[11px] font-bold text-ink-soft uppercase tracking-wide block mb-1">
-            College
-          </label>
-          <input
-            className="input text-sm"
-            placeholder="e.g. Delhi Technological University"
-            value={college}
-            onChange={(e) => setCollege(e.target.value)}
-          />
-        </div>
+          <div className="flex justify-between items-baseline mb-1">
+            <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide block">
+              Username
+            </label>
+            <span className="text-[9px] text-ink-mute font-bold">
+              Changes this month: {usernameChangesThisMonth}/2
+            </span>
+          </div>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-mute text-sm font-medium select-none">@</span>
+            <input
+              className={`input text-sm pl-8 pr-10 transition-colors ${
+                isUsernameLimitExceeded ? "border-red-500/50 bg-red-500/5 cursor-not-allowed" :
+                usernameStatus === "available" ? "border-green-500/40 focus:border-green-500/60" :
+                usernameStatus === "taken" ? "border-red-500/40 focus:border-red-500/60" :
+                usernameStatus === "invalid" ? "border-amber-500/40 focus:border-amber-500/60" :
+                ""
+              }`}
+              placeholder="your_username"
+              value={username}
+              onChange={(e) => {
+                if (usernameChangesThisMonth < 2 || e.target.value === (data.profile?.username || "")) {
+                  handleUsernameChange(e.target.value);
+                }
+              }}
+              disabled={usernameChangesThisMonth >= 2 && username === (data.profile?.username || "")}
+              maxLength={20}
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2">
+              {usernameStatus === "checking" && (
+                <span className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin inline-block" />
+              )}
+              {usernameStatus === "available" && !isUsernameLimitExceeded && (
+                <span className="w-5 h-5 rounded-full bg-green-500/20 text-green-400 inline-flex items-center justify-center text-[10px]">✓</span>
+              )}
+              {usernameStatus === "taken" && !isUsernameLimitExceeded && (
+                <span className="w-5 h-5 rounded-full bg-red-500/20 text-red-400 inline-flex items-center justify-center text-[10px] font-bold">!</span>
+              )}
+              {usernameStatus === "invalid" && (
+                <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 inline-flex items-center justify-center text-[10px] font-bold">⚠</span>
+              )}
+            </span>
+          </div>
 
-        {/* Year */}
-        <div>
-          <label className="text-[11px] font-bold text-ink-soft uppercase tracking-wide block mb-1">
-            Year
-          </label>
-          <input
-            type="number"
-            inputMode="numeric"
-            className="input text-sm"
-            placeholder="e.g. 1, 2, 3, 4"
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-          />
-        </div>
-
-        {/* Course */}
-        <div>
-          <label className="text-[11px] font-bold text-ink-soft uppercase tracking-wide block mb-1">
-            Course / Department
-          </label>
-          <input
-            className="input text-sm"
-            placeholder="e.g. B.Tech Computer Science"
-            value={course}
-            onChange={(e) => setCourse(e.target.value)}
-          />
+          {/* Feedback messages */}
+          {isUsernameLimitExceeded ? (
+            <p className="text-[10px] mt-1 font-bold text-red-400">
+              ⚠️ Username change limit reached. Save is locked until you revert to @{data.profile?.username || ""}.
+            </p>
+          ) : (
+            <p className={`text-[10px] mt-1 font-medium transition-colors ${
+              usernameStatus === "available" ? "text-green-400" :
+              usernameStatus === "taken" ? "text-red-400" :
+              usernameStatus === "invalid" ? "text-amber-400" :
+              usernameStatus === "checking" ? "text-ink-mute" :
+              "text-transparent"
+            }`}>
+              {usernameStatus === "checking" && "Checking availability…"}
+              {usernameStatus === "available" && "Username is available!"}
+              {usernameStatus === "taken" && "Username is already taken"}
+              {usernameStatus === "invalid" && "3–20 chars: lowercase, numbers, underscores only"}
+              {usernameStatus === "idle" && "\u200b"}
+            </p>
+          )}
         </div>
 
         {/* Bio */}
         <div>
-          <label className="text-[11px] font-bold text-ink-soft uppercase tracking-wide block mb-1">
+          <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide block mb-1">
             Bio
           </label>
           <textarea
@@ -1236,15 +1328,55 @@ function EditProfileSheet({
           <p className="text-[10px] text-ink-mute mt-1 text-right">{bio.length}/150</p>
         </div>
 
+        {/* College & Course Info (Instagram Stacked Grid) */}
+        <div className="grid grid-cols-2 gap-3.5">
+          <div>
+            <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide block mb-1">
+              College
+            </label>
+            <input
+              className="input text-sm"
+              placeholder="College name"
+              value={college}
+              onChange={(e) => setCollege(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide block mb-1">
+              Year
+            </label>
+            <input
+              type="number"
+              inputMode="numeric"
+              className="input text-sm"
+              placeholder="Year"
+              value={year}
+              onChange={(e) => setYear(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide block mb-1">
+            Course / Department
+          </label>
+          <input
+            className="input text-sm"
+            placeholder="Course"
+            value={course}
+            onChange={(e) => setCourse(e.target.value)}
+          />
+        </div>
+
         {/* Skills */}
         <div>
-          <label className="text-[11px] font-bold text-ink-soft uppercase tracking-wide block mb-1">
+          <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide block mb-1">
             Skills
           </label>
           <div className="flex gap-2">
             <input
               className="input text-sm flex-1"
-              placeholder="Add a skill (e.g. React)"
+              placeholder="Add skill (e.g. Figma)"
               value={skillInput}
               onChange={(e) => setSkillInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSkill(); } }}
@@ -1252,7 +1384,7 @@ function EditProfileSheet({
             <button
               type="button"
               onClick={addSkill}
-              className="px-3 py-2 bg-brand-500/20 text-brand-300 rounded-xl text-sm font-bold hover:bg-brand-500/30 transition shrink-0"
+              className="px-3.5 py-2 bg-brand-500/20 text-brand-300 rounded-xl text-xs font-bold hover:bg-brand-500/30 transition shrink-0"
             >
               Add
             </button>
@@ -1275,7 +1407,7 @@ function EditProfileSheet({
 
         {/* Social Links */}
         <div>
-          <label className="text-[11px] font-bold text-ink-soft uppercase tracking-wide block mb-2">
+          <label className="text-[10px] font-bold text-ink-soft uppercase tracking-wide block mb-2">
             Social Links
           </label>
           <div className="space-y-2">
@@ -1298,59 +1430,16 @@ function EditProfileSheet({
           </div>
         </div>
 
-        {/* Avatar Selection */}
-        <div>
-          <label className="text-[11px] font-bold text-ink-soft uppercase tracking-wide block mb-2">
-            Select Avatar / Emoji
-          </label>
-          <div className="grid grid-cols-6 gap-2 mb-3">
-            {emojis.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => setAvatar(emoji)}
-                className={`h-11 rounded-xl flex items-center justify-center text-xl transition bg-white/[0.04] ${
-                  avatar === emoji ? "ring-2 ring-brand-500 bg-brand-500/15" : "hover:bg-white/[0.07]"
-                }`}
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
-          
-          <div className="text-center py-1">
-            <span className="text-xs text-ink-mute block mb-2">OR</span>
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              id="avatar-file-upload"
-              onChange={handlePhotoUpload}
-            />
-            <label
-              htmlFor="avatar-file-upload"
-              className="inline-block px-4 py-2 bg-white/[0.07] hover:bg-white/10 rounded-xl text-xs font-bold text-ink-soft cursor-pointer transition active:scale-95"
-            >
-              📷 Upload custom photo
-            </label>
-          </div>
-
-          {avatar && avatar.startsWith("data:") && (
-            <div className="mt-3 flex items-center justify-center gap-3 bg-white/[0.04] p-2.5 rounded-2xl">
-              <img src={avatar} alt="Preview" className="w-12 h-12 rounded-full object-cover border border-white/[0.14]" />
-              <span className="text-xs font-semibold text-ink-soft">Custom avatar selected</span>
-              <button 
-                type="button"
-                onClick={() => setAvatar("👨‍💻")} 
-                className="text-red-500 font-bold text-xs ml-auto"
-              >
-                Reset
-              </button>
-            </div>
-          )}
-        </div>
-
-        <button onClick={save} disabled={!name.trim()} className="btn-primary w-full py-2.5 mt-2">
+        {/* Action Button */}
+        <button
+          onClick={save}
+          disabled={!name.trim() || isUsernameLimitExceeded || usernameStatus === "taken" || usernameStatus === "invalid"}
+          className={`w-full py-3.5 mt-4 rounded-2xl text-xs font-bold text-white transition-all select-none flex items-center justify-center gap-1.5 ${
+            !name.trim() || isUsernameLimitExceeded || usernameStatus === "taken" || usernameStatus === "invalid"
+              ? "bg-brand-500/30 text-white/50 cursor-not-allowed border border-brand-500/5"
+              : "bg-brand-500 hover:bg-brand-600 active:scale-[0.98] shadow-lg shadow-brand-500/15"
+          }`}
+        >
           Save Changes
         </button>
       </div>
@@ -1398,12 +1487,12 @@ function SocialListSheet({
                 }}
                 className="flex items-center gap-3 cursor-pointer active:opacity-75 transition flex-1 min-w-0"
               >
-                <div className="w-10 h-10 rounded-full bg-white/[0.05] flex items-center justify-center text-xl shrink-0 overflow-hidden">
-                  {person.avatar && person.avatar.startsWith("data:") ? (
-                    <img src={person.avatar} alt={person.name} className="w-full h-full object-cover rounded-full" />
-                  ) : (
-                    <span>{person.avatar || "🎓"}</span>
-                  )}
+                <div className="w-10 h-10 rounded-full bg-white/[0.05] flex items-center justify-center shrink-0 overflow-hidden">
+                  <img 
+                    src={person.avatar && (person.avatar.startsWith("data:") || person.avatar.startsWith("http")) ? person.avatar : "/default_avatar.png"} 
+                    alt={person.name} 
+                    className="w-full h-full object-cover rounded-full" 
+                  />
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-1">
@@ -2046,6 +2135,89 @@ function PerkRow({ icon, title, desc }: { icon: string; title: string; desc: str
         <p className="text-[10.5px] text-ink-mute mt-1 leading-relaxed">{desc}</p>
       </div>
     </div>
+  );
+}
+
+function ResetConfirmSheet({
+  open,
+  onClose,
+  username,
+  onConfirm,
+}: {
+  open: boolean;
+  onClose: () => void;
+  username: string;
+  onConfirm: () => void;
+}) {
+  const [typedConfirm, setTypedConfirm] = useState("");
+  const [countdown, setCountdown] = useState(3);
+
+  useEffect(() => {
+    if (open) {
+      setTypedConfirm("");
+      setCountdown(3);
+      const timer = setInterval(() => {
+        setCountdown((c) => {
+          if (c <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return c - 1;
+        });
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [open]);
+
+  const targetPhrase = username || "RESET";
+  const isValid = typedConfirm.trim().toLowerCase() === targetPhrase.toLowerCase() && countdown === 0;
+
+  return (
+    <Sheet open={open} onClose={onClose} title="Secure Reset Data">
+      <div className="space-y-5 text-left py-2">
+        <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex gap-3 items-start select-none">
+          <span className="text-xl shrink-0 mt-0.5">⚠️</span>
+          <div>
+            <p className="text-xs font-bold text-red-400 leading-tight">This action is irreversible</p>
+            <p className="text-[11px] text-ink-soft mt-1 leading-relaxed">
+              This will immediately delete all local academic history, split transactions, side-hustle listings, DMs, and configuration settings from this device.
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-[11px] font-bold text-ink-soft uppercase tracking-wide block">
+            Type your username <span className="text-brand-400 font-extrabold">@{targetPhrase}</span> to confirm:
+          </label>
+          <input
+            className="input text-sm focus:border-red-500/40"
+            placeholder={targetPhrase}
+            value={typedConfirm}
+            onChange={(e) => setTypedConfirm(e.target.value)}
+          />
+        </div>
+
+        <button
+          onClick={onConfirm}
+          disabled={!isValid}
+          className={`w-full py-3.5 rounded-2xl text-xs font-bold text-white transition-all select-none flex items-center justify-center gap-1.5 ${
+            isValid
+              ? "bg-red-500 hover:bg-red-600 active:scale-[0.98] shadow-lg shadow-red-500/15 cursor-pointer"
+              : "bg-red-500/30 text-white/50 cursor-not-allowed border border-red-500/5"
+          }`}
+        >
+          <span>Reset All Data</span>
+          {countdown > 0 && <span>({countdown}s)</span>}
+        </button>
+
+        <button
+          onClick={onClose}
+          className="w-full py-3 bg-white/[0.05] hover:bg-white/10 active:scale-95 transition text-ink-soft hover:text-white text-xs font-bold rounded-2xl border border-white/10"
+        >
+          Cancel
+        </button>
+      </div>
+    </Sheet>
   );
 }
 

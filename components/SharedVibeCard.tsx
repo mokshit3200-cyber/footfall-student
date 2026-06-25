@@ -81,17 +81,11 @@ export default function SharedVibeCard({
 
         {/* Person */}
         <div className="flex items-center gap-2.5">
-          {vibe.avatar_url ? (
-            <img
-              src={vibe.avatar_url}
-              alt={vibe.name}
-              className="w-9 h-9 rounded-full object-cover border border-white/10 shrink-0"
-            />
-          ) : (
-            <div className="w-9 h-9 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30 flex items-center justify-center text-[11px] font-bold shrink-0">
-              {initials}
-            </div>
-          )}
+          <img
+            src={vibe.avatar_url && (vibe.avatar_url.startsWith("http") || vibe.avatar_url.startsWith("data:")) ? vibe.avatar_url : "/default_avatar.png"}
+            alt={vibe.name}
+            className="w-9 h-9 rounded-full object-cover border border-white/10 shrink-0"
+          />
           <div className="min-w-0">
             <div className="flex items-center gap-1">
               <span className="text-xs font-bold text-ink truncate">{vibe.name}</span>

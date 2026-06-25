@@ -42,6 +42,7 @@ export interface Profile {
   ambassador_role?: string | null;
   global_signup_rank?: number | null;
   campus_signup_rank?: number | null;
+  username_changed_at?: string[];
 }
 
 export interface Subject {

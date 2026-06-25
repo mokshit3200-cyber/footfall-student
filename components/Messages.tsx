@@ -358,13 +358,12 @@ function SignalEditorSheet({
               <div className="w-full bg-[#141416] border border-white/[0.08] rounded-3xl p-5 relative text-left text-white">
                 <div className="flex items-start gap-3.5">
                   <div className="relative shrink-0">
-                    {profile?.avatar_url ? (
-                      <img src={profile.avatar_url} alt={profile.name} className="w-10 h-10 rounded-full object-cover border border-white/10" style={{ borderColor: intentInfo.color }} />
-                    ) : (
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs shrink-0 bg-brand-500/20 text-brand-300 border-2" style={{ borderColor: intentInfo.color }}>
-                        {initials}
-                      </div>
-                    )}
+                    <img 
+                      src={profile?.avatar_url && (profile.avatar_url.startsWith("http") || profile.avatar_url.startsWith("data:")) ? profile.avatar_url : "/default_avatar.png"} 
+                      alt={profile?.name || ""} 
+                      className="w-10 h-10 rounded-full object-cover border border-white/10" 
+                      style={{ borderColor: intentInfo.color }} 
+                    />
                     <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-brand-500 rounded-full border-2 border-black flex items-center justify-center">
                       <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
                     </span>
@@ -1777,13 +1776,11 @@ export default function Messages({
                     style={ringStyle}
                   >
                     <div className="w-full h-full rounded-full bg-white/[0.05] border border-white/[0.12] flex items-center justify-center overflow-hidden">
-                      {profile?.avatar_url ? (
-                        <img src={profile.avatar_url} alt="Me" className="w-full h-full rounded-full object-cover" />
-                      ) : (
-                        <span className="text-[15px] font-bold text-brand-300">
-                          {profile?.name?.[0]?.toUpperCase() || "?"}
-                        </span>
-                      )}
+                      <img 
+                        src={profile?.avatar_url && (profile.avatar_url.startsWith("http") || profile.avatar_url.startsWith("data:")) ? profile.avatar_url : "/default_avatar.png"} 
+                        alt="Me" 
+                        className="w-full h-full rounded-full object-cover" 
+                      />
                     </div>
                     <span className="absolute bottom-0 right-0 w-4 h-4 bg-brand-500 rounded-full border-2 border-black flex items-center justify-center text-white">
                       <PlusIcon className="w-2.5 h-2.5" />
@@ -1818,13 +1815,11 @@ export default function Messages({
                     style={ringStyle}
                   >
                     <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center">
-                      {sig.avatar_url ? (
-                        <img src={sig.avatar_url} alt={sig.name} className="w-full h-full rounded-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center font-bold text-base">
-                          {sig.name[0]}
-                        </div>
-                      )}
+                      <img 
+                        src={sig.avatar_url && (sig.avatar_url.startsWith("http") || sig.avatar_url.startsWith("data:")) ? sig.avatar_url : "/default_avatar.png"} 
+                        alt={sig.name} 
+                        className="w-full h-full rounded-full object-cover" 
+                      />
                     </div>
                   </div>
                   {/* Name + status */}
@@ -1937,13 +1932,11 @@ export default function Messages({
                         <div className={`relative w-12 h-12 rounded-full flex items-center justify-center ${
                           unread ? "ring-2 ring-brand-500 ring-offset-1 ring-offset-black" : ""
                         }`}>
-                          {c.peer?.avatar_url ? (
-                            <img src={c.peer.avatar_url} alt={c.peer.name} className="w-full h-full rounded-full object-cover border border-white/10" />
-                          ) : (
-                            <div className="w-full h-full rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30 flex items-center justify-center text-xs font-bold">
-                              {initials}
-                            </div>
-                          )}
+                          <img 
+                            src={c.peer?.avatar_url && (c.peer.avatar_url.startsWith("http") || c.peer.avatar_url.startsWith("data:")) ? c.peer.avatar_url : "/default_avatar.png"} 
+                            alt={c.peer?.name || ""} 
+                            className="w-full h-full rounded-full object-cover border border-white/10" 
+                          />
                         </div>
                       )}
                     </div>
@@ -2027,11 +2020,11 @@ export default function Messages({
                       className="flex items-center gap-3 text-left active:scale-[0.98] transition"
                     >
                       <div className="relative w-10 h-10 rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center font-bold text-xs overflow-hidden shrink-0 border border-white/[0.08]">
-                        {classmate.avatar_url ? (
-                          <img src={classmate.avatar_url} alt={classmate.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <span>{initials}</span>
-                        )}
+                        <img 
+                          src={classmate.avatar_url && (classmate.avatar_url.startsWith("http") || classmate.avatar_url.startsWith("data:")) ? classmate.avatar_url : "/default_avatar.png"} 
+                          alt={classmate.name} 
+                          className="w-full h-full object-cover" 
+                        />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -2120,13 +2113,11 @@ export default function Messages({
                 {/* Avatars */}
                 {activePeer ? (
                   <div className="relative">
-                    {activePeer.avatar_url ? (
-                      <img src={activePeer.avatar_url} alt={activePeer.name} className="w-9 h-9 rounded-full object-cover border border-white/10" />
-                    ) : (
-                      <div className="w-9 h-9 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30 flex items-center justify-center font-bold text-xs">
-                        {activePeer.name.split(" ")[0][0]}
-                      </div>
-                    )}
+                    <img 
+                      src={activePeer.avatar_url && (activePeer.avatar_url.startsWith("http") || activePeer.avatar_url.startsWith("data:")) ? activePeer.avatar_url : "/default_avatar.png"} 
+                      alt={activePeer.name} 
+                      className="w-9 h-9 rounded-full object-cover border border-white/10" 
+                    />
                     {activePeer.is_online && (
                       <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-brand-500 border-2 border-black rounded-full" />
                     )}
@@ -2581,13 +2572,11 @@ export default function Messages({
                     className="flex items-center justify-between p-2 rounded-xl hover:bg-white/[0.02] active:bg-white/[0.04] transition cursor-pointer select-none"
                   >
                     <div className="flex items-center gap-3">
-                      {p.avatar_url ? (
-                        <img src={p.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover border border-white/10" />
-                      ) : (
-                        <div className="w-9 h-9 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30 flex items-center justify-center font-bold text-xs">
-                          {p.name.split(" ")[0][0]}
-                        </div>
-                      )}
+                      <img 
+                        src={p.avatar_url && (p.avatar_url.startsWith("http") || p.avatar_url.startsWith("data:")) ? p.avatar_url : "/default_avatar.png"} 
+                        alt="" 
+                        className="w-9 h-9 rounded-full object-cover border border-white/10" 
+                      />
                       <div>
                         <p className="text-sm font-bold text-ink">{p.name}</p>
                         {p.username && <p className="text-xs text-brand-300">@{p.username}</p>}
@@ -3463,16 +3452,12 @@ function ChatInfoScreen({
                   {convo?.members?.[1]?.name[0] || "S"}
                 </div>
               </div>
-            ) : peer?.avatar_url ? (
+            ) : (
               <img
-                src={peer.avatar_url}
+                src={peer?.avatar_url && (peer.avatar_url.startsWith("http") || peer.avatar_url.startsWith("data:")) ? peer.avatar_url : "/default_avatar.png"}
                 alt={displayName}
                 className="w-24 h-24 rounded-full object-cover border border-white/10"
               />
-            ) : (
-              <div className="w-24 h-24 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30 flex items-center justify-center font-bold text-3xl">
-                {initials}
-              </div>
             )}
             {!isGroup && peer?.is_online && (
               <span className="absolute bottom-1 right-1 w-4 h-4 bg-brand-500 border-2 border-black rounded-full" />
@@ -3536,13 +3521,11 @@ function ChatInfoScreen({
               {/* Other members */}
               {(convo?.members ?? []).map((m: any) => (
                 <div key={m.id} className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl">
-                  {m.avatar_url ? (
-                    <img src={m.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover border border-white/10 shrink-0" />
-                  ) : (
-                    <div className="w-9 h-9 rounded-full bg-white/[0.06] text-ink-soft flex items-center justify-center font-bold text-xs shrink-0">
-                      {(m.name?.[0] || "?").toUpperCase()}
-                    </div>
-                  )}
+                  <img 
+                    src={m.avatar_url && (m.avatar_url.startsWith("http") || m.avatar_url.startsWith("data:")) ? m.avatar_url : "/default_avatar.png"} 
+                    alt="" 
+                    className="w-9 h-9 rounded-full object-cover border border-white/10 shrink-0" 
+                  />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-ink truncate">{m.name}</p>
                     {m.username && <p className="text-[11px] text-ink-mute truncate">@{m.username}</p>}
