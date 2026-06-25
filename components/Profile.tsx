@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect, useRef } from "react";
 import { useStore } from "./store";
+import UserProfileView from "./UserProfileView";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { dbUpdateProfile, uploadPhoto } from "@/lib/dbActions";
@@ -13,8 +14,10 @@ import { ChevronRight, SparkIcon, XIcon, CheckIcon, TrashIcon, ArrowLeftIcon } f
 
 export default function Profile({
   onOpenBusiness,
+  onSwitchTab,
 }: {
   onOpenBusiness: () => void;
+  onSwitchTab?: (tab: string) => void;
 }) {
   const { data, update, reset } = useStore();
   const { profile, business, subjects, attendance, deadlines } = data;
@@ -605,11 +608,25 @@ export default function Profile({
         onRemoveFollower={handleRemoveFollower}
       />
       {selectedClassmate && (
-        <ClassmateDetailSheet
+        <UserProfileView
+          peer={selectedClassmate}
           open={!!selectedClassmate}
           onClose={() => setSelectedClassmate(null)}
-          person={selectedClassmate}
-          onToggleFollow={handleSocialAction}
+          demo={isDemo()}
+          currentUserId={user?.id}
+          onSwitchTab={onSwitchTab}
+          onOpenDm={(p) => {
+            setSelectedClassmate(null);
+            if (onSwitchTab) onSwitchTab("messages");
+          }}
+          followState={selectedClassmate.followed ? "following" : "none"}
+          onFollow={async (pId, newState) => {
+            const isFollowedNow = newState === "following" || newState === "mutual";
+            const wasFollowed = !!selectedClassmate.followed;
+            if (isFollowedNow !== wasFollowed) {
+              await handleSocialAction(selectedClassmate);
+            }
+          }}
         />
       )}
       {selectedListingToEdit && (
@@ -1255,100 +1272,7 @@ function SocialListSheet({
   );
 }
 
-function ClassmateDetailSheet({
-  open,
-  onClose,
-  person,
-  onToggleFollow,
-}: {
-  open: boolean;
-  onClose: () => void;
-  person: any;
-  onToggleFollow: (person: any) => Promise<void>;
-}) {
-  const [localFollowed, setLocalFollowed] = useState(person.followed);
 
-  useEffect(() => {
-    setLocalFollowed(person.followed);
-  }, [person.followed]);
-
-  return (
-    <Sheet open={open} onClose={onClose} title={`${person.name}'s Profile`}>
-      <div className="space-y-5 text-left">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-white/[0.07] border border-white/[0.14] flex items-center justify-center text-3xl overflow-hidden shrink-0">
-            {person.avatar && person.avatar.startsWith("data:") ? (
-              <img src={person.avatar} className="w-full h-full object-cover" alt="" />
-            ) : (
-              person.avatar || "🎓"
-            )}
-          </div>
-          <div>
-            <div className="flex items-center gap-1">
-              <h3 className="text-base font-bold text-ink">{person.name}</h3>
-              {person.verified && (
-                <span className="inline-flex items-center justify-center w-4 h-4 bg-brand-500 text-white rounded-full text-[8px]">
-                  ✓
-                </span>
-              )}
-            </div>
-            {person.username && <p className="text-xs text-brand-300 font-medium">@{person.username}</p>}
-            <p className="text-[10px] text-ink-mute mt-1 font-semibold">
-              {person.course} {person.year ? `· Year ${person.year}` : ""} {person.college ? `· ${person.college}` : ""}
-            </p>
-          </div>
-        </div>
-
-        {person.bio && (
-          <div>
-            <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wide mb-1">Bio</p>
-            <p className="text-sm text-ink-soft leading-relaxed">{person.bio}</p>
-          </div>
-        )}
-
-        {person.skills && person.skills.length > 0 && (
-          <div>
-            <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wide mb-1.5">Skills</p>
-            <div className="flex flex-wrap gap-1.5">
-              {person.skills.map((s: string) => (
-                <span key={s} className="px-2.5 py-1 bg-white/[0.05] rounded-full text-[10px] text-ink-soft border border-white/[0.08] font-semibold">
-                  {s}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {person.links && (person.links.github || person.links.linkedin || person.links.instagram || person.links.portfolio) && (
-          <div>
-            <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wide mb-1.5">Links</p>
-            <div className="flex flex-wrap gap-1.5">
-              {person.links.github && <span className="px-2.5 py-1 bg-white/[0.05] rounded-full text-[10px] text-ink-mute border border-white/[0.07] font-semibold">🐙 {person.links.github}</span>}
-              {person.links.linkedin && <span className="px-2.5 py-1 bg-white/[0.05] rounded-full text-[10px] text-ink-mute border border-white/[0.07] font-semibold">💼 {person.links.linkedin}</span>}
-              {person.links.instagram && <span className="px-2.5 py-1 bg-white/[0.05] rounded-full text-[10px] text-ink-mute border border-white/[0.07] font-semibold">📸 {person.links.instagram}</span>}
-              {person.links.portfolio && <span className="px-2.5 py-1 bg-white/[0.05] rounded-full text-[10px] text-ink-mute border border-white/[0.07] font-semibold">🌐 {person.links.portfolio}</span>}
-            </div>
-          </div>
-        )}
-
-        <button
-          type="button"
-          onClick={async () => {
-            await onToggleFollow(person);
-            setLocalFollowed(!localFollowed);
-          }}
-          className={`w-full py-2.5 rounded-xl text-xs font-bold transition ${
-            localFollowed
-              ? "bg-white/[0.06] text-brand-300 border border-brand-500/20 hover:bg-white/10"
-              : "bg-brand-500 text-white hover:bg-brand-600"
-          }`}
-        >
-          {localFollowed ? "Following" : "Follow"}
-        </button>
-      </div>
-    </Sheet>
-  );
-}
 
 function EditListingSheet({
   open,

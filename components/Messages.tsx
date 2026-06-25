@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import UserProfileView from "./UserProfileView";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { isDemo } from "@/lib/config";
@@ -2062,13 +2063,15 @@ export default function Messages({
         />
       )}
 
-      {/* SCREEN 3 — PROFILE SHEET (bottom sheet) */}
-      <DraggableProfileSheet
+      {/* SCREEN 3 — PROFILE SHEET */}
+      <UserProfileView
         open={profileSheetOpen}
         onClose={() => setProfileSheetOpen(false)}
         peer={profileUser}
+        demo={demo}
+        currentUserId={user?.id}
         onSwitchTab={onSwitchTab}
-        onStartChat={(peer) => {
+        onOpenDm={(peer) => {
           setProfileSheetOpen(false);
           // find convo
           const exist = convos.find(c => c.type === "dm" && c.peer?.id === peer.id);
@@ -3495,255 +3498,4 @@ function PrivacySubScreen({
   );
 }
 
-// 3. DraggableProfileSheet
-function DraggableProfileSheet({
-  open,
-  onClose,
-  peer,
-  onSwitchTab,
-  onStartChat,
-}: {
-  open: boolean;
-  onClose: () => void;
-  peer: any;
-  onSwitchTab?: (tab: string) => void;
-  onStartChat: (peer: any) => void;
-}) {
-  const [activeTab, setActiveTab] = useState<"posts" | "media" | "links">("posts");
-  const [translateY, setTranslateY] = useState(35); // top position vh offset
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStartY = useRef(0);
-  const startTranslateY = useRef(35);
 
-  useEffect(() => {
-    if (open) {
-      setTranslateY(35);
-      setActiveTab("posts");
-    }
-  }, [open]);
-
-  if (!open || !peer) return null;
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    setIsDragging(true);
-    dragStartY.current = e.touches[0].clientY;
-    startTranslateY.current = translateY;
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging) return;
-    const deltaY = e.touches[0].clientY - dragStartY.current;
-    const deltaVh = (deltaY / window.innerHeight) * 100;
-    let newTranslateY = startTranslateY.current + deltaVh;
-    if (newTranslateY < 10) newTranslateY = 10; // max visible (90vh)
-    setTranslateY(newTranslateY);
-  };
-
-  const handleTouchEnd = () => {
-    setIsDragging(false);
-    if (translateY > 50) {
-      onClose();
-    } else if (translateY < 22) {
-      setTranslateY(10); // snaps to 90vh height
-    } else {
-      setTranslateY(35); // snaps to 65vh default height
-    }
-  };
-
-  // Mock mutual follower checking
-  const isMutual = peer.id === "dp1" || peer.id === "dp2";
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity animate-fade-in">
-      <div className="absolute inset-0" onClick={onClose} />
-      
-      {/* Draggable bottom sheet */}
-      <div
-        style={{ transform: `translateY(${translateY}vh)` }}
-        className={`absolute bottom-0 inset-x-0 h-[100vh] bg-[#0c0c0e] rounded-t-[32px] border-t border-white/[0.08] flex flex-col z-10 select-none pb-28 ${
-          isDragging ? "transition-none" : "transition-transform duration-300 ease-out"
-        }`}
-      >
-        {/* Drag handle */}
-        <div
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-          className="w-full flex justify-center py-3 cursor-grab active:cursor-grabbing shrink-0"
-        >
-          <div className="w-8 h-1 bg-white/20 rounded-full" />
-        </div>
-
-        {/* Content area */}
-        <div className="flex-1 overflow-y-auto no-scrollbar px-6 space-y-5">
-          {/* Avatar and Name */}
-          <div className="flex flex-col items-center text-center">
-            {peer.avatar_url ? (
-              <img src={peer.avatar_url} alt="" className="w-20 h-20 rounded-full object-cover border border-white/10 shadow" />
-            ) : (
-              <div className="w-20 h-20 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30 flex items-center justify-center font-bold text-2xl shadow">
-                {peer.name[0]}
-              </div>
-            )}
-            
-            <div className="flex items-center gap-1.5 mt-3 justify-center">
-              <h3 className="font-extrabold text-base text-ink">{peer.name}</h3>
-              {peer.verified && (
-                <span className="inline-flex items-center justify-center w-4 h-4 bg-brand-500 text-white rounded-full p-0.5 text-[8px] shrink-0">
-                  <CheckIcon className="w-3.5 h-3.5" />
-                </span>
-              )}
-            </div>
-            {peer.username && <p className="text-xs text-brand-300 font-semibold mt-0.5">@{peer.username}</p>}
-            
-            {/* College info */}
-            <p className="text-[11.5px] text-ink-mute mt-1.5">
-              {peer.college || "IIIT Hyderabad"} • {peer.course || "B.Tech CSE"} • Year {peer.year || 2}
-            </p>
-          </div>
-
-          {/* Active Broadcast signal */}
-          {peer.signal && (
-            <div className="flex justify-center">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-brand-500/10 border border-brand-500/20 text-[11px] text-brand-300 font-semibold animate-fade-in">
-                <SignalIcon className="w-3.5 h-3.5 text-brand-300" />
-                <span>{peer.signal}</span>
-              </div>
-            </div>
-          )}
-
-          {/* Follow statistics counts */}
-          <div className="flex justify-center gap-6 text-center py-1 border-y border-white/[0.04]">
-            <div>
-              <p className="text-xs font-bold text-ink">142</p>
-              <p className="text-[9px] text-ink-mute uppercase tracking-wider">Followers</p>
-            </div>
-            <div>
-              <p className="text-xs font-bold text-ink">98</p>
-              <p className="text-[9px] text-ink-mute uppercase tracking-wider">Following</p>
-            </div>
-            {isMutual && (
-              <div className="flex items-center">
-                <span className="pill bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 text-[9px] font-bold">Mutual</span>
-              </div>
-            )}
-          </div>
-
-          {/* Action follow buttons */}
-          <div className="flex gap-2 text-xs select-none">
-            {isMutual ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => onStartChat(peer)}
-                  className="flex-grow py-2.5 font-bold rounded-xl bg-brand-500 hover:bg-brand-600 text-white transition active:scale-95 inline-flex items-center justify-center gap-1.5"
-                >
-                  <ChatIcon className="w-4 h-4" />
-                  Message
-                </button>
-                <button
-                  type="button"
-                  className="flex-grow py-2.5 font-bold rounded-xl bg-white/[0.05] border border-white/[0.08] hover:bg-white/[0.08] transition text-ink"
-                >
-                  Unfollow
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  className="flex-grow py-2.5 font-bold rounded-xl bg-white/[0.05] border border-white/[0.08] hover:bg-white/[0.08] text-brand-300 border-brand-500/30 transition inline-flex items-center justify-center gap-1.5"
-                >
-                  Following
-                  <CheckIcon className="w-3.5 h-3.5 text-brand-300" />
-                </button>
-                <button
-                  type="button"
-                  disabled
-                  className="flex-grow py-2.5 font-bold rounded-xl bg-white/[0.02] border border-white/[0.05] text-ink-mute transition cursor-not-allowed"
-                >
-                  Message
-                </button>
-              </>
-            )}
-          </div>
-
-          {/* Tab Strip */}
-          <div className="flex border-b border-white/[0.06] text-xs font-bold text-ink-soft select-none pt-2">
-            {(["posts", "media", "links"] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setActiveTab(t)}
-                className={`flex-1 pb-2 border-b-2 capitalize transition ${
-                  activeTab === t ? "border-brand-500 text-ink" : "border-transparent text-ink-mute"
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-
-          {/* Tab Panels */}
-          <div className="min-h-[140px] pt-1">
-            {activeTab === "posts" && (
-              <div className="grid grid-cols-3 gap-2">
-                {[...Array(6)].map((_, i) => (
-                  <div key={i} className="aspect-square rounded-xl bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.06] transition" />
-                ))}
-              </div>
-            )}
-
-            {activeTab === "media" && (
-              <div className="grid grid-cols-3 gap-2">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="aspect-square rounded-xl bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.06] transition flex items-center justify-center text-white/20">
-                    <ImageIcon className="w-5 h-5" />
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {activeTab === "links" && (
-              <div className="space-y-2 select-none">
-                <a
-                  href="https://github.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2.5 p-3 rounded-xl bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.05] transition text-xs font-semibold text-ink-soft hover:text-white"
-                >
-                  <LinkIcon className="w-4 h-4 text-ink-mute" />
-                  <span>GitHub Profile</span>
-                </a>
-                <a
-                  href="https://linkedin.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2.5 p-3 rounded-xl bg-white/[0.03] border border-white/[0.05] hover:bg-white/[0.05] transition text-xs font-semibold text-ink-soft hover:text-white"
-                >
-                  <LinkIcon className="w-4 h-4 text-ink-mute" />
-                  <span>LinkedIn Profile</span>
-                </a>
-              </div>
-            )}
-          </div>
-
-          {/* Switch Tab trigger link */}
-          {onSwitchTab && (
-            <div className="text-center pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onSwitchTab("profile");
-                }}
-                className="text-xs text-brand-300 font-bold hover:underline active:scale-95 transition"
-              >
-                View Full Profile
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}

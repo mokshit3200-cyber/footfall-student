@@ -7,6 +7,7 @@ import { isDemo } from "@/lib/config";
 import { INTENTS } from "@/lib/intents";
 import { dbPostStory, dbFetchStoriesBar } from "@/lib/dbActions";
 import StoryViewer, { hasViewedAllStories } from "./StoryViewer";
+import UserProfileView from "./UserProfileView";
 import {
   CheckIcon,
   ArrowLeftIcon,
@@ -1263,143 +1264,38 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
 
   // ── Profile sheet ────────────────────────────────────────
   if (viewProfile) {
-    const p = viewProfile;
-    const state = followStates[p.id] ?? followStates[p.user_id] ?? "none";
-    const personId = p.id ?? p.user_id;
-    const isPrivate = p.is_private ?? p.profiles?.is_private ?? false;
-    const profileData = p.profiles ?? p;
-    const canSeePrivate = !isPrivate || state === "following" || state === "mutual";
-    const skills: string[] = profileData.skills || [];
-    const links: Record<string, string> = profileData.links || {};
-
-    const blockFromProfile = async () => {
-      if (!demo) {
-        await supabase.from("blocks").insert({ blocker_id: user!.id, blocked_id: personId });
-      }
-      setSignals(prev => prev.filter((s: any) => s.user_id !== personId));
-      setViewProfile(null);
-      setProfileMenuOpen(false);
-      setProfileBlockConfirming(false);
-      showToast("User blocked");
-    };
-
+    const peerId = viewProfile.id ?? viewProfile.user_id;
+    const isRequest = followRequests.some(r => r.follower_id === peerId);
     return (
-      <div className="min-h-screen bg-black animate-fade-in pb-28">
-        <div className="flex items-center gap-3 px-5 pt-12 pb-4 border-b border-white/[0.07] bg-[#0c0c0e]/95 backdrop-blur-md sticky top-0 z-10">
-          <button onClick={() => { setViewProfile(null); setProfileMenuOpen(false); setProfileBlockConfirming(false); }} className="w-10 h-10 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-95 transition flex items-center justify-center text-white shrink-0">
-            <ArrowLeftIcon className="w-5 h-5" />
-          </button>
-          <span className="font-bold text-ink flex-1">Profile</span>
-          <button onClick={() => { setProfileMenuOpen(true); setProfileBlockConfirming(false); }}
-            className="w-9 h-9 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-90 transition flex items-center justify-center text-ink-soft shrink-0">
-            <span className="text-lg leading-none font-bold tracking-tighter">⋯</span>
-          </button>
-        </div>
-        <div className="px-5 pt-6">
-          <div className="flex items-center gap-4 mb-4">
-            <Avatar person={profileData} size={16} />
-            <div>
-              <div className="flex items-center gap-1.5">
-                <h2 className="text-lg font-bold text-ink">{profileData.name}</h2>
-                {(profileData.verified) && <span className="inline-flex items-center justify-center w-4 h-4 bg-brand-500 text-white rounded-full text-[8px]"><CheckIcon className="w-3 h-3" /></span>}
-                {isPrivate && <LockIcon className="w-3.5 h-3.5 text-ink-mute shrink-0" />}
-              </div>
-              {profileData.username && <p className="text-sm text-brand-300 font-medium">@{profileData.username}</p>}
-              <p className="text-xs text-ink-mute mt-1">{profileData.course} · Y{profileData.year} · {profileData.college}</p>
-            </div>
-          </div>
-          {/* Current signal */}
-          {p.content && (
-            <div className="bg-brand-500/[0.03] border border-brand-500/10 rounded-3xl p-5 mb-5 flex items-start gap-3.5">
-              <SignalIcon className="w-5 h-5 text-brand-400 shrink-0 mt-0.5 animate-pulse" />
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider mb-1">Broadcasting</p>
-                <p className="text-sm text-ink font-semibold leading-relaxed">"{p.content}"</p>
-                <p className="text-[10px] text-ink-mute mt-1.5">{timeAgo(p.created_at)} ago</p>
-              </div>
-            </div>
-          )}
-          <div className="flex gap-3">
-            {state === "mutual" ? (
-              <button onClick={() => { setViewProfile(null); openDm(profileData); }}
-                className="flex-1 h-12 rounded-2xl bg-brand-500 hover:bg-brand-600 active:scale-95 transition text-white text-sm font-bold flex items-center justify-center gap-2">
-                <ChatIcon className="w-4 h-4" />
-                <span>Message</span>
-              </button>
-            ) : (
-              <button onClick={() => handleFollow(personId, isPrivate)}
-                className={`flex-1 h-12 rounded-2xl text-sm font-bold transition active:scale-95 flex items-center justify-center gap-2 ${
-                  state === "none" ? "bg-brand-500 hover:bg-brand-600 text-white" :
-                  state === "pending" ? "bg-white/[0.06] text-ink-mute border border-white/[0.08]" :
-                  "bg-white/[0.06] text-brand-300 border border-brand-500/20"
-                }`}>
-                <span>{state === "none" ? "Follow" : state === "pending" ? "Requested" : "Following"}</span>
-                {state === "following" && <CheckIcon className="w-4 h-4 text-brand-300" />}
-              </button>
-            )}
-          </div>
-          {/* Private gate or skills/links */}
-          {!canSeePrivate ? (
-            <div className="mt-8 text-center px-4">
-              <div className="w-16 h-16 rounded-full bg-white/[0.04] border border-white/[0.07] flex items-center justify-center mx-auto mb-3">
-                <LockIcon className="w-7 h-7 text-ink-mute" />
-              </div>
-              <p className="text-sm font-bold text-ink">This account is private</p>
-              <p className="text-xs text-ink-mute mt-1 leading-relaxed">Follow to see their skills, links, and full profile</p>
-            </div>
-          ) : (
-            <>
-              {skills.length > 0 && (
-                <div className="mt-5">
-                  <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider mb-2">Skills</p>
-                  <div className="flex flex-wrap gap-2">
-                    {skills.map((s: string) => (
-                      <span key={s} className="px-3 py-1.5 rounded-full bg-white/[0.05] border border-white/[0.08] text-xs font-medium text-ink-soft">{s}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {Object.values(links).some(Boolean) && (
-                <div className="mt-4">
-                  <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider mb-2">Links</p>
-                  <div className="space-y-2">
-                    {Object.entries(links).map(([label, url]) => url && (
-                      <a key={label} href={url as string} target="_blank" rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-sm text-brand-300 font-medium active:opacity-70">
-                        <span className="w-7 h-7 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-[10px] shrink-0 capitalize">{label[0]?.toUpperCase()}</span>
-                        <span className="truncate">{url as string}</span>
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-        {/* Profile ⋯ action sheet */}
-        {profileMenuOpen && (
-          <div className="fixed inset-0 z-[60] flex flex-col justify-end" onClick={() => { setProfileMenuOpen(false); setProfileBlockConfirming(false); }}>
-            <div className="absolute inset-0 bg-black/50" />
-            <div className="relative bg-[#111] border-t border-white/[0.08] rounded-t-3xl p-4 space-y-2" onClick={e => e.stopPropagation()}>
-              <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-3" />
-              {profileBlockConfirming ? (
-                <div className="space-y-2">
-                  <p className="text-xs text-ink-mute text-center mb-2">Block {profileData.name}? They won&apos;t be able to interact with you.</p>
-                  <button onClick={blockFromProfile} className="w-full py-3 rounded-2xl bg-red-500/20 text-red-400 font-bold text-sm border border-red-500/20">Confirm Block</button>
-                  <button onClick={() => setProfileBlockConfirming(false)} className="w-full py-3 rounded-2xl bg-white/[0.05] text-ink-soft font-bold text-sm">Cancel</button>
-                </div>
-              ) : (
-                <>
-                  <button onClick={() => setProfileBlockConfirming(true)} className="w-full py-3 rounded-2xl bg-red-500/10 text-red-400 font-bold text-sm text-left px-4">
-                    Block {profileData.name}
-                  </button>
-                  <button onClick={() => setProfileMenuOpen(false)} className="w-full py-3 rounded-2xl bg-white/[0.04] text-ink-mute font-bold text-sm">Cancel</button>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
+      <UserProfileView
+        peer={viewProfile}
+        open={!!viewProfile}
+        onClose={() => setViewProfile(null)}
+        demo={demo}
+        currentUserId={user?.id}
+        onSwitchTab={onSwitchTab}
+        onOpenDm={(p) => {
+          setViewProfile(null);
+          openDm(p);
+        }}
+        followState={followStates[peerId] || "none"}
+        onFollow={(pId, newState) => {
+          setFollowStates(prev => ({ ...prev, [pId]: newState }));
+          // If blocking is triggered via profile menu, remove from feed signals
+          if (newState === "blocked") {
+            setSignals(prev => prev.filter((s: any) => s.user_id !== pId));
+          }
+        }}
+        mode={isRequest ? "request" : "view"}
+        onAccept={async (followerId) => {
+          await acceptRequest(followerId);
+          setViewProfile(null);
+        }}
+        onDecline={async (followerId) => {
+          await declineRequest(followerId);
+          setViewProfile(null);
+        }}
+      />
     );
   }
 
