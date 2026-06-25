@@ -233,6 +233,11 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
   const [followRequests, setFollowRequests] = useState<any[]>([]);
   const [requestsSheetOpen, setRequestsSheetOpen] = useState(false);
 
+  // Story-style quick reply to a vibe ("I'm in" / raise hand)
+  const [replyVibe, setReplyVibe] = useState<{ sig: any; peer: any } | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [replySending, setReplySending] = useState(false);
+
   // Bookmarks
   const [bookmarkedSignals, setBookmarkedSignals] = useState<Set<string>>(new Set());
   const [activeFilter, setActiveFilter] = useState<string>("all");
@@ -957,6 +962,61 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
         await supabase.from("groups").update(groupUpdates).eq("id", groupId);
       }
       setActiveDmId(groupId);
+    }
+  }
+
+  // Send a quick story-style reply to a vibe WITHOUT opening the full chat.
+  // Persists the DM + message in the background and keeps the user on the feed.
+  async function sendQuickReply() {
+    if (!replyVibe || !replyText.trim() || replySending) return;
+    const { sig, peer } = replyVibe;
+    const text = replyText.trim();
+    setReplySending(true);
+
+    try {
+      if (demo) {
+        const fakeGroupId = `dg-fake-${peer.id}`;
+        const followState = followStates[peer.id] || "none";
+        const requestStatus = followState === "mutual" ? "accepted" : "pending";
+
+        const savedMsgs = JSON.parse(localStorage.getItem(`demo_messages_${fakeGroupId}`) || "[]");
+        savedMsgs.push({ id: `reply-${Date.now()}`, sender_id: "me", content: text, created_at: new Date().toISOString() });
+        localStorage.setItem(`demo_messages_${fakeGroupId}`, JSON.stringify(savedMsgs));
+
+        const localGroups = JSON.parse(localStorage.getItem("demo_groups") || "[]");
+        const idx = localGroups.findIndex((g: any) => g.group_id === fakeGroupId);
+        if (idx !== -1) {
+          localGroups[idx].last_message = text;
+          localGroups[idx].last_at = new Date().toISOString();
+        } else {
+          localGroups.unshift({
+            group_id: fakeGroupId,
+            type: "dm",
+            peer: { id: peer.id, name: peer.name, username: peer.username, avatar_url: peer.avatar_url, college: peer.college, course: peer.course, year: peer.year, verified: peer.verified },
+            last_message: text,
+            last_at: new Date().toISOString(),
+            unread: 0,
+            request_status: requestStatus,
+            requested_by: "me",
+            origin_signal_note: sig.content || "",
+          });
+        }
+        localStorage.setItem("demo_groups", JSON.stringify(localGroups));
+      } else if (user) {
+        const { data: groupId, error } = await supabase.rpc("create_dm", { other_user_id: peer.id });
+        if (error) throw error;
+        await Promise.all([
+          supabase.from("messages").insert({ group_id: groupId, sender_id: user.id, content: text, type: "text" }),
+          supabase.from("groups").update({ last_message: text, last_at: new Date().toISOString(), origin_signal_id: sig.id, requested_by: user.id }).eq("id", groupId),
+        ]);
+      }
+      setReplyVibe(null);
+      setReplyText("");
+      showToast(`Sent to ${peer.name.split(" ")[0]} ✓`);
+    } catch {
+      showToast("Couldn't send — try again");
+    } finally {
+      setReplySending(false);
     }
   }
 
@@ -1716,7 +1776,6 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
                     <div onClick={e => e.stopPropagation()} className="flex items-center gap-2.5 mt-1 select-none">
                       <button
                         onClick={async () => {
-                          const seedMsg = `✋ raised a hand on your vibe: "${sig.content}"`;
                           if (!hasRaised) {
                             const myRaise = {
                               user_id: user?.id || "me",
@@ -1731,12 +1790,15 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
                               }
                               return s;
                             }));
-                            
+
                             if (!demo && user) {
                               await supabase.from("signal_raises").insert({ signal_id: sig.id, user_id: user.id });
                             }
                           }
-                          openDm(p, seedMsg, sig.id);
+                          // Open an Instagram-story-style quick reply (stay on the
+                          // feed) instead of jumping into a full chat thread.
+                          setReplyText("");
+                          setReplyVibe({ sig, peer: { ...p, id: p.id ?? sig.user_id } });
                         }}
                         className={`flex-1 h-10 rounded-xl text-xs font-bold transition-all duration-200 active:scale-95 flex items-center justify-center gap-1.5 ${
                           hasRaised
@@ -1868,8 +1930,65 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
       )}
 
       {/* ── Toast ── */}
+      {/* ── Story-style quick reply to a vibe ── */}
+      {replyVibe && (() => {
+        const intent = INTENTS.find(i => i.id === replyVibe.sig.intent) || INTENTS[0];
+        const firstName = (replyVibe.peer.name || "them").split(" ")[0];
+        return (
+          <div className="fixed inset-0 z-[70] flex items-end" onClick={() => { if (!replySending) { setReplyVibe(null); setReplyText(""); } }}>
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" />
+            <div className="relative w-full bg-[#0c0c0e] rounded-t-[28px] border-t border-white/[0.08] p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] z-10 animate-slide-up" onClick={e => e.stopPropagation()}>
+              <div className="w-10 h-1 bg-white/15 rounded-full mx-auto mb-4" />
+
+              {/* The vibe you're replying to */}
+              <div className="rounded-2xl border p-3.5 mb-4 flex items-start gap-3" style={{ borderColor: intent.color + "40", backgroundColor: intent.color + "0f" }}>
+                <div className="w-1 self-stretch rounded-full shrink-0" style={{ backgroundColor: intent.color }} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wider mb-0.5" style={{ color: intent.color }}>
+                    Replying to {firstName}&apos;s vibe
+                  </p>
+                  <p className="text-sm text-ink font-semibold leading-snug">&ldquo;{replyVibe.sig.content}&rdquo;</p>
+                </div>
+              </div>
+
+              {/* Quick reactions */}
+              <div className="flex gap-2 mb-3 overflow-x-auto no-scrollbar">
+                {["I'm in! 🙌", "Where?", "On my way", "Count me in", "What time?"].map(q => (
+                  <button
+                    key={q}
+                    type="button"
+                    onClick={() => setReplyText(q)}
+                    className="shrink-0 px-3 py-1.5 rounded-full bg-white/[0.05] border border-white/[0.08] text-xs font-semibold text-ink-soft hover:bg-white/10 active:scale-95 transition"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+
+              {/* Input row */}
+              <form onSubmit={e => { e.preventDefault(); sendQuickReply(); }} className="flex items-center gap-2.5">
+                <input
+                  autoFocus
+                  value={replyText}
+                  onChange={e => setReplyText(e.target.value)}
+                  placeholder={`Reply to ${firstName}…`}
+                  className="flex-1 h-12 rounded-full bg-[#1a1a1a] border border-white/[0.08] px-4 text-sm text-white placeholder-white/35 focus:outline-none focus:border-brand-500/50 transition"
+                />
+                <button
+                  type="submit"
+                  disabled={!replyText.trim() || replySending}
+                  className="w-12 h-12 rounded-full bg-brand-500 hover:bg-brand-600 disabled:opacity-40 active:scale-95 transition flex items-center justify-center text-white shrink-0"
+                >
+                  <SendIcon className="w-5 h-5" />
+                </button>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
+
       {toast && (
-        <div className="fixed inset-x-0 bottom-24 z-[60] flex justify-center px-4 pointer-events-none animate-fade-up">
+        <div className="fixed inset-x-0 bottom-24 z-[80] flex justify-center px-4 pointer-events-none animate-fade-up">
           <div className="bg-[#1e1e1e] border border-white/10 text-ink text-xs font-semibold rounded-full px-4 py-2.5 shadow-lg flex items-center gap-2">
             <CheckIcon className="w-4 h-4 text-brand-400" />
             {toast}
