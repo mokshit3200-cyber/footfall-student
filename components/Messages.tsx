@@ -1692,8 +1692,12 @@ export default function Messages({
                     key={c.group_id}
                     className="bg-[#121214] border border-white/[0.06] rounded-3xl p-5 flex flex-col gap-4"
                   >
-                    {/* Header: Classmate info */}
-                    <div className="flex items-center gap-3">
+                    {/* Header: Classmate info — tap to view full profile before deciding */}
+                    <button
+                      type="button"
+                      onClick={() => { setProfileUser(classmate); setProfileSheetOpen(true); }}
+                      className="flex items-center gap-3 text-left active:scale-[0.98] transition"
+                    >
                       <div className="relative w-10 h-10 rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center font-bold text-xs overflow-hidden shrink-0 border border-white/[0.08]">
                         {classmate.avatar_url ? (
                           <img src={classmate.avatar_url} alt={classmate.name} className="w-full h-full object-cover" />
@@ -1717,7 +1721,7 @@ export default function Messages({
                           {classmate.course || "Student"} {classmate.year ? `· Y${classmate.year}` : ""}
                         </p>
                       </div>
-                    </div>
+                    </button>
 
                     {/* Context Card: Signal Response */}
                     {c.origin_signal_note && (
