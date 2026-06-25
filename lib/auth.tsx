@@ -19,6 +19,10 @@ export type Profile = {
   business_name: string | null;
   business_type: "sell" | "service" | "club" | null;
   business_contact: string | null;
+  is_ambassador?: boolean;
+  ambassador_role?: string | null;
+  global_signup_rank?: number | null;
+  campus_signup_rank?: number | null;
 };
 
 type AuthCtx = {

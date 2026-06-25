@@ -38,6 +38,10 @@ export interface Profile {
   bio?: string;
   skills?: string[];
   links?: { github?: string; linkedin?: string; instagram?: string; portfolio?: string };
+  is_ambassador?: boolean;
+  ambassador_role?: string | null;
+  global_signup_rank?: number | null;
+  campus_signup_rank?: number | null;
 }
 
 export interface Subject {
@@ -221,6 +225,10 @@ export interface Classmate {
   skills?: string[];
   links?: { github?: string; linkedin?: string; instagram?: string; portfolio?: string };
   business?: { name: string; type: "sell" | "service" | "club"; contact?: string };
+  is_ambassador?: boolean;
+  ambassador_role?: string | null;
+  global_signup_rank?: number | null;
+  campus_signup_rank?: number | null;
 }
 
 export interface InAppNotification {
@@ -309,6 +317,9 @@ export const emptyData: AppData = {
       followersCount: 184,
       followingCount: 120,
       followed: true,
+      global_signup_rank: 12,
+      campus_signup_rank: 1,
+      is_ambassador: false,
       stories: [
         {
           id: "s-1",
@@ -358,6 +369,9 @@ export const emptyData: AppData = {
       followersCount: 95,
       followingCount: 64,
       followed: false,
+      global_signup_rank: null,
+      campus_signup_rank: 45,
+      is_ambassador: false,
       stories: [
         {
           id: "s-2",
@@ -407,6 +421,10 @@ export const emptyData: AppData = {
       followersCount: 210,
       followingCount: 154,
       followed: true,
+      global_signup_rank: 8,
+      campus_signup_rank: 3,
+      is_ambassador: true,
+      ambassador_role: "Marketing Manager",
       stories: [
         {
           id: "s-3",
@@ -456,6 +474,9 @@ export const emptyData: AppData = {
       followersCount: 120,
       followingCount: 92,
       followed: false,
+      global_signup_rank: 554,
+      campus_signup_rank: 82,
+      is_ambassador: false,
       stories: [
         {
           id: "s-4",
@@ -486,6 +507,9 @@ export const emptyData: AppData = {
       followersCount: 135,
       followingCount: 88,
       followed: false,
+      global_signup_rank: null,
+      campus_signup_rank: 112,
+      is_ambassador: false,
       stories: [
         {
           id: "s-5",

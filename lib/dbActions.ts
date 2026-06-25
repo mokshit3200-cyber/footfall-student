@@ -339,7 +339,7 @@ export async function dbFetchStoriesBar(userId: string, college: string) {
     supabase.from('follows').select('follower_id').eq('following_id', userId).eq('status', 'accepted'),
     supabase
       .from('stories')
-      .select('id, user_id, media_url, visibility, created_at, expires_at, profiles!stories_user_id_fkey(id, name, username, avatar_url, college, verified)')
+      .select('id, user_id, media_url, visibility, created_at, expires_at, profiles!stories_user_id_fkey(id, name, username, avatar_url, college, verified, is_private)')
       .gt('expires_at', now)
       .neq('user_id', userId)
       .order('created_at', { ascending: false }),
@@ -348,7 +348,13 @@ export async function dbFetchStoriesBar(userId: string, college: string) {
   const followerIds = new Set((followers ?? []).map((f: any) => f.follower_id));
   const visible = (stories ?? []).filter((s: any) => {
     const prof = s.profiles as any;
-    if (s.visibility === 'public' && prof?.college === college) return true;
+    if (!prof) return false;
+    const isPrivate = prof.is_private ?? false;
+    
+    // Private profiles stories can only be seen if following
+    if (isPrivate && !followingIds.has(s.user_id)) return false;
+
+    if (s.visibility === 'public' && prof.college === college) return true;
     if (s.visibility === 'followers' && followingIds.has(s.user_id)) return true;
     return false;
   });

@@ -132,6 +132,24 @@ export default function UserProfileView({
   const [profileBlockConfirming, setProfileBlockConfirming] = useState(false);
   const [isMutual, setIsMutual] = useState<boolean>(false);
 
+  const [perksOpen, setPerksOpen] = useState(false);
+  const [perksType, setPerksType] = useState<"gold" | "silver" | "crew" | null>(null);
+  const [perksValue, setPerksValue] = useState<string | number | null>(null);
+
+  const [betaMode, setBetaMode] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setBetaMode(localStorage.getItem("cmpus_beta_mode") === "true");
+    }
+  }, []);
+
+  const handleToggleBeta = (enabled: boolean) => {
+    localStorage.setItem("cmpus_beta_mode", String(enabled));
+    setBetaMode(enabled);
+    if (typeof window !== "undefined") window.dispatchEvent(new Event("cmpus_beta_toggle"));
+  };
+
   const peerIdRef = useRef<string | null>(null);
 
   // Sync override followState if passed
@@ -200,7 +218,7 @@ export default function UserProfileView({
           // 1. Get profile data
           const { data: prof } = await supabase
             .from("profiles")
-            .select("id, name, username, avatar_url, college, course, year, verified, is_private, skills, links, bio, business_name, business_type, business_contact")
+            .select("id, name, username, avatar_url, college, course, year, verified, is_private, skills, links, bio, business_name, business_type, business_contact, is_ambassador, ambassador_role, global_signup_rank, campus_signup_rank")
             .eq("id", id)
             .single();
 
@@ -384,6 +402,48 @@ export default function UserProfileView({
               {resolvedProfile.course ? ` · ${resolvedProfile.course}` : ""}
               {resolvedProfile.year ? ` · Year ${resolvedProfile.year}` : ""}
             </p>
+            {/* OG & Crew Badges */}
+            <div className="flex flex-wrap gap-1.5 mt-2 select-none">
+              {resolvedProfile.is_ambassador && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPerksType("crew");
+                    setPerksValue(resolvedProfile.ambassador_role || "Crew Member");
+                    setPerksOpen(true);
+                  }}
+                  className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-extrabold text-emerald-400 flex items-center gap-1 hover:bg-emerald-500/20 active:scale-95 transition-all"
+                >
+                  🏆 Campus Crew: {resolvedProfile.ambassador_role || "Crew Member"}
+                </button>
+              )}
+              {resolvedProfile.global_signup_rank && resolvedProfile.global_signup_rank <= 999 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPerksType("gold");
+                    setPerksValue(resolvedProfile.global_signup_rank ?? null);
+                    setPerksOpen(true);
+                  }}
+                  className="px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-[9px] font-extrabold text-amber-400 flex items-center gap-1 hover:bg-amber-500/20 active:scale-95 transition-all"
+                >
+                  🎖️ Global OG #{resolvedProfile.global_signup_rank}
+                </button>
+              )}
+              {resolvedProfile.campus_signup_rank && resolvedProfile.campus_signup_rank <= 999 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPerksType("silver");
+                    setPerksValue(resolvedProfile.campus_signup_rank ?? null);
+                    setPerksOpen(true);
+                  }}
+                  className="px-2.5 py-0.5 rounded-full bg-slate-300/10 border border-slate-300/20 text-[9px] font-extrabold text-slate-300 flex items-center gap-1 hover:bg-slate-300/20 active:scale-95 transition-all"
+                >
+                  🎖️ Campus OG #{resolvedProfile.campus_signup_rank}
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -477,44 +537,44 @@ export default function UserProfileView({
           )}
         </div>
 
-        {/* Private Gate Lock Wall */}
-        {!canSeePrivate ? (
-          <div className="mt-8 text-center px-4 py-8 border border-white/[0.04] rounded-3xl bg-[#0c0c0e]/30">
-            <div className="w-16 h-16 rounded-full bg-white/[0.04] border border-white/[0.07] flex items-center justify-center mx-auto mb-3">
-              <LockIcon className="w-7 h-7 text-ink-mute" />
+        {/* Bio */}
+        {resolvedProfile.bio && (
+          <div className="space-y-1.5">
+            <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider">Bio</p>
+            <p className="text-sm text-ink-soft leading-relaxed whitespace-pre-wrap">{resolvedProfile.bio}</p>
+          </div>
+        )}
+
+        {/* Skills */}
+        {skills.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider">Skills</p>
+            <div className="flex flex-wrap gap-2">
+              {skills.map((s: string) => (
+                <span
+                  key={s}
+                  className="px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.07] text-xs font-medium text-ink-soft"
+                >
+                  {s}
+                </span>
+              ))}
             </div>
-            <p className="text-sm font-bold text-ink">This account is private</p>
-            <p className="text-xs text-ink-mute mt-1 leading-relaxed">
-              Follow to see their skills, links, and business storefront
+          </div>
+        )}
+
+        {/* Private Gate for Links & Shop */}
+        {!canSeePrivate ? (
+          <div className="mt-2 text-center px-4 py-8 border border-white/[0.04] rounded-3xl bg-[#0c0c0e]/30">
+            <div className="w-12 h-12 rounded-full bg-white/[0.04] border border-white/[0.07] flex items-center justify-center mx-auto mb-3">
+              <LockIcon className="w-5 h-5 text-ink-mute" />
+            </div>
+            <p className="text-xs font-bold text-ink">Links & Shop are private</p>
+            <p className="text-[11px] text-ink-mute mt-1 leading-relaxed">
+              Follow this user to view their social links and shop items
             </p>
           </div>
         ) : (
           <>
-            {/* Bio */}
-            {resolvedProfile.bio && (
-              <div className="space-y-1.5">
-                <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider">Bio</p>
-                <p className="text-sm text-ink-soft leading-relaxed whitespace-pre-wrap">{resolvedProfile.bio}</p>
-              </div>
-            )}
-
-            {/* Skills */}
-            {skills.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider">Skills</p>
-                <div className="flex flex-wrap gap-2">
-                  {skills.map((s: string) => (
-                    <span
-                      key={s}
-                      className="px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.07] text-xs font-medium text-ink-soft"
-                    >
-                      {s}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Social Links */}
             {Object.values(links).some(Boolean) && (
               <div className="space-y-2">
@@ -677,6 +737,144 @@ export default function UserProfileView({
           </div>
         </div>
       )}
+
+      {/* Perks Bottom Sheet Drawer */}
+      {perksOpen && perksType && (
+        <div
+          className="fixed inset-0 z-[60] flex flex-col justify-end"
+          onClick={() => setPerksOpen(false)}
+        >
+          <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" />
+          <div
+            className="relative bg-[#0c0c0e] border-t border-white/[0.08] rounded-t-[32px] p-6 pb-10 space-y-6 max-h-[85vh] overflow-y-auto z-10 animate-slide-in-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Handle bar */}
+            <div className="w-12 h-1 bg-white/20 rounded-full mx-auto -mt-2 mb-2" />
+
+            {/* Header */}
+            <div className="text-center space-y-1.5 pb-4 border-b border-white/[0.05]">
+              <div className="inline-flex p-3 rounded-full bg-white/[0.03] border border-white/[0.06] mb-1">
+                {perksType === "gold" ? (
+                  <span className="text-3xl">🎖️</span>
+                ) : perksType === "silver" ? (
+                  <span className="text-3xl">🎖️</span>
+                ) : (
+                  <span className="text-3xl">🏆</span>
+                )}
+              </div>
+              <h3 className="text-base font-bold text-ink">
+                {perksType === "gold" && `Global Gold OG Member #${perksValue}`}
+                {perksType === "silver" && `Campus Silver OG Member #${perksValue}`}
+                {perksType === "crew" && `Campus Crew: ${perksValue}`}
+              </h3>
+              <p className="text-xs text-ink-mute">
+                {perksType === "gold" && "Early-bird Gold OG status awarded to the first 999 signups globally."}
+                {perksType === "silver" && "Campus Silver OG status awarded to the first 999 signups per university."}
+                {perksType === "crew" && "University brand ambassadors coordinating campus growth & local events."}
+              </p>
+            </div>
+
+            {/* Perks List */}
+            <div className="space-y-4">
+              <h4 className="text-[10px] font-bold text-ink-mute uppercase tracking-wider">Active Perks & Privileges</h4>
+              <div className="space-y-3.5">
+                {perksType === "gold" && (
+                  <>
+                    <PerkRow icon="⚡" title="Permanent Global VIP Status" desc="Stand out in search and group lists with your gold badge." />
+                    <PerkRow icon="🧪" title="First-Priority Beta Features" desc="Test new experiments before anyone else in your campus." />
+                    <PerkRow icon="🎨" title="Exclusive Gold Theme Accents" desc="Toggle premium gold UI customizations inside your settings." />
+                    <PerkRow icon="🎫" title="Fast-Track Event Access" desc="Instant bookings and skip-the-line passes at fests." />
+                  </>
+                )}
+                {perksType === "silver" && (
+                  <>
+                    <PerkRow icon="🎫" title="24h Pre-Access Ticket Booking" desc="Book campus fests, concerts, and local events 24 hours early." />
+                    <PerkRow icon="🏷️" title="First-Alert Discount Vouchers" desc="Be the first to claim canteen, hostel, and local cafe deals." />
+                    <PerkRow icon="💬" title="Automated OG Lounge Access" desc="Instantly joined to your local college's read-only group." />
+                    <PerkRow icon="🗳️" title="Feature Voting Power" desc="Vote on 4 proposed features — first 999 OGs pick the Top 2, then everyone votes publicly. The winning feature gets built into the app." />
+                  </>
+                )}
+                {perksType === "crew" && (
+                  <>
+                    <PerkRow icon="📝" title="Official Recommendation Letter (LOR)" desc="Get a signed resume LOR highlighting leadership achievements." />
+                    <PerkRow icon="📢" title="OG Lounge Posting rights" desc="Announce campus meetups and local split split events." />
+                    <PerkRow icon="💼" title="Branch Coordinator Fast-Track" desc="Get hired as paid Event, Marketing, or Finance leads." />
+                    <PerkRow icon="🎫" title="Free Festival Passes" desc="Complimentary VIP entry to all coordinated campus events." />
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Beta Feature Testing Section (Only for Gold / Silver OGs) */}
+            {(perksType === "gold" || perksType === "silver") && (
+              <div className="border-t border-white/[0.05] pt-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <h4 className="text-xs font-bold text-ink flex items-center gap-1.5">
+                      <span className="text-brand-400">🧪</span>
+                      <span>Beta Features Access</span>
+                    </h4>
+                    <p className="text-[10px] text-ink-mute">Toggle experimental UI & physics engines</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleBeta(!betaMode)}
+                    className={`w-11 h-6 rounded-full transition-colors relative flex items-center px-0.5 ${
+                      betaMode ? "bg-brand-500" : "bg-white/10"
+                    }`}
+                  >
+                    <span
+                      className={`w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-200 ${
+                        betaMode ? "translate-x-5" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {betaMode && (
+                  <div className="bg-[#141416] border border-brand-500/20 rounded-2xl p-3.5 space-y-2.5 text-xs text-brand-300 animate-fade-in">
+                    <p className="font-bold flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 bg-brand-500 rounded-full animate-ping" />
+                      <span>Experimental Features Active:</span>
+                    </p>
+                    <ul className="space-y-1.5 pl-3 list-disc text-ink-soft text-[11px] leading-relaxed">
+                      <li><strong>Neumorphic Chat Bubbles:</strong> Renders chat bubbles with premium Gen Z styling.</li>
+                      <li><strong>Haptic Gestures:</strong> Double-tap to react and swipe-to-reply physics.</li>
+                      <li><strong>Shake to Bug Report:</strong> Shake your phone to immediately trigger developers.</li>
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
+
+
+
+            {/* Close Button */}
+            <button
+              onClick={() => setPerksOpen(false)}
+              className="w-full py-3.5 bg-white/[0.05] hover:bg-white/10 active:scale-95 transition text-white text-xs font-bold rounded-2xl border border-white/10"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+function PerkRow({ icon, title, desc }: { icon: string; title: string; desc: string }) {
+  return (
+    <div className="flex gap-3 items-start select-none">
+      <span className="text-lg shrink-0 mt-0.5">{icon}</span>
+      <div>
+        <p className="text-xs font-bold text-ink leading-tight">{title}</p>
+        <p className="text-[10.5px] text-ink-mute mt-1 leading-relaxed">{desc}</p>
+      </div>
+    </div>
+  );
+}
+
+

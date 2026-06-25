@@ -100,3 +100,23 @@ body {
   to { transform: translateX(0); }
 }
 .animate-slide-in-right { animation: slide-in-right 0.25s ease-out; }
+
+@keyframes heart-burst {
+  0% { transform: scale(0) rotate(0deg); opacity: 0; }
+  15% { transform: scale(1.2) rotate(-15deg); opacity: 0.9; }
+  30% { transform: scale(0.9) rotate(10deg); opacity: 0.9; }
+  80% { transform: scale(1) rotate(0deg); opacity: 0.9; }
+  100% { transform: scale(1.8) rotate(0deg); opacity: 0; }
+}
+.animate-heart-burst {
+  animation: heart-burst 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes slide-in-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.animate-slide-in-up {
+  animation: slide-in-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+

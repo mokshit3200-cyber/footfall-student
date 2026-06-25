@@ -144,7 +144,7 @@ export default function Page() {
           {tab === "messages" && <Messages onChatOpen={setInChat} />}
           {tab === "market" && <Marketplace onSwitchTab={changeTab} />}
           {tab === "profile" && (
-            <Profile onOpenBusiness={handleOpenBusiness} onSwitchTab={changeTab} />
+            <Profile onOpenBusiness={handleOpenBusiness} onSwitchTab={(t) => changeTab(t as Tab)} />
           )}
         </main>
       </div>

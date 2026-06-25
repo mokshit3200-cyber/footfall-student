@@ -818,12 +818,39 @@ export default function Marketplace({ onSwitchTab }: { onSwitchTab?: (tab: any) 
               </button>
             )}
             {!sel.mine && onSwitchTab && (
-              <button
-                onClick={() => openOfferSheet()}
-                className="w-full py-3 bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold active:scale-95 transition shadow-md shadow-brand-500/25 flex items-center justify-center gap-1.5"
-              >
-                🤝 Make an Offer / Negotiate
-              </button>
+              <div className="space-y-2">
+                <button
+                  onClick={() => openOfferSheet()}
+                  className="w-full py-3 bg-[#0F8F6F]/10 border border-[#0F8F6F]/25 text-[#0F8F6F] hover:bg-[#0F8F6F]/15 rounded-xl font-bold active:scale-95 transition flex items-center justify-center gap-1.5"
+                >
+                  🤝 Make an Offer / Negotiate
+                </button>
+                <button
+                  onClick={() => {
+                    const mapSellerToPeerId = (seller: string): string => {
+                      const name = seller.toLowerCase();
+                      if (name.includes("karan")) return "dp5";
+                      if (name.includes("maya") || name.includes("priya")) return "dp2";
+                      if (name.includes("sneha")) return "dp4";
+                      if (name.includes("rahul") || name.includes("rohan")) return "dp3";
+                      if (name.includes("aarav") || name.includes("arjun")) return "dp1";
+                      return "dp1";
+                    };
+                    const peerId = mapSellerToPeerId(sel.seller);
+                    localStorage.setItem("footfall-pending-dm", JSON.stringify({
+                      id: peerId,
+                      name: sel.seller,
+                      username: peerId === "dp5" ? "karanp" : peerId === "dp2" ? "priya.n" : peerId === "dp4" ? "sneha.r" : peerId === "dp3" ? "rohanm" : "arjun_s",
+                      avatar_url: null,
+                    }));
+                    setSel(null);
+                    onSwitchTab("connect");
+                  }}
+                  className="btn-primary w-full py-3 flex items-center justify-center gap-2"
+                >
+                  💬 Message Seller
+                </button>
+              </div>
             )}
             {!reveal ? <button onClick={() => setReveal(true)} className="btn-primary w-full bg-white/[0.06] hover:bg-white/[0.1] text-ink border border-white/[0.08]">Show contact</button> : (
               <div className="card p-4 text-center">
