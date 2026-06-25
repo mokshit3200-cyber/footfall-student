@@ -240,7 +240,7 @@ export default function Profile({
           onClick={() => setSettingsOpen(true)}
           className="p-2 -mr-2 rounded-full hover:bg-white/[0.05] active:scale-95 transition text-ink-soft hover:text-ink shrink-0"
         >
-          <GearIcon className="w-5.5 h-5.5" />
+          <GearIcon className="w-6 h-6" />
         </button>
       </div>
 
