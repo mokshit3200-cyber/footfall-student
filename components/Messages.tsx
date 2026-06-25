@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import UserProfileView from "./UserProfileView";
+import SharedVibeCard, { parseVibeShare } from "./SharedVibeCard";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { isDemo } from "@/lib/config";
@@ -2450,8 +2451,17 @@ function SwipeMessageBubble({
           </div>
         )}
 
-        {/* Message content text */}
-        <p className="leading-relaxed break-words">{renderContent(msg.content)}</p>
+        {/* Message content — shared vibe renders as a card, else text */}
+        {(() => {
+          const sharedVibe = parseVibeShare(msg.content);
+          return sharedVibe ? (
+            <div className="my-0.5">
+              <SharedVibeCard vibe={sharedVibe} />
+            </div>
+          ) : (
+            <p className="leading-relaxed break-words">{renderContent(msg.content)}</p>
+          );
+        })()}
 
         {/* Timestamp */}
         <span className="text-[9.5px] text-white/50 mt-1 text-right select-none flex items-center justify-end gap-1 whitespace-nowrap">

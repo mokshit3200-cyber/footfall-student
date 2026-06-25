@@ -7,6 +7,7 @@ import { isDemo } from "@/lib/config";
 import { INTENTS } from "@/lib/intents";
 import { dbPostStory, dbFetchStoriesBar } from "@/lib/dbActions";
 import StoryViewer, { hasViewedAllStories } from "./StoryViewer";
+import SharedVibeCard, { encodeVibeShare, parseVibeShare } from "./SharedVibeCard";
 import UserProfileView from "./UserProfileView";
 import {
   CheckIcon,
@@ -406,8 +407,10 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
 
   async function handleSelectFriend(friend: any) {
     if (!shareSignal) return;
-    const intentLabel = INTENTS.find(i => i.id === shareSignal.intent)?.label || "Vibe";
-    const shareText = `Thought of you — ${shareSignal.profiles?.name || "Someone"} is ${intentLabel}: '${shareSignal.content}'`;
+    // Encode the whole vibe so it renders as a card (Instagram-style share),
+    // not a sentence. last_message stays human-readable for the inbox preview.
+    const shareText = encodeVibeShare(shareSignal);
+    const previewText = "📡 Shared a vibe";
     
     if (demo) {
       // For Arjun it's dg1, for Priya it's dg3, otherwise fake
@@ -429,7 +432,7 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
       const existingIdx = localGroups.findIndex((g: any) => g.group_id === groupId);
       
       if (existingIdx !== -1) {
-        localGroups[existingIdx].last_message = shareText;
+        localGroups[existingIdx].last_message = previewText;
         localGroups[existingIdx].last_at = new Date().toISOString();
       } else {
         const newConvo = {
@@ -445,7 +448,7 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
             year: friend.year || 2,
             verified: friend.verified || false
           },
-          last_message: shareText,
+          last_message: previewText,
           last_at: new Date().toISOString(),
           unread: 0,
           request_status: "accepted" as const
@@ -470,7 +473,7 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
         });
         
         await supabase.from("groups").update({
-          last_message: shareText,
+          last_message: previewText,
           last_at: new Date().toISOString()
         }).eq("id", groupId);
         
@@ -1097,6 +1100,40 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
     );
   }
 
+  // Derived feed list — MUST run before any early return below so React
+  // always sees the same number of hooks (DM chat + profile sheet both
+  // early-return; a hook after them caused "Rendered fewer hooks" crashes).
+  const visibleSignals = useMemo(() => {
+    let list = [...signals];
+
+    // Filter out expired signals
+    list = list.filter((sig: any) => !sig.expires_at || new Date(sig.expires_at).getTime() > Date.now());
+
+    // 1. Filter by scope
+    if (scope === "campus") {
+      if (demo) {
+        list = list.filter((s: any) => {
+          const p = s.profiles ?? s;
+          return p.college === "IIIT Hyderabad";
+        });
+      } else {
+        list = list.filter((s: any) => {
+          const p = s.profiles ?? s;
+          return p.college === profile?.college;
+        });
+      }
+    } else {
+      list = list.filter((s: any) => s.reach === "all");
+    }
+
+    // 2. Filter by intent category tabs
+    if (activeFilter !== "all") {
+      list = list.filter((s: any) => s.intent === activeFilter);
+    }
+
+    return list;
+  }, [signals, scope, activeFilter, profile, demo, ticker]);
+
   // ── DM chat screen ───────────────────────────────────────
   if (activeDmId && activePeer) {
     const deleteMsg = async (msgId: string) => {
@@ -1161,6 +1198,7 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
             : messages.map(m => {
               const mine = m.sender_id === user?.id || (demo && m.sender_id === "me");
               const selected = selectedMsgId === m.id;
+              const sharedVibe = parseVibeShare(m.content);
               return (
                 <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                   {mine && selected && (
@@ -1173,13 +1211,26 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
                       </button>
                     </div>
                   )}
-                  <div
-                    onClick={(e) => { e.stopPropagation(); if (mine) setSelectedMsgId(selected ? null : m.id); }}
-                    className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-xs cursor-default ${mine ? "bg-brand-500 text-white rounded-tr-none" : "bg-white/[0.08] text-ink rounded-tl-none border border-white/[0.05]"} ${selected ? "ring-2 ring-red-400/50" : ""}`}
-                  >
-                    <p className="break-words leading-relaxed">{m.content}</p>
-                    <span className="text-[9px] opacity-50 block mt-1 text-right">{new Date(m.created_at).toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })}</span>
-                  </div>
+                  {sharedVibe ? (
+                    <div
+                      onClick={(e) => { e.stopPropagation(); if (mine) setSelectedMsgId(selected ? null : m.id); }}
+                      className={selected ? "rounded-2xl ring-2 ring-red-400/50" : ""}
+                    >
+                      <SharedVibeCard
+                        vibe={sharedVibe}
+                        onOpenProfile={(v) => openViewProfile({ ...v, id: v.user_id })}
+                      />
+                      <span className="text-[9px] text-ink-mute block mt-1 text-right pr-1">{new Date(m.created_at).toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })}</span>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={(e) => { e.stopPropagation(); if (mine) setSelectedMsgId(selected ? null : m.id); }}
+                      className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-xs cursor-default ${mine ? "bg-brand-500 text-white rounded-tr-none" : "bg-white/[0.08] text-ink rounded-tl-none border border-white/[0.05]"} ${selected ? "ring-2 ring-red-400/50" : ""}`}
+                    >
+                      <p className="break-words leading-relaxed">{m.content}</p>
+                      <span className="text-[9px] opacity-50 block mt-1 text-right">{new Date(m.created_at).toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })}</span>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1230,37 +1281,6 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
       </div>
     );
   }
-
-  const visibleSignals = useMemo(() => {
-    let list = [...signals];
-
-    // Filter out expired signals
-    list = list.filter((sig: any) => !sig.expires_at || new Date(sig.expires_at).getTime() > Date.now());
-
-    // 1. Filter by scope
-    if (scope === "campus") {
-      if (demo) {
-        list = list.filter((s: any) => {
-          const p = s.profiles ?? s;
-          return p.college === "IIIT Hyderabad";
-        });
-      } else {
-        list = list.filter((s: any) => {
-          const p = s.profiles ?? s;
-          return p.college === profile?.college;
-        });
-      }
-    } else {
-      list = list.filter((s: any) => s.reach === "all");
-    }
-
-    // 2. Filter by intent category tabs
-    if (activeFilter !== "all") {
-      list = list.filter((s: any) => s.intent === activeFilter);
-    }
-
-    return list;
-  }, [signals, scope, activeFilter, profile, demo, ticker]);
 
   // ── Profile sheet ────────────────────────────────────────
   if (viewProfile) {
