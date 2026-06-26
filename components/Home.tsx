@@ -243,6 +243,34 @@ export default function Home({ onSwitchTab }: { onSwitchTab?: (tab: any) => void
     }
   }
 
+  // bulk-cancel all today's slots (holiday / no classes)
+  function markAllHoliday() {
+    playTick();
+    update((d) => {
+      todaySlots.forEach((slot) => {
+        const existing = d.attendance.find(
+          (r) => r.slotId === slot.id && r.date === today
+        );
+        if (existing) {
+          existing.status = "cancelled";
+        } else {
+          d.attendance.push({
+            id: uid(),
+            subjectId: slot.subjectId,
+            slotId: slot.id,
+            date: today,
+            status: "cancelled",
+          });
+        }
+      });
+    });
+    if (!isDemo() && user) {
+      todaySlots.forEach((slot) =>
+        dbSaveAttendance(user.id, slot.subjectId, today, "cancelled")
+      );
+    }
+  }
+
   // quick-mark (no timetable) — one tap adds a held class for a subject
   function quickMark(subjectId: string, status: AttStatus) {
     update((d) => {
@@ -422,14 +450,24 @@ export default function Home({ onSwitchTab }: { onSwitchTab?: (tab: any) => void
         <div id="attendance-section" className="mt-5 pt-4 border-t border-white/10">
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-bold text-ink">Today&apos;s classes</p>
-            {timetable.length > 0 && (
-              <button
-                onClick={() => setSheet("timetable")}
-                className="text-brand-300 text-xs font-semibold"
-              >
-                Edit timetable
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {todaySlots.length > 0 && (
+                <button
+                  onClick={markAllHoliday}
+                  className="text-xs font-semibold text-ink-mute hover:text-ink-soft transition flex items-center gap-1"
+                >
+                  <span>🏖️</span> Holiday
+                </button>
+              )}
+              {timetable.length > 0 && (
+                <button
+                  onClick={() => setSheet("timetable")}
+                  className="text-brand-300 text-xs font-semibold"
+                >
+                  Edit timetable
+                </button>
+              )}
+            </div>
           </div>
 
           {todaySlots.length > 0 ? (
