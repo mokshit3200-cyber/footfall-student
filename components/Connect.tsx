@@ -229,7 +229,12 @@ export default function Connect({
   const [storyViewerStartIdx, setStoryViewerStartIdx] = useState(0);
   const [addStoryOpen, setAddStoryOpen] = useState(false);
   const [storyUploading, setStoryUploading] = useState(false);
-  const storyFileRef = useRef<HTMLInputElement>(null);
+  const storyFileRef = useRef<HTMLInputElement | null>(null);
+  const [storyPreviewUrl, setStoryPreviewUrl] = useState<string | null>(null);
+  const [storyCaption, setStoryCaption] = useState("");
+  const pendingStoryFileRef = useRef<File | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
   const [pendingVisibility, setPendingVisibility] = useState<"public" | "followers">("public");
 
   // DM Inbox
@@ -614,16 +619,34 @@ export default function Connect({
     setDmInboxLoading(false);
   }
 
-  // Story upload handler
-  async function handleStoryUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  function resetStoryComposer() {
+    if (storyPreviewUrl) URL.revokeObjectURL(storyPreviewUrl);
+    setAddStoryOpen(false);
+    setStoryPreviewUrl(null);
+    setStoryCaption("");
+    pendingStoryFileRef.current = null;
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
+    if (galleryInputRef.current) galleryInputRef.current.value = "";
+    if (storyFileRef.current) storyFileRef.current.value = "";
+  }
+
+  function handleStoryFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    if (!file) return;
+    pendingStoryFileRef.current = file;
+    if (storyPreviewUrl) URL.revokeObjectURL(storyPreviewUrl);
+    setStoryPreviewUrl(URL.createObjectURL(file));
+  }
+
+  async function handlePendingStoryUpload() {
+    const file = pendingStoryFileRef.current;
     if (!file) return;
     setStoryUploading(true);
     if (demo) {
       // Demo: just show a toast
       setTimeout(() => {
         setStoryUploading(false);
-        setAddStoryOpen(false);
+        resetStoryComposer();
         showToast("Story posted! 📸");
       }, 800);
       return;
@@ -631,16 +654,16 @@ export default function Connect({
     if (!user) { setStoryUploading(false); return; }
     const ok = await dbPostStory(user.id, file, pendingVisibility);
     setStoryUploading(false);
-    setAddStoryOpen(false);
+    resetStoryComposer();
     if (ok) {
       showToast("Story posted! 📸");
       // Refresh stories bar
       if (profile?.college) {
         const entries = await dbFetchStoriesBar(user.id, profile.college);
-        setStoryUsers(entries);
+        setStoryUsers(entries ?? []);
       }
     } else {
-      showToast("Failed to post story");
+      showToast("Upload failed - try again");
     }
   }
 
@@ -2028,54 +2051,135 @@ export default function Connect({
 
       {/* ── Add Story Bottom Sheet ── */}
       {addStoryOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity animate-fade-in flex items-end">
-          <div className="absolute inset-0" onClick={() => setAddStoryOpen(false)} />
-          <div className="relative w-full bg-[#0c0c0e] rounded-t-[32px] border-t border-white/[0.08] p-5 pb-8 z-10 animate-slide-up">
-            <div className="flex items-center justify-between mb-5 border-b border-white/[0.05] pb-3 select-none">
-              <h2 className="font-bold text-base text-ink flex items-center gap-2">
-                <CameraIcon className="w-5 h-5 text-brand-400" />
-                <span>Add Story</span>
-              </h2>
+        <div className="fixed inset-0 z-[60] bg-black flex flex-col animate-fade-in">
+          <div className="flex items-center justify-between px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-3 shrink-0">
+            <button
+              type="button"
+              onClick={resetStoryComposer}
+              className="w-10 h-10 rounded-full bg-white/[0.08] flex items-center justify-center active:scale-95 transition"
+            >
+              <XIcon className="w-5 h-5 text-white" />
+            </button>
+            <span className="text-sm font-bold text-white">New Story</span>
+            {storyPreviewUrl ? (
               <button
-                onClick={() => setAddStoryOpen(false)}
-                className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/10 active:scale-95 transition flex items-center justify-center text-ink-soft hover:text-white"
-              >
-                <XIcon className="w-4 h-4" />
-              </button>
-            </div>
-            <p className="text-xs text-ink-mute mb-4">Share a photo with your campus or followers. Stories disappear after 24 hours.</p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => { setPendingVisibility("public"); storyFileRef.current?.click(); }}
+                type="button"
+                onClick={handlePendingStoryUpload}
                 disabled={storyUploading}
-                className="flex-1 h-14 rounded-2xl bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 text-green-400 text-sm font-bold flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-40"
+                className="h-9 px-4 rounded-full bg-brand-500 hover:bg-brand-600 disabled:opacity-40 active:scale-95 transition text-white text-sm font-bold"
               >
-                <CampusIcon className="w-4 h-4" />
-                <span>Campus</span>
+                {storyUploading ? "Sharing..." : "Share"}
               </button>
-              <button
-                onClick={() => { setPendingVisibility("followers"); storyFileRef.current?.click(); }}
-                disabled={storyUploading}
-                className="flex-1 h-14 rounded-2xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-300 text-sm font-bold flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-40"
-              >
-                <LockIcon className="w-4 h-4" />
-                <span>Followers only</span>
-              </button>
-            </div>
-            {storyUploading && (
-              <div className="mt-4 flex items-center justify-center gap-2 text-xs text-ink-mute">
-                <div className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-                <span>Uploading…</span>
+            ) : (
+              <div className="w-10" />
+            )}
+          </div>
+
+          <div className="flex-1 flex flex-col items-center justify-center px-4 min-h-0">
+            {storyPreviewUrl ? (
+              <div className="relative w-full max-w-sm aspect-[9/16] rounded-2xl overflow-hidden bg-[#111]">
+                <img
+                  src={storyPreviewUrl}
+                  alt="Preview"
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute bottom-4 inset-x-4">
+                  <input
+                    type="text"
+                    placeholder="Add a caption..."
+                    value={storyCaption}
+                    onChange={e => setStoryCaption(e.target.value)}
+                    maxLength={120}
+                    className="w-full bg-black/50 backdrop-blur-sm rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/50 focus:outline-none border border-white/20 focus:border-white/40 transition"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (storyPreviewUrl) URL.revokeObjectURL(storyPreviewUrl);
+                    setStoryPreviewUrl(null);
+                    setStoryCaption("");
+                    pendingStoryFileRef.current = null;
+                    if (cameraInputRef.current) cameraInputRef.current.value = "";
+                    if (galleryInputRef.current) galleryInputRef.current.value = "";
+                    if (storyFileRef.current) storyFileRef.current.value = "";
+                  }}
+                  className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/60 flex items-center justify-center active:scale-95 transition"
+                >
+                  <XIcon className="w-4 h-4 text-white" />
+                </button>
+              </div>
+            ) : (
+              <div className="w-full max-w-sm aspect-[9/16] rounded-2xl border-2 border-dashed border-white/[0.12] flex flex-col items-center justify-center gap-5 bg-white/[0.02]">
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="w-20 h-20 rounded-3xl bg-brand-500/15 border border-brand-500/30 flex items-center justify-center active:scale-95 transition-all hover:bg-brand-500/25"
+                >
+                  <CameraIcon className="w-8 h-8 text-brand-400" />
+                </button>
+                <p className="text-sm font-bold text-white">Take a photo</p>
+                <button
+                  type="button"
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="text-xs text-ink-mute hover:text-ink-soft transition underline underline-offset-2 decoration-white/20"
+                >
+                  or choose from gallery
+                </button>
               </div>
             )}
-            <input
-              ref={storyFileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleStoryUpload}
-            />
           </div>
+
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handleStoryFileSelected}
+          />
+          <input
+            ref={(node) => {
+              galleryInputRef.current = node;
+              storyFileRef.current = node;
+            }}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleStoryFileSelected}
+          />
+
+          {storyPreviewUrl && (
+            <div className="shrink-0 px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3 border-t border-white/[0.07]">
+              <p className="text-[10px] font-bold text-ink-mute uppercase tracking-wider mb-3">Who can see this?</p>
+              <div className="flex gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setPendingVisibility("public")}
+                  className={`flex-1 h-12 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition active:scale-[0.97] border ${
+                    pendingVisibility === "public"
+                      ? "bg-brand-500 border-brand-500 text-white"
+                      : "bg-white/[0.04] border-white/[0.08] text-ink-soft"
+                  }`}
+                >
+                  <CampusIcon className="w-4 h-4" />
+                  My University
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPendingVisibility("followers")}
+                  className={`flex-1 h-12 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition active:scale-[0.97] border ${
+                    pendingVisibility === "followers"
+                      ? "bg-white/[0.12] border-white/[0.2] text-white"
+                      : "bg-white/[0.04] border-white/[0.08] text-ink-soft"
+                  }`}
+                >
+                  <LockIcon className="w-4 h-4" />
+                  My Friends
+                </button>
+              </div>
+          </div>
+          )}
         </div>
       )}
 
