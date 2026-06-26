@@ -853,7 +853,7 @@ export default function Home({ onSwitchTab }: { onSwitchTab?: (tab: any) => void
           step={tutorialStep}
           firstName={profile.name?.split(" ")[0] || "there"}
           onNext={() => {
-            if (tutorialStep >= 6) {
+            if (tutorialStep >= 7) {
               localStorage.setItem("cmpus_tutorial_done", "1");
               setShowTutorial(false);
             } else {

@@ -203,6 +203,7 @@ export default function Connect({
 
   // Follow states
   const [followStates, setFollowStates] = useState<Record<string, string>>(demo ? DEMO_FOLLOW_STATES : {});
+  const [suggestedPeople, setSuggestedPeople] = useState<any[]>([]);
 
   // DM
   const [activeDmId, setActiveDmId] = useState<string | null>(null);
@@ -584,6 +585,29 @@ export default function Connect({
       setStoryUsers(entries);
     });
   }, [user, profile, demo]);
+
+  // ── Load suggested people (same college, not yet followed) ─
+  useEffect(() => {
+    if (demo) {
+      setSuggestedPeople([
+        { id: "s1", name: "Riya Sharma", username: "riya.sh", avatar_url: null, is_private: false },
+        { id: "s2", name: "Dev Patel", username: "devp", avatar_url: null, is_private: false },
+        { id: "s3", name: "Ananya K", username: "ananya.k", avatar_url: null, is_private: false },
+        { id: "s4", name: "Rohan M", username: "rohanm", avatar_url: null, is_private: false },
+      ]);
+      return;
+    }
+    if (!user || !profile?.college) return;
+    (async () => {
+      const [{ data: peers }, { data: following }] = await Promise.all([
+        supabase.from("profiles").select("id, name, username, avatar_url, is_private").eq("college", profile.college).neq("id", user.id).limit(20),
+        supabase.from("follows").select("following_id").eq("follower_id", user.id),
+      ]);
+      const followedIds = new Set((following ?? []).map((f: any) => f.following_id));
+      const suggestions = (peers ?? []).filter((p: any) => !followedIds.has(p.id)).slice(0, 8);
+      setSuggestedPeople(suggestions);
+    })();
+  }, [user, profile?.college, demo]);
 
   // ── Load DM inbox ─────────────────────────────────────────
   async function loadDmInbox() {
@@ -1567,6 +1591,32 @@ export default function Connect({
               })}
             </div>
           </div>
+          {/* Suggested People Strip */}
+          {suggestedPeople.length > 0 && (
+          <div className="mb-5">
+            <p className="text-[10px] font-semibold text-ink-mute uppercase tracking-wider mb-3">People at your college</p>
+            <div className="flex gap-4 overflow-x-auto no-scrollbar pb-1 select-none -mx-5 px-5">
+              {suggestedPeople.map((person) => (
+                <div key={person.id} className="flex flex-col items-center gap-1.5 shrink-0 group">
+                  <div className="relative w-12 h-12 rounded-full bg-white/[0.06] border-2 border-dashed border-white/20 flex items-center justify-center group-hover:border-brand-400/50 transition-colors">
+                    <img
+                      src={person.avatar_url && (person.avatar_url.startsWith('http') || person.avatar_url.startsWith('data:')) ? person.avatar_url : '/default_avatar.png'}
+                      alt={person.name}
+                      className="w-full h-full rounded-full object-cover opacity-60"
+                    />
+                  </div>
+                  <span className="text-[10px] font-semibold text-ink-mute truncate max-w-[60px]">{person.name.split(' ')[0]}</span>
+                  <button
+                    onClick={e => { e.stopPropagation(); handleFollow(person.id, person.is_private); setSuggestedPeople(prev => prev.filter(p => p.id !== person.id)); }}
+                    className="mt-1 px-2 py-0.5 text-xs bg-brand-500 text-white rounded-full hover:bg-brand-600 transition"
+                  >
+                    Follow
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+          )}
 
           {/* My signal */}
           <button onClick={() => {
@@ -1605,7 +1655,7 @@ export default function Connect({
                         <span className="text-[8px] font-extrabold bg-purple-500/15 text-purple-400 px-1.5 py-0.5 rounded-full border border-purple-500/20 select-none">ALL CAMPUSES</span>
                       )}
                       {mySignalIntent && (
-                        <span className="text-[9px] font-bold px-2 py-0.2 rounded-full border" style={{ borderColor: `${(INTENTS.find(i => i.id === mySignalIntent))?.color}30`, color: (INTENTS.find(i => i.id === mySignalIntent))?.color, backgroundColor: `${(INTENTS.find(i => i.id === mySignalIntent))?.color}10` }}>
+                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-full border" style={{ borderColor: `${(INTENTS.find(i => i.id === mySignalIntent))?.color}30`, color: (INTENTS.find(i => i.id === mySignalIntent))?.color, backgroundColor: `${(INTENTS.find(i => i.id === mySignalIntent))?.color}10` }}>
                           {(INTENTS.find(i => i.id === mySignalIntent))?.label}
                         </span>
                       )}
@@ -1613,7 +1663,13 @@ export default function Connect({
                     <p className="text-sm text-ink font-semibold truncate">"{mySignal}"</p>
                   </>
                 ) : (
-                  <p className="text-sm text-ink-soft font-semibold">What's your vibe right now?</p>
+                  <>
+  <div className="flex items-center">
+    <p className="text-sm text-ink-soft font-semibold flex-1">Drop a vibe 🔥</p>
+    <PlusIcon className="w-4 h-4 text-brand-500" />
+  </div>
+  <p className="mt-0.5 text-xs text-ink-mute">Your campus sees this • disappears in 24h</p>
+</>
                 )}
               </div>
               {mySignal && (
