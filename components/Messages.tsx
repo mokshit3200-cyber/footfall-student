@@ -602,7 +602,7 @@ export default function Messages({
     if (!user) return;
     (async () => {
       const [{ data: peers }, { data: following }] = await Promise.all([
-        supabase.from("profiles").select("id, name, username, avatar_url").neq("id", user.id).limit(20),
+        supabase.from("profiles").select("id, name, username, avatar_url, is_private").neq("id", user.id).limit(20),
         supabase.from("follows").select("following_id").eq("follower_id", user.id),
       ]);
       const followedIds = new Set((following ?? []).map((f: any) => f.following_id));
@@ -1794,7 +1794,8 @@ export default function Messages({
                     <button
                       onClick={async () => {
                         if (!user) return;
-                        await supabase.from("follows").insert({ follower_id: user.id, following_id: person.id, status: "following" });
+                        const status = person.is_private ? "pending" : "following";
+                        await supabase.from("follows").insert({ follower_id: user.id, following_id: person.id, status });
                         setSuggestedPeople(prev => prev.filter(p => p.id !== person.id));
                       }}
                       className="px-2.5 py-0.5 text-[10px] font-bold bg-brand-500 text-white rounded-full active:scale-95 transition"

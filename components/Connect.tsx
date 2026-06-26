@@ -1609,33 +1609,6 @@ export default function Connect({
               })}
             </div>
           </div>
-          {/* Suggested People Strip */}
-          {suggestedPeople.length > 0 && (
-          <div className="mb-5">
-            <p className="text-[10px] font-semibold text-ink-mute uppercase tracking-wider mb-3">People at your college</p>
-            <div className="flex gap-4 overflow-x-auto no-scrollbar pb-1 select-none -mx-5 px-5">
-              {suggestedPeople.map((person) => (
-                <div key={person.id} className="flex flex-col items-center gap-1.5 shrink-0 group">
-                  <div className="relative w-12 h-12 rounded-full bg-white/[0.06] border-2 border-dashed border-white/20 flex items-center justify-center group-hover:border-brand-400/50 transition-colors">
-                    <img
-                      src={person.avatar_url && (person.avatar_url.startsWith('http') || person.avatar_url.startsWith('data:')) ? person.avatar_url : '/default_avatar.png'}
-                      alt={person.name}
-                      className="w-full h-full rounded-full object-cover opacity-60"
-                    />
-                  </div>
-                  <span className="text-[10px] font-semibold text-ink-mute truncate max-w-[60px]">{person.name.split(' ')[0]}</span>
-                  <button
-                    onClick={e => { e.stopPropagation(); handleFollow(person.id, person.is_private); setSuggestedPeople(prev => prev.filter(p => p.id !== person.id)); }}
-                    className="mt-1 px-2 py-0.5 text-xs bg-brand-500 text-white rounded-full hover:bg-brand-600 transition"
-                  >
-                    Follow
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-          )}
-
           {/* My signal */}
           <button ref={vibeInputRef as React.RefObject<HTMLButtonElement>} onClick={() => {
             setBroadcastInput(mySignal ?? "");
