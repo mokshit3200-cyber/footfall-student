@@ -163,7 +163,15 @@ function Avatar({ person, size = 10 }: { person: any; size?: number }) {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t: any) => void; onChatOpen?: (o: boolean) => void }) {
+export default function Connect({
+  onSwitchTab,
+  onChatOpen,
+  onReplySheetOpen,
+}: {
+  onSwitchTab?: (t: any) => void;
+  onChatOpen?: (o: boolean) => void;
+  onReplySheetOpen?: (open: boolean) => void;
+}) {
   const { user, profile } = useAuth();
   const demo = isDemo();
 
@@ -1019,6 +1027,7 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
           supabase.from("groups").update({ last_message: text, last_at: new Date().toISOString(), origin_signal_id: sig.id, requested_by: user.id }).eq("id", groupId),
         ]);
       }
+      onReplySheetOpen?.(false);
       setReplyVibe(null);
       setReplyText("");
       showToast(`Sent to ${peer.name.split(" ")[0]} ✓`);
@@ -1805,6 +1814,7 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
                           // Open an Instagram-story-style quick reply (stay on the
                           // feed) instead of jumping into a full chat thread.
                           setReplyText("");
+                          onReplySheetOpen?.(true);
                           setReplyVibe({ sig, peer: { ...p, id: p.id ?? sig.user_id } });
                         }}
                         className={`flex-1 h-10 rounded-xl text-xs font-bold transition-all duration-200 active:scale-95 flex items-center justify-center gap-1.5 ${
@@ -1942,9 +1952,9 @@ export default function Connect({ onSwitchTab, onChatOpen }: { onSwitchTab?: (t:
         const intent = INTENTS.find(i => i.id === replyVibe.sig.intent) || INTENTS[0];
         const firstName = (replyVibe.peer.name || "them").split(" ")[0];
         return (
-          <div className="fixed inset-0 z-[70] flex items-end" onClick={() => { if (!replySending) { setReplyVibe(null); setReplyText(""); } }}>
+          <div className="fixed inset-0 z-[70] flex items-end" onClick={() => { if (!replySending) { setReplyVibe(null); onReplySheetOpen?.(false); setReplyText(""); } }}>
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" />
-            <div className="relative w-full bg-[#0c0c0e] rounded-t-[28px] border-t border-white/[0.08] p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] z-10 animate-slide-up" onClick={e => e.stopPropagation()}>
+            <div className="relative w-full bg-[#0c0c0e] rounded-t-[28px] border-t border-white/[0.08] p-5 pb-[max(6rem,calc(env(safe-area-inset-bottom)+4.5rem))] z-10 animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="w-10 h-1 bg-white/15 rounded-full mx-auto mb-4" />
 
               {/* The vibe you're replying to */}

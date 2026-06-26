@@ -24,6 +24,7 @@ export default function Page() {
   const { data, ready } = useStore();
   const [tab, setTab] = useState<Tab>("home");
   const [businessMode, setBusinessMode] = useState(false);
+  const [replySheetOpen, setReplySheetOpen] = useState(false);
   const [inChat, setInChat] = useState(false);
   const [isDemo, setIsDemo] = useState(false);
 
@@ -140,7 +141,7 @@ export default function Page() {
         <main className={`mx-auto w-full ${wide ? "md:max-w-5xl" : "md:max-w-2xl"}`}>
           {tab === "home" && <Home onSwitchTab={changeTab} />}
           {tab === "money" && <Money />}
-          {tab === "connect" && <Connect onSwitchTab={changeTab} onChatOpen={setInChat} />}
+          {tab === "connect" && <Connect onSwitchTab={changeTab} onChatOpen={setInChat} onReplySheetOpen={setReplySheetOpen} />}
           {tab === "messages" && <Messages onChatOpen={setInChat} />}
           {tab === "market" && <Marketplace onSwitchTab={changeTab} />}
           {tab === "profile" && (
@@ -148,7 +149,7 @@ export default function Page() {
           )}
         </main>
       </div>
-      {!inChat && <BottomNav active={tab} onChange={changeTab} />}
+      {!inChat && !replySheetOpen && <BottomNav active={tab} onChange={changeTab} />}
     </div>
   );
 }
