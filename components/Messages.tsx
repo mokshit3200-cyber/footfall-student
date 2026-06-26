@@ -559,6 +559,9 @@ export default function Messages({
   const { user, profile } = useAuth();
   const demo = isDemo();
 
+  // Suggested people
+  const [suggestedPeople, setSuggestedPeople] = useState<any[]>([]);
+
   // Convo List States
   const [convos, setConvos] = useState<any[]>([]);
   const [loading, setLoading] = useState(!demo);
@@ -584,6 +587,28 @@ export default function Messages({
   const [betaMode, setBetaMode] = useState(false);
   const [hapticToast, setHapticToast] = useState<string | null>(null);
   const [shakeReportOpen, setShakeReportOpen] = useState(false);
+
+  // Fetch suggested people (all users not yet followed)
+  useEffect(() => {
+    if (demo) {
+      setSuggestedPeople([
+        { id: "s1", name: "Riya Sharma", username: "riya.sh", avatar_url: null },
+        { id: "s2", name: "Dev Patel", username: "devp", avatar_url: null },
+        { id: "s3", name: "Ananya K", username: "ananya.k", avatar_url: null },
+        { id: "s4", name: "Rohan M", username: "rohanm", avatar_url: null },
+      ]);
+      return;
+    }
+    if (!user) return;
+    (async () => {
+      const [{ data: peers }, { data: following }] = await Promise.all([
+        supabase.from("profiles").select("id, name, username, avatar_url").neq("id", user.id).limit(20),
+        supabase.from("follows").select("following_id").eq("follower_id", user.id),
+      ]);
+      const followedIds = new Set((following ?? []).map((f: any) => f.following_id));
+      setSuggestedPeople((peers ?? []).filter((p: any) => !followedIds.has(p.id)).slice(0, 8));
+    })();
+  }, [user, demo]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -1750,6 +1775,37 @@ export default function Messages({
               <EditIcon className="w-5 h-5 text-ink" />
             </button>
           </div>
+
+          {/* People you may know */}
+          {suggestedPeople.length > 0 && (
+            <div className="mb-5">
+              <p className="text-[10px] font-semibold text-ink-mute uppercase tracking-wider mb-3">People you may know</p>
+              <div className="flex gap-4 overflow-x-auto no-scrollbar pb-1 -mx-5 px-5 select-none">
+                {suggestedPeople.map((person) => (
+                  <div key={person.id} className="flex flex-col items-center gap-1.5 shrink-0 w-[64px]">
+                    <div className="w-12 h-12 rounded-full bg-white/[0.06] border border-white/10 flex items-center justify-center overflow-hidden">
+                      {person.avatar_url && (person.avatar_url.startsWith("http") || person.avatar_url.startsWith("data:")) ? (
+                        <img src={person.avatar_url} alt={person.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-sm font-bold text-ink-mute">{person.name?.[0]?.toUpperCase()}</span>
+                      )}
+                    </div>
+                    <span className="text-[10px] font-semibold text-ink-mute truncate w-full text-center">{person.name.split(" ")[0]}</span>
+                    <button
+                      onClick={async () => {
+                        if (!user) return;
+                        await supabase.from("follows").insert({ follower_id: user.id, following_id: person.id, status: "following" });
+                        setSuggestedPeople(prev => prev.filter(p => p.id !== person.id));
+                      }}
+                      className="px-2.5 py-0.5 text-[10px] font-bold bg-brand-500 text-white rounded-full active:scale-95 transition"
+                    >
+                      Follow
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Search bar */}
           <div className="relative mb-5 mt-2">

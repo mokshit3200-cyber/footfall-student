@@ -9,6 +9,7 @@ import { dbPostStory, dbFetchStoriesBar } from "@/lib/dbActions";
 import StoryViewer, { hasViewedAllStories } from "./StoryViewer";
 import SharedVibeCard, { encodeVibeShare, parseVibeShare } from "./SharedVibeCard";
 import UserProfileView from "./UserProfileView";
+import ConnectTutorial from "./ConnectTutorial";
 import {
   CheckIcon,
   ArrowLeftIcon,
@@ -181,6 +182,11 @@ export default function Connect({
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // Connect tutorial
+  const [showConnectTutorial, setShowConnectTutorial] = useState(false);
+  const vibeInputRef = useRef<HTMLElement | null>(null);
+  const storyBtnRef = useRef<HTMLElement | null>(null);
 
   // Frequency feed
   const [scope, setScope] = useState<"campus" | "all">("campus");
@@ -609,6 +615,16 @@ export default function Connect({
       setSuggestedPeople(suggestions);
     })();
   }, [user, profile?.college, demo]);
+
+  // ── Trigger connect tutorial after home tutorial done ─────
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const homeDone = localStorage.getItem("cmpus_tutorial_done");
+    const connectDone = localStorage.getItem("cmpus_connect_tutorial_done");
+    if ((homeDone || demo) && !connectDone) {
+      setTimeout(() => setShowConnectTutorial(true), 600);
+    }
+  }, [demo]);
 
   // ── Load DM inbox ─────────────────────────────────────────
   async function loadDmInbox() {
@@ -1481,8 +1497,6 @@ export default function Connect({
               placeholder="Search people..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              onFocus={() => setSearchFocused(true)}
-              onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
               className="input w-full pl-10 pr-10 py-3 text-sm rounded-2xl bg-[#1a1a1a] border border-white/[0.05] text-white focus:outline-none focus:border-brand-500/50 transition-colors"
             />
             {search && (
@@ -1522,40 +1536,6 @@ export default function Connect({
             ))}
           </div>
         </div>
-      ) : searchFocused ? (
-        <div className="px-5 pt-2 animate-fade-in">
-          <p className="text-[10px] font-semibold text-ink-mute uppercase tracking-wider mb-4">People you may know</p>
-          {suggestedPeople.length === 0 ? (
-            <p className="text-sm text-ink-mute text-center py-10">No one to discover yet 👀</p>
-          ) : (
-            <div className="space-y-2.5">
-              {suggestedPeople.map((person: any) => (
-                <div key={person.id} onClick={() => openViewProfile(person)}
-                  className="bg-[#0c0c0e]/90 border border-white/[0.07] rounded-3xl p-4 flex items-center gap-3.5 cursor-pointer hover:border-white/12 active:scale-[0.98] transition-all">
-                  <div className="w-10 h-10 rounded-full bg-white/[0.06] flex items-center justify-center overflow-hidden shrink-0">
-                    {person.avatar_url && (person.avatar_url.startsWith("http") || person.avatar_url.startsWith("data:")) ? (
-                      <img src={person.avatar_url} alt={person.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-sm font-bold text-ink-mute">{person.name?.[0]?.toUpperCase()}</span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-bold text-ink text-sm truncate">{person.name}</span>
-                      {person.verified && <span className="inline-flex items-center justify-center w-3.5 h-3.5 bg-brand-500 text-white rounded-full text-[7px]"><CheckIcon className="w-2.5 h-2.5" /></span>}
-                      {person.is_private && <LockIcon className="w-3.5 h-3.5 text-ink-mute shrink-0" />}
-                    </div>
-                    {person.username && <p className="text-[11px] text-brand-300 font-medium">@{person.username}</p>}
-                    {person.college && <p className="text-[11px] text-ink-mute truncate mt-0.5">{person.college}</p>}
-                  </div>
-                  <div onClick={e => e.stopPropagation()} className="shrink-0">
-                    <FollowBtn personId={person.id} isPrivate={person.is_private ?? false} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       ) : (
         <div className="px-5 animate-fade-in">
           {/* ── Follow Requests Banner ── */}
@@ -1585,6 +1565,7 @@ export default function Connect({
             <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1 select-none">
               {/* Your Story */}
               <button
+                ref={storyBtnRef as React.RefObject<HTMLButtonElement>}
                 onClick={() => setAddStoryOpen(true)}
                 className="flex flex-col items-center gap-1.5 shrink-0 group"
               >
@@ -1656,7 +1637,7 @@ export default function Connect({
           )}
 
           {/* My signal */}
-          <button onClick={() => {
+          <button ref={vibeInputRef as React.RefObject<HTMLButtonElement>} onClick={() => {
             setBroadcastInput(mySignal ?? "");
             setBroadcastIntent(mySignalIntent ?? "free");
             setBroadcastReach(mySignalReach ?? "campus");
@@ -2618,6 +2599,13 @@ export default function Connect({
             </div>
           </div>
         </div>
+      )}
+
+      {showConnectTutorial && (
+        <ConnectTutorial
+          refs={{ vibeInput: vibeInputRef, storyBtn: storyBtnRef }}
+          onDone={() => setShowConnectTutorial(false)}
+        />
       )}
     </div>
   );

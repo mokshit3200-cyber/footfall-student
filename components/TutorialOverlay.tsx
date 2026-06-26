@@ -25,11 +25,11 @@ export default function TutorialOverlay({
 }) {
   const [rect, setRect] = useState<DOMRect | null>(null);
   const targetRef = useMemo(() => {
-    if (step === 2) return refs.attendanceSection;
-    if (step === 3) return refs.markButtons;
-    if (step === 4) return refs.bunkCard;
-    if (step === 5) return refs.holidayBtn;
-    if (step === 6) return refs.editTimetable;
+    if (step === 1) return refs.attendanceSection;
+    if (step === 2) return refs.markButtons;
+    if (step === 3) return refs.bunkCard;
+    if (step === 4) return refs.holidayBtn;
+    if (step === 5) return refs.editTimetable;
     return null;
   }, [step, refs]);
 
@@ -66,20 +66,7 @@ export default function TutorialOverlay({
     );
   }
 
-  if (step === 1) {
-    return (
-      <FullScreen
-        emoji="👀"
-        title="Two ways to vibe"
-        text={"🔥 Vibe — drop your current mood or move in text. \"anyone for chai at 4pm?\" or \"DBMS grind rn 💀\" — your whole campus sees it, gone in 24h.\n\n📸 Story — post a photo or video, just like insta. Your college sees it, poof after 24h."}
-        action="Got it →"
-        onAction={onNext}
-        onSkip={onSkip}
-      />
-    );
-  }
-
-  if (step >= 7) {
+  if (step >= 6) {
     return (
       <FullScreen
         emoji="🎉"
@@ -92,11 +79,11 @@ export default function TutorialOverlay({
   }
 
   const messages: Record<number, string> = {
-    2: "Mark every class here, every day. Takes 10 seconds.",
-    3: "P = you went ✅  B = you bunked 😬  ✕ = cancelled 🚫",
-    4: "This updates live. It'll tell you exactly when it's safe to bunk.",
-    5: "Holiday? Tap this - marks every class cancelled in one go.",
-    6: "Set your weekly schedule here once. We auto-fill every day.",
+    1: "Mark every class here, every day. Takes 10 seconds.",
+    2: "P = you went ✅  B = you bunked 😬  ✕ = cancelled 🚫",
+    3: "This updates live. It'll tell you exactly when it's safe to bunk.",
+    4: "Holiday? Tap this - marks every class cancelled in one go.",
+    5: "Set your weekly schedule here once. We auto-fill every day.",
   };
   const pad = 10;
   const r = rect
