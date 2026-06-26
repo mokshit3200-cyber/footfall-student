@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useStore } from "./store";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
@@ -53,6 +53,7 @@ import {
   DayKey,
 } from "@/lib/types";
 import AttendanceDetail from "./AttendanceDetail";
+import TutorialOverlay from "./TutorialOverlay";
 
 type SheetKind =
   | null
@@ -80,6 +81,13 @@ export default function Home({ onSwitchTab }: { onSwitchTab?: (tab: any) => void
   const [pullStart, setPullStart] = useState<number | null>(null);
   const [pullOffset, setPullOffset] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
+  const bunkCardRef = useRef<HTMLDivElement | null>(null);
+  const attendanceSectionRef = useRef<HTMLDivElement | null>(null);
+  const markButtonsRef = useRef<HTMLDivElement | null>(null);
+  const holidayBtnRef = useRef<HTMLButtonElement | null>(null);
+  const editTimetableRef = useRef<HTMLButtonElement | null>(null);
 
   const demo = isDemo();
   const [followRequests, setFollowRequests] = useState<any[]>([]);
@@ -106,6 +114,17 @@ export default function Home({ onSwitchTab }: { onSwitchTab?: (tab: any) => void
         setFollowRequests(mapped);
       });
   }, [user, demo]);
+
+  useEffect(() => {
+    if (
+      !localStorage.getItem("cmpus_tutorial_done") &&
+      profile?.college &&
+      data.subjects.length > 0
+    ) {
+      setShowTutorial(true);
+      setTutorialStep(0);
+    }
+  }, [profile?.college, data.subjects.length]);
 
   async function handleAcceptFollow(followerId: string) {
     playTick();
@@ -423,6 +442,7 @@ export default function Home({ onSwitchTab }: { onSwitchTab?: (tab: any) => void
       <RemindersPanel />
 
       {/* ATTENDANCE HERO */}
+      <div ref={bunkCardRef}>
       <SpotlightCard className="card p-5">
         <div className="flex items-center gap-4">
           <Ring pct={overall.percentage} color={sc.fg}>
@@ -447,12 +467,13 @@ export default function Home({ onSwitchTab }: { onSwitchTab?: (tab: any) => void
         </div>
 
         {/* today's classes */}
-        <div id="attendance-section" className="mt-5 pt-4 border-t border-white/10">
+        <div id="attendance-section" ref={attendanceSectionRef} className="mt-5 pt-4 border-t border-white/10">
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-bold text-ink">Today&apos;s classes</p>
             <div className="flex items-center gap-3">
               {todaySlots.length > 0 && (
                 <button
+                  ref={holidayBtnRef}
                   onClick={markAllHoliday}
                   className="text-xs font-semibold text-ink-mute hover:text-ink-soft transition flex items-center gap-1"
                 >
@@ -461,6 +482,7 @@ export default function Home({ onSwitchTab }: { onSwitchTab?: (tab: any) => void
               )}
               {timetable.length > 0 && (
                 <button
+                  ref={editTimetableRef}
                   onClick={() => setSheet("timetable")}
                   className="text-brand-300 text-xs font-semibold"
                 >
@@ -493,10 +515,12 @@ export default function Home({ onSwitchTab }: { onSwitchTab?: (tab: any) => void
                         {slot.room ? ` · ${slot.room}` : ""}
                       </p>
                     </div>
-                    <MarkButtons
-                      value={st}
-                      onMark={(s) => markSlot(slot.id, slot.subjectId, s)}
-                    />
+                    <div ref={markButtonsRef}>
+                      <MarkButtons
+                        value={st}
+                        onMark={(s) => markSlot(slot.id, slot.subjectId, s)}
+                      />
+                    </div>
                   </div>
                 );
               })}
@@ -530,6 +554,7 @@ export default function Home({ onSwitchTab }: { onSwitchTab?: (tab: any) => void
           )}
         </div>
       </SpotlightCard>
+      </div>
 
       {/* QUICK STATS */}
       <div className="grid grid-cols-2 gap-2.5 mt-4">
@@ -823,6 +848,31 @@ export default function Home({ onSwitchTab }: { onSwitchTab?: (tab: any) => void
         <AttendanceDetail
           subjectId={detailSubject}
           onClose={() => setDetailSubject(null)}
+        />
+      )}
+      {showTutorial && (
+        <TutorialOverlay
+          step={tutorialStep}
+          firstName={profile.name?.split(" ")[0] || "there"}
+          onNext={() => {
+            if (tutorialStep >= 6) {
+              localStorage.setItem("cmpus_tutorial_done", "1");
+              setShowTutorial(false);
+            } else {
+              setTutorialStep((s) => s + 1);
+            }
+          }}
+          onSkip={() => {
+            localStorage.setItem("cmpus_tutorial_done", "1");
+            setShowTutorial(false);
+          }}
+          refs={{
+            bunkCard: bunkCardRef,
+            attendanceSection: attendanceSectionRef,
+            markButtons: markButtonsRef,
+            holidayBtn: holidayBtnRef,
+            editTimetable: editTimetableRef,
+          }}
         />
       )}
       </div>
@@ -1263,17 +1313,26 @@ function TimetableSheet({
             <p className="text-xs font-bold text-ink-soft">
               Add class to {DAY_LABELS[day]}
             </p>
-            <select
-              className="input"
-              value={subjectId || data.subjects[0]?.id}
-              onChange={(e) => setSubjectId(e.target.value)}
-            >
-              {data.subjects.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+              {data.subjects.map((s) => {
+                const selected = (subjectId || data.subjects[0]?.id) === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setSubjectId(s.id)}
+                    className={`shrink-0 inline-flex items-center gap-2 px-3 py-2 rounded-full text-xs font-bold border active:scale-[0.97] transition-all ${
+                      selected
+                        ? "border-brand-500 bg-brand-500/15 text-brand-300"
+                        : "border-white/[0.08] bg-white/[0.03] text-ink-soft"
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full" style={{ background: s.color }} />
+                    {s.name}
+                  </button>
+                );
+              })}
+            </div>
             <div className="flex gap-2">
               <input
                 type="time"

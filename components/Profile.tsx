@@ -578,6 +578,17 @@ export default function Profile({
               </button>
               <button
                 onClick={() => {
+                  localStorage.removeItem("cmpus_tutorial_done");
+                  setSettingsOpen(false);
+                  onSwitchTab?.("home");
+                }}
+                className="w-full flex items-center justify-between p-3.5 text-left active:bg-white/[0.04]"
+              >
+                <span className="text-sm text-ink-soft font-semibold">Replay tutorial</span>
+                <ChevronRight className="w-4 h-4 text-ink-mute" />
+              </button>
+              <button
+                onClick={() => {
                   setSettingsOpen(false);
                   setAcademicSettingsOpen(true);
                 }}
