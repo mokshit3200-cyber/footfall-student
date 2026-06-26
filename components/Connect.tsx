@@ -179,6 +179,7 @@ export default function Connect({
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Frequency feed
@@ -600,7 +601,7 @@ export default function Connect({
     if (!user || !profile?.college) return;
     (async () => {
       const [{ data: peers }, { data: following }] = await Promise.all([
-        supabase.from("profiles").select("id, name, username, avatar_url, is_private").eq("college", profile.college).neq("id", user.id).limit(20),
+        supabase.from("profiles").select("id, name, username, avatar_url, is_private, college, course, year, verified").neq("id", user.id).limit(20),
         supabase.from("follows").select("following_id").eq("follower_id", user.id),
       ]);
       const followedIds = new Set((following ?? []).map((f: any) => f.following_id));
@@ -1480,6 +1481,8 @@ export default function Connect({
               placeholder="Search people..."
               value={search}
               onChange={e => setSearch(e.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
               className="input w-full pl-10 pr-10 py-3 text-sm rounded-2xl bg-[#1a1a1a] border border-white/[0.05] text-white focus:outline-none focus:border-brand-500/50 transition-colors"
             />
             {search && (
@@ -1518,6 +1521,40 @@ export default function Connect({
               </div>
             ))}
           </div>
+        </div>
+      ) : searchFocused ? (
+        <div className="px-5 pt-2 animate-fade-in">
+          <p className="text-[10px] font-semibold text-ink-mute uppercase tracking-wider mb-4">People you may know</p>
+          {suggestedPeople.length === 0 ? (
+            <p className="text-sm text-ink-mute text-center py-10">No one to discover yet 👀</p>
+          ) : (
+            <div className="space-y-2.5">
+              {suggestedPeople.map((person: any) => (
+                <div key={person.id} onClick={() => openViewProfile(person)}
+                  className="bg-[#0c0c0e]/90 border border-white/[0.07] rounded-3xl p-4 flex items-center gap-3.5 cursor-pointer hover:border-white/12 active:scale-[0.98] transition-all">
+                  <div className="w-10 h-10 rounded-full bg-white/[0.06] flex items-center justify-center overflow-hidden shrink-0">
+                    {person.avatar_url && (person.avatar_url.startsWith("http") || person.avatar_url.startsWith("data:")) ? (
+                      <img src={person.avatar_url} alt={person.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-sm font-bold text-ink-mute">{person.name?.[0]?.toUpperCase()}</span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-ink text-sm truncate">{person.name}</span>
+                      {person.verified && <span className="inline-flex items-center justify-center w-3.5 h-3.5 bg-brand-500 text-white rounded-full text-[7px]"><CheckIcon className="w-2.5 h-2.5" /></span>}
+                      {person.is_private && <LockIcon className="w-3.5 h-3.5 text-ink-mute shrink-0" />}
+                    </div>
+                    {person.username && <p className="text-[11px] text-brand-300 font-medium">@{person.username}</p>}
+                    {person.college && <p className="text-[11px] text-ink-mute truncate mt-0.5">{person.college}</p>}
+                  </div>
+                  <div onClick={e => e.stopPropagation()} className="shrink-0">
+                    <FollowBtn personId={person.id} isPrivate={person.is_private ?? false} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
         <div className="px-5 animate-fade-in">
