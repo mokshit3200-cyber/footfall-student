@@ -7,6 +7,7 @@ import { ClassSlot, DayKey, SUBJECT_COLORS, Subject } from "@/lib/types";
 import { dbSaveTimetableSlot } from "@/lib/dbActions";
 import { useStore } from "./store";
 import { PlusIcon, XIcon, CheckIcon } from "./icons";
+import { isValidImageFile, sanitizeHandle, sanitizeText } from "@/lib/validation";
 
 const HYD_COLLEGES = [
   "Adamas University - Kolkata",
@@ -401,6 +402,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
   const [username, setUsername] = useState("");
   const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
   const checkRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const checkCountRef = useRef(0);
 
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || "");
   const [avatarPreview, setAvatarPreview] = useState(profile?.avatar_url || "");
@@ -438,6 +440,11 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
     const v = username.trim();
     if (!v) { setUsernameStatus("idle"); return; }
     if (!/^[a-z0-9_]{3,20}$/.test(v)) { setUsernameStatus("invalid"); return; }
+    checkCountRef.current++;
+    if (checkCountRef.current > 30) {
+      setUsernameStatus("idle");
+      return;
+    }
     setUsernameStatus("checking");
     if (checkRef.current) clearTimeout(checkRef.current);
     checkRef.current = setTimeout(async () => {
@@ -458,6 +465,11 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
     if (!user) return;
     setAvatarUploading(true);
     setProfileSaveError("");
+    if (!isValidImageFile(file, 5)) {
+      setProfileSaveError("Please upload an image under 5MB");
+      setAvatarUploading(false);
+      return;
+    }
     setAvatarPreview(URL.createObjectURL(file));
     const path = `${user.id}/avatar.jpg`;
     const { error } = await supabase.storage.from("avatars").upload(path, file, { upsert: true, contentType: file.type || "image/jpeg" });
@@ -481,11 +493,13 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
     if (!user || !profileValid) return;
     setProfileSaving(true);
     setProfileSaveError("");
-    const links = { instagram: instagram.trim().replace(/^@+/, ""), linkedin: linkedin.trim() };
-    const { error } = await supabase.from("profiles").update({ bio: bio.trim(), skills, links }).eq("id", user.id);
+    const cleanBio = sanitizeText(bio, 120);
+    const cleanSkills = skills.map((s) => sanitizeText(s, 40)).filter(Boolean).slice(0, 10);
+    const links = { instagram: sanitizeHandle(instagram.replace(/^@+/, "")), linkedin: sanitizeHandle(linkedin.replace(/https?:\/\/[^/]+\/in\//i, "")) };
+    const { error } = await supabase.from("profiles").update({ bio: cleanBio, skills: cleanSkills, links }).eq("id", user.id);
     setProfileSaving(false);
     if (error) { setProfileSaveError(`Profile save failed: ${error.message}`); return; }
-    update((d) => { d.profile.bio = bio.trim(); d.profile.skills = skills; d.profile.links = links; if (avatarUrl) d.profile.avatar = avatarUrl; });
+    update((d) => { d.profile.bio = cleanBio; d.profile.skills = cleanSkills; d.profile.links = links; if (avatarUrl) d.profile.avatar = avatarUrl; });
     setStep(2);
   }
 
@@ -513,8 +527,10 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
     if (!user) { setSaveError("Not signed in - please refresh and try again."); return; }
     setSaving(true);
     const yearNum = parseInt(year) || 1;
-    const links = { instagram: instagram.trim().replace(/^@+/, ""), linkedin: linkedin.trim() };
-    const { error: profErr } = await supabase.from("profiles").update({ college: college.trim(), course: course.trim(), year: yearNum, username: username.trim() || null, bio: bio.trim(), skills, links, ...(avatarUrl ? { avatar_url: avatarUrl } : {}) }).eq("id", user.id);
+    const cleanBio = sanitizeText(bio, 120);
+    const cleanSkills = skills.map((s) => sanitizeText(s, 40)).filter(Boolean).slice(0, 10);
+    const links = { instagram: sanitizeHandle(instagram.replace(/^@+/, "")), linkedin: sanitizeHandle(linkedin.replace(/https?:\/\/[^/]+\/in\//i, "")) };
+    const { error: profErr } = await supabase.from("profiles").update({ college: sanitizeText(college, 120), course: sanitizeText(course, 80), year: yearNum, username: username.trim() || null, bio: cleanBio, skills: cleanSkills, links, ...(avatarUrl ? { avatar_url: avatarUrl } : {}) }).eq("id", user.id);
     if (profErr) { setSaveError(`Profile save failed: ${profErr.message}`); setSaving(false); return; }
     if (subjects.length > 0) {
       const { error: subErr } = await supabase.from("subjects").insert(subjects.map((subject) => ({ user_id: user.id, name: subject.name, color: subject.color, target_pct: target })));
@@ -525,8 +541,8 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
       await dbSaveTimetableSlot(user.id, slot, subjectName);
     }
     update((d) => {
-      d.profile.college = college.trim(); d.profile.course = course.trim(); d.profile.year = yearNum; d.profile.attendanceTarget = target / 100;
-      d.profile.bio = bio.trim(); d.profile.skills = skills; d.profile.links = links; if (avatarUrl) d.profile.avatar = avatarUrl;
+      d.profile.college = sanitizeText(college, 120); d.profile.course = sanitizeText(course, 80); d.profile.year = yearNum; d.profile.attendanceTarget = target / 100;
+      d.profile.bio = cleanBio; d.profile.skills = cleanSkills; d.profile.links = links; if (avatarUrl) d.profile.avatar = avatarUrl;
       d.subjects = [...subjects]; d.timetable = [...slots];
     });
     setSaving(false);

@@ -18,6 +18,7 @@ import Business from "@/components/Business";
 import RemindersEngine from "@/components/RemindersEngine";
 import SupabaseSync from "@/components/SupabaseSync";
 import { playTick } from "@/components/ui";
+import { sanitizeHandle } from "@/lib/validation";
 
 export default function Page() {
   const { user, loading: authLoading, profile, refreshProfile } = useAuth();
@@ -30,6 +31,14 @@ export default function Page() {
 
   useEffect(() => {
     setIsDemo(getMode() === "demo");
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("ref");
+    if (ref) {
+      const cleanRef = sanitizeHandle(ref).slice(0, 8).toUpperCase();
+      if (/^[A-Z0-9]{6,8}$/.test(cleanRef)) {
+        localStorage.setItem("cmpus_ref", cleanRef);
+      }
+    }
   }, []);
 
   // Synchronize state from URL parameters on boot and popstate navigation

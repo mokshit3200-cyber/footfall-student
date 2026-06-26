@@ -801,7 +801,7 @@ export default function Home({ onSwitchTab }: { onSwitchTab?: (tab: any) => void
                           d.grades = d.grades.filter((x) => x.id !== g.id);
                         });
                         if (!isDemo() && user) {
-                          dbDeleteGrade(g.id);
+                          dbDeleteGrade(g.id, user.id);
                         }
                       }
                     }}
@@ -1231,7 +1231,7 @@ function SubjectSheet({ open, onClose }: { open: boolean; onClose: () => void })
                   d.subjects = d.subjects.filter((x) => x.id !== s.id);
                 });
                 if (!isDemo() && user) {
-                  dbDeleteSubject(s.id);
+                  dbDeleteSubject(s.id, user.id);
                 }
               }}
               className="text-ink-mute"
@@ -1367,7 +1367,7 @@ function TimetableSheet({
                 <button
                   onClick={() => {
                     update((d) => { d.timetable = d.timetable.filter((x) => x.id !== slot.id); });
-                    if (!isDemo() && user) dbDeleteTimetableSlot(slot.id);
+                    if (!isDemo() && user) dbDeleteTimetableSlot(slot.id, user.id);
                   }}
                   className="text-ink-mute"
                 >

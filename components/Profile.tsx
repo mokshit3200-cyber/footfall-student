@@ -6,6 +6,7 @@ import UserProfileView from "./UserProfileView";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { dbUpdateProfile, uploadPhoto } from "@/lib/dbActions";
+import { isSafeUrl, isValidImageFile, sanitizeHandle, sanitizeText } from "@/lib/validation";
 import { isDemo } from "@/lib/config";
 import { subscribeUserToPush, unsubscribeUserFromPush } from "./PWA";
 import { overallStats } from "@/lib/attendance";
@@ -160,7 +161,7 @@ export default function Profile({
           setSocialPeople(list);
         }
       } catch (err) {
-        console.error("Error loading social connections:", err);
+        if (process.env.NODE_ENV === "development") console.error("Error loading social connections:", err);
       } finally {
         setSocialLoading(false);
       }
@@ -1041,6 +1042,7 @@ function EditProfileSheet({
   const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
   const usernameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [college, setCollege] = useState("");
+  const usernameCheckCountRef = useRef(0);
   const [year, setYear] = useState("");
   const [course, setCourse] = useState("");
   const [avatar, setAvatar] = useState("");
@@ -1100,6 +1102,11 @@ function EditProfileSheet({
     }
     setUsernameStatus("checking");
     usernameTimerRef.current = setTimeout(async () => {
+      if (usernameCheckCountRef.current >= 30) {
+        setUsernameStatus("idle");
+        return;
+      }
+      usernameCheckCountRef.current += 1;
       if (isDemo()) {
         setUsernameStatus(cleaned === "arjun_s" ? "taken" : "available");
         return;
@@ -1115,7 +1122,7 @@ function EditProfileSheet({
   }
 
   function addSkill() {
-    const s = skillInput.trim();
+    const s = sanitizeText(skillInput, 40);
     if (s && !skills.includes(s)) setSkills([...skills, s]);
     setSkillInput("");
   }
@@ -1127,23 +1134,27 @@ function EditProfileSheet({
   async function save() {
     if (!name.trim()) return;
     const parsedYear = Number(year) || 1;
-    const trimmedBio = bio.trim();
-    const trimmedSkills = skills.map((s) => s.trim()).filter(Boolean);
+    const cleanName = sanitizeText(name, 80);
+    const cleanCollege = sanitizeText(college, 120);
+    const cleanCourse = sanitizeText(course, 120);
+    const trimmedBio = sanitizeText(bio, 150);
+    const trimmedSkills = skills.map((s) => sanitizeText(s, 40)).filter(Boolean).slice(0, 10);
 
-    const hasLinks = github.trim() || linkedin.trim() || instagram.trim() || portfolio.trim();
+    const cleanPortfolio = portfolio.trim();
     const links = {
-      github: github.trim(),
-      linkedin: linkedin.trim(),
-      instagram: instagram.trim(),
-      portfolio: portfolio.trim(),
+      github: sanitizeHandle(github),
+      linkedin: sanitizeHandle(linkedin.replace(/https?:\/\/[^/]+\/in\//i, "")),
+      instagram: sanitizeHandle(instagram.replace(/^@+/, "")),
+      portfolio: cleanPortfolio && isSafeUrl(cleanPortfolio) ? cleanPortfolio : "",
     };
+    const hasLinks = Object.values(links).some(Boolean);
 
     let finalAvatar = avatar;
     if (avatarFile && !isDemo() && user) {
       try {
         finalAvatar = await uploadPhoto("avatars", `${user.id}/avatar-${Date.now()}.png`, avatarFile);
       } catch (err) {
-        console.error("Avatar upload failed, utilizing fallback:", err);
+        if (process.env.NODE_ENV === "development") console.error("Avatar upload failed, utilizing fallback:", err);
       }
     }
 
@@ -1156,10 +1167,10 @@ function EditProfileSheet({
     }
 
     update((d) => {
-      d.profile.name = name.trim();
-      d.profile.college = college.trim() || undefined;
+      d.profile.name = cleanName;
+      d.profile.college = cleanCollege || undefined;
       d.profile.year = parsedYear;
-      d.profile.course = course.trim();
+      d.profile.course = cleanCourse;
       d.profile.avatar = finalAvatar;
       d.profile.bio = trimmedBio;
       d.profile.skills = trimmedSkills;
@@ -1172,10 +1183,10 @@ function EditProfileSheet({
 
     if (!isDemo() && user) {
       const profileUpdate: Record<string, any> = {
-        name: name.trim(),
-        college: college.trim(),
+        name: cleanName,
+        college: cleanCollege,
         year: parsedYear,
-        course: course.trim(),
+        course: cleanCourse,
         bio: trimmedBio,
         skills: trimmedSkills,
         links: hasLinks ? (links as Record<string, string>) : {},
@@ -1194,6 +1205,7 @@ function EditProfileSheet({
   function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) {
+      if (!isValidImageFile(file, 5)) return;
       setAvatarFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -1614,7 +1626,7 @@ function EditListingSheet({
       }
       onClose();
     } catch (err) {
-      console.error(err);
+      if (process.env.NODE_ENV === "development") console.error(err);
     } finally {
       setLoading(false);
     }
@@ -1636,7 +1648,7 @@ function EditListingSheet({
       }
       onClose();
     } catch (err) {
-      console.error(err);
+      if (process.env.NODE_ENV === "development") console.error(err);
     } finally {
       setLoading(false);
     }
@@ -1813,14 +1825,14 @@ function VerifyIdSheet({ open, onClose, name, college, onVerified }: VerifyIdShe
         .eq("id", user.id);
       
       if (error) {
-        console.error(error);
+        if (process.env.NODE_ENV === "development") console.error(error);
         alert("Verification failed: " + error.message);
       } else {
         triggerConfetti();
         onVerified();
       }
     } catch (err) {
-      console.error(err);
+      if (process.env.NODE_ENV === "development") console.error(err);
     } finally {
       onClose();
     }

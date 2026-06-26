@@ -8,10 +8,14 @@ import {
   useState,
 } from "react";
 import { AppData, emptyData } from "@/lib/types";
-import { isDemo } from "@/lib/config";
+import { getMode, isDemo } from "@/lib/config";
 import { buildDemoData } from "@/lib/demoData";
 
 const KEY = isDemo() ? "footfall-student-demo-v1" : "footfall-student-data-v1";
+
+function isDemoQueryMode() {
+  return typeof window !== "undefined" && new URLSearchParams(window.location.search).get("mode") === "demo";
+}
 
 function uid(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -34,7 +38,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(KEY);
+      const demoMode = isDemoQueryMode() || getMode() === "demo";
+      const raw = demoMode ? null : localStorage.getItem(KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<AppData>;
         setData({
@@ -52,7 +57,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           classmates: parsed.classmates || emptyData.classmates,
           notifications: parsed.notifications || [],
         });
-      } else if (isDemo()) {
+      } else if (demoMode) {
         // first visit to the demo link → seed a fully populated app
         setData(buildDemoData());
       }
@@ -71,6 +76,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     // would then load blank — no name, no OG badges).
     if (data === emptyData) return;
     try {
+      if (isDemoQueryMode() || getMode() === "demo") return;
       localStorage.setItem(KEY, JSON.stringify(data));
     } catch {
       /* quota / private mode — ignore */

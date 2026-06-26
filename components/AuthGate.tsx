@@ -87,7 +87,7 @@ export default function AuthGate() {
       },
     });
     if (error) {
-      console.error("Supabase signUp error:", JSON.stringify(error), error);
+      if (process.env.NODE_ENV === "development") console.error("Supabase signUp error:", JSON.stringify(error), error);
       const msg = error.message && error.message !== "{}"
         ? error.message
         : `Error ${(error as any).status || ""}: ${JSON.stringify(error)}`;

@@ -146,7 +146,7 @@ function LiveListingSheet({
         try {
           finalImage = await uploadPhoto("listings", `${user.id}/listing-${Date.now()}.png`, imageFile);
         } catch (err) {
-          console.error("Listing photo upload failed, utilizing fallback:", err);
+          if (process.env.NODE_ENV === "development") console.error("Listing photo upload failed, utilizing fallback:", err);
         }
       }
 
@@ -164,7 +164,7 @@ function LiveListingSheet({
           .eq("user_id", user.id);
 
         if (error) {
-          console.error(error);
+          if (process.env.NODE_ENV === "development") console.error(error);
           alert("Failed to update listing: " + error.message);
         } else {
           onSaved();
@@ -182,14 +182,14 @@ function LiveListingSheet({
         });
 
         if (error) {
-          console.error(error);
+          if (process.env.NODE_ENV === "development") console.error(error);
           alert("Failed to post listing: " + error.message);
         } else {
           onSaved();
         }
       }
     } catch (err) {
-      console.error(err);
+      if (process.env.NODE_ENV === "development") console.error(err);
     } finally {
       setSaving(false);
     }
@@ -314,12 +314,12 @@ function LiveMarketplace({ onSwitchTab }: { onSwitchTab?: (tab: any) => void }) 
         .eq("college", profile.college)
         .order("created_at", { ascending: false });
       if (error) {
-        console.error(error);
+        if (process.env.NODE_ENV === "development") console.error(error);
       } else if (data) {
         setListings(data);
       }
     } catch (err) {
-      console.error(err);
+      if (process.env.NODE_ENV === "development") console.error(err);
     } finally {
       setLoading(false);
     }
@@ -520,7 +520,7 @@ function LiveMarketplace({ onSwitchTab }: { onSwitchTab?: (tab: any) => void }) 
                           fetchListings();
                         }
                       } catch (err) {
-                        console.error(err);
+                        if (process.env.NODE_ENV === "development") console.error(err);
                       }
                     }}
                     className="w-full py-3 rounded-xl font-bold bg-white/[0.05] border border-white/[0.08] text-ink-soft active:scale-[0.98] transition flex items-center justify-center gap-2"
@@ -552,7 +552,7 @@ function LiveMarketplace({ onSwitchTab }: { onSwitchTab?: (tab: any) => void }) 
                             fetchListings();
                           }
                         } catch (err) {
-                          console.error(err);
+                          if (process.env.NODE_ENV === "development") console.error(err);
                         }
                       }
                     }}

@@ -1,8 +1,42 @@
 import { supabase } from "./supabase";
-import type { AppData, ClassSlot, DayKey, Grade } from "./types";
+import type { AppData, ClassSlot, DayKey, ExpenseCategory, Grade } from "./types";
+import { isValidImageFile } from "./validation";
 
 const DAY_TO_NUM: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
 const NUM_TO_DAY: Record<number, DayKey> = { 0: "sun", 1: "mon", 2: "tue", 3: "wed", 4: "thu", 5: "fri", 6: "sat" };
+
+type StoryProfileRow = {
+  id: string;
+  name: string;
+  username: string | null;
+  avatar_url: string | null;
+  college: string | null;
+  verified: boolean | null;
+  is_private?: boolean | null;
+};
+
+type StoryRow = {
+  id: string;
+  user_id: string;
+  media_url: string;
+  visibility: "public" | "followers";
+  created_at: string;
+  expires_at: string;
+  profiles: StoryProfileRow | StoryProfileRow[] | null;
+};
+
+type StoryBarEntry = {
+  userId: string;
+  profile: StoryProfileRow;
+  stories: StoryRow[];
+  isMutual: boolean;
+  isFollowing: boolean;
+  sameCampus: boolean;
+};
+
+function storyProfile(profiles: StoryRow["profiles"]): StoryProfileRow | null {
+  return Array.isArray(profiles) ? profiles[0] ?? null : profiles;
+}
 
 export async function dbSaveTimetableSlot(userId: string, slot: ClassSlot, label: string) {
   await supabase.from("timetable").upsert(
@@ -19,8 +53,8 @@ export async function dbSaveTimetableBulk(userId: string, slots: ClassSlot[], la
   );
 }
 
-export async function dbDeleteTimetableSlot(slotId: string) {
-  await supabase.from("timetable").delete().eq("id", slotId);
+export async function dbDeleteTimetableSlot(slotId: string, userId: string) {
+  await supabase.from("timetable").delete().eq("id", slotId).eq("user_id", userId);
 }
 
 export async function dbGetUserTimetable(userId: string) {
@@ -88,7 +122,7 @@ export async function dbLoadAll(
   update: (fn: (draft: AppData) => void) => void
 ) {
   const [profileRes, subjectsRes, attendanceRes, deadlinesRes, expensesRes, timetableRes, gradesRes, splitsRes] = await Promise.all([
-    supabase.from("profiles").select("*").eq("id", userId).single(),
+    supabase.from("profiles").select("id, name, username, college, course, year, avatar_url, bio, skills, links, verified, business_name, business_type, business_contact, is_ambassador, ambassador_role, global_signup_rank, campus_signup_rank, username_changed_at").eq("id", userId).single(),
     supabase.from("subjects").select("*").eq("user_id", userId).order("created_at"),
     supabase.from("attendance").select("*").eq("user_id", userId),
     supabase.from("deadlines").select("*").eq("user_id", userId),
@@ -151,7 +185,7 @@ export async function dbLoadAll(
       d.expenses = exps.map((e) => ({
         id: e.id,
         amount: Number(e.amount) || 0,
-        category: e.category as any,
+        category: e.category as ExpenseCategory,
         date: e.date,
         note: e.note || undefined,
       }));
@@ -161,8 +195,8 @@ export async function dbLoadAll(
 
     const slots = timetableRes.data;
     if (slots && slots.length > 0) {
-      const subjectsByName = Object.fromEntries((subjectsRes.data ?? []).map((s: any) => [s.name, s.id]));
-      d.timetable = slots.map((s: any) => ({
+      const subjectsByName = Object.fromEntries((subjectsRes.data ?? []).map((s) => [s.name, s.id]));
+      d.timetable = slots.map((s) => ({
         id: s.id,
         day: NUM_TO_DAY[s.day as number] ?? "mon",
         subjectId: subjectsByName[s.label] ?? (subjectsRes.data?.[0]?.id ?? ""),
@@ -200,8 +234,8 @@ export async function dbSaveSubject(userId: string, subject: { id: string; name:
   );
 }
 
-export async function dbDeleteSubject(subjectId: string) {
-  await supabase.from("subjects").delete().eq("id", subjectId);
+export async function dbDeleteSubject(subjectId: string, userId: string) {
+  await supabase.from("subjects").delete().eq("id", subjectId).eq("user_id", userId);
 }
 
 export async function dbSaveDeadline(userId: string, dl: { id: string; title: string; subjectId?: string; date: string; type: string; done: boolean }) {
@@ -211,8 +245,8 @@ export async function dbSaveDeadline(userId: string, dl: { id: string; title: st
   );
 }
 
-export async function dbDeleteDeadline(deadlineId: string) {
-  await supabase.from("deadlines").delete().eq("id", deadlineId);
+export async function dbDeleteDeadline(deadlineId: string, userId: string) {
+  await supabase.from("deadlines").delete().eq("id", deadlineId).eq("user_id", userId);
 }
 
 export async function dbToggleDeadline(deadlineId: string, done: boolean) {
@@ -226,8 +260,8 @@ export async function dbSaveGrade(userId: string, grade: Grade, subjectName: str
   );
 }
 
-export async function dbDeleteGrade(gradeId: string) {
-  await supabase.from("grades").delete().eq("id", gradeId);
+export async function dbDeleteGrade(gradeId: string, userId: string) {
+  await supabase.from("grades").delete().eq("id", gradeId).eq("user_id", userId);
 }
 
 export async function dbSaveExpense(
@@ -240,8 +274,8 @@ export async function dbSaveExpense(
   );
 }
 
-export async function dbDeleteExpense(expenseId: string) {
-  await supabase.from("expenses").delete().eq("id", expenseId);
+export async function dbDeleteExpense(expenseId: string, userId: string) {
+  await supabase.from("expenses").delete().eq("id", expenseId).eq("user_id", userId);
 }
 
 export async function dbSaveSplit(
@@ -261,8 +295,8 @@ export async function dbSaveSplit(
   );
 }
 
-export async function dbDeleteSplit(splitId: string) {
-  await supabase.from("splits").delete().eq("id", splitId);
+export async function dbDeleteSplit(splitId: string, userId: string) {
+  await supabase.from("splits").delete().eq("id", splitId).eq("user_id", userId);
 }
 
 /**
@@ -278,6 +312,9 @@ export async function uploadPhoto(
   if (typeof fileOrBase64 === "string") {
     return fileOrBase64;
   }
+  if (!isValidImageFile(fileOrBase64, 5)) {
+    throw new Error("Invalid image file");
+  }
 
   try {
     const { data, error } = await supabase.storage
@@ -288,7 +325,7 @@ export async function uploadPhoto(
       });
 
     if (error) {
-      console.warn("Supabase storage upload failed, falling back to base64:", error.message);
+      if (process.env.NODE_ENV === "development") console.warn("Supabase storage upload failed, falling back to base64:", error.message);
       return await fileToBase64(fileOrBase64);
     }
 
@@ -298,12 +335,15 @@ export async function uploadPhoto(
 
     return publicUrlData.publicUrl;
   } catch (err) {
-    console.warn("Storage upload error, falling back to base64:", err);
+    if (process.env.NODE_ENV === "development") console.warn("Storage upload error, falling back to base64:", err);
     return await fileToBase64(fileOrBase64);
   }
 }
 
 function fileToBase64(file: File): Promise<string> {
+  if (file.size > 1 * 1024 * 1024) {
+    return Promise.reject(new Error("File too large for base64 fallback"));
+  }
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
@@ -321,12 +361,19 @@ export async function dbPostStory(
   file: File,
   visibility: "public" | "followers"
 ): Promise<boolean> {
-  const ext = file.name.split('.').pop() || 'jpg';
+  if (!isValidImageFile(file, 10)) {
+    if (process.env.NODE_ENV === "development") console.error("Story upload rejected: not an image or file too large");
+    return false;
+  }
+  const contentType = ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)
+    ? file.type
+    : "image/jpeg";
+  const ext = contentType.split("/")[1] || "jpg";
   const path = `${userId}/${Date.now()}.${ext}`;
   const { error: upErr } = await supabase.storage
     .from('stories')
-    .upload(path, file, { upsert: false, contentType: file.type });
-  if (upErr) { console.error('Story upload error:', upErr.message); return false; }
+    .upload(path, file, { upsert: false, contentType });
+  if (upErr) { if (process.env.NODE_ENV === "development") console.error('Story upload error:', upErr.message); return false; }
   const { data: urlData } = supabase.storage.from('stories').getPublicUrl(path);
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   const { error } = await supabase.from('stories').insert({
@@ -335,7 +382,7 @@ export async function dbPostStory(
     expires_at: expiresAt,
     visibility,
   });
-  if (error) { console.error('Story insert error:', error.message); return false; }
+  if (error) { if (process.env.NODE_ENV === "development") console.error('Story insert error:', error.message); return false; }
   return true;
 }
 
@@ -352,10 +399,11 @@ export async function dbFetchStoriesBar(userId: string, college: string) {
       .neq('user_id', userId)
       .order('created_at', { ascending: false }),
   ]);
-  const followingIds = new Set((following ?? []).map((f: any) => f.following_id));
-  const followerIds = new Set((followers ?? []).map((f: any) => f.follower_id));
-  const visible = (stories ?? []).filter((s: any) => {
-    const prof = s.profiles as any;
+  const followingIds = new Set((following ?? []).map((f) => f.following_id));
+  const followerIds = new Set((followers ?? []).map((f) => f.follower_id));
+  const storyRows = (stories ?? []) as StoryRow[];
+  const visible = storyRows.filter((s) => {
+    const prof = storyProfile(s.profiles);
     if (!prof) return false;
     const isPrivate = prof.is_private ?? false;
     
@@ -366,26 +414,28 @@ export async function dbFetchStoriesBar(userId: string, college: string) {
     if (s.visibility === 'followers' && followingIds.has(s.user_id)) return true;
     return false;
   });
-  const byUser = new Map<string, any>();
+  const byUser = new Map<string, StoryBarEntry>();
   for (const s of visible) {
+    const profile = storyProfile(s.profiles);
+    if (!profile) continue;
     if (!byUser.has(s.user_id)) {
       const isMutual = followingIds.has(s.user_id) && followerIds.has(s.user_id);
       const isFollowing = followingIds.has(s.user_id);
       byUser.set(s.user_id, {
         userId: s.user_id,
-        profile: s.profiles,
+        profile,
         stories: [s],
         isMutual,
         isFollowing,
-        sameCampus: (s.profiles as any)?.college === college,
+        sameCampus: profile.college === college,
       });
     } else {
-      byUser.get(s.user_id).stories.push(s);
+      byUser.get(s.user_id)?.stories.push(s);
     }
   }
   const entries = Array.from(byUser.values());
   entries.sort((a, b) => {
-    const rank = (e: any) => e.isMutual ? 0 : e.isFollowing ? 1 : e.sameCampus ? 2 : 3;
+    const rank = (e: StoryBarEntry) => e.isMutual ? 0 : e.isFollowing ? 1 : e.sameCampus ? 2 : 3;
     return rank(a) - rank(b);
   });
   return entries;

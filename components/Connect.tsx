@@ -318,7 +318,7 @@ export default function Connect({
         (incoming ?? []).forEach((f: any) => { if (f.follower) friendsMap.set(f.follower.id, f.follower); });
         setFriendsList(Array.from(friendsMap.values()));
       } catch (err) {
-        console.error("Error loading friends:", err);
+        if (process.env.NODE_ENV === "development") console.error("Error loading friends:", err);
       } finally {
         setShareFriendsLoading(false);
       }
@@ -499,7 +499,7 @@ export default function Connect({
         setShareSignal(null);
         showToast(`Shared with ${friend.name.split(" ")[0]}`);
       } catch (err) {
-        console.error("Error sharing signal:", err);
+        if (process.env.NODE_ENV === "development") console.error("Error sharing signal:", err);
         showToast("Couldn't share — try again");
       }
     }

@@ -1,6 +1,19 @@
-/* Cmpus — minimal offline service worker */
-const CACHE = "cmpus-v4";
+/* Cmpus - minimal offline service worker */
+const CACHE = "cmpus-static-v5";
 const PRECACHE = ["/", "/manifest.webmanifest", "/icon-192.png", "/brand/mark-white.png"];
+
+function isCacheableStatic(url) {
+  if (url.origin !== self.location.origin) return false;
+  const path = url.pathname;
+  return (
+    path.startsWith("/_next/static/") ||
+    path.startsWith("/brand/") ||
+    path.startsWith("/icon-") ||
+    path.startsWith("/favicon") ||
+    path === "/manifest.webmanifest" ||
+    /\.(?:css|js|png|jpg|jpeg|webp|gif|svg|ico|woff2?)$/i.test(path)
+  );
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -23,13 +36,15 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
 
-  // Network-first for navigations (so updates land), fall back to cached shell offline.
+  // Network-first for navigations so updates land; cached shell is only offline fallback.
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put("/", copy));
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put("/", copy));
+          }
           return res;
         })
         .catch(() => caches.match("/").then((r) => r || caches.match(request)))
@@ -38,14 +53,10 @@ self.addEventListener("fetch", (event) => {
   }
 
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return;
+  if (!isCacheableStatic(url)) return;
 
-  // App code (JS/CSS, incl. Next.js build chunks): NETWORK-FIRST so a new
-  // deploy is always picked up immediately. Cache is only an offline fallback.
-  // Cache-first here caused version skew — fresh HTML loading stale chunks —
-  // which surfaced as "Application error: a client-side exception has occurred".
   const isAppCode =
-    url.pathname.startsWith("/_next/") ||
+    url.pathname.startsWith("/_next/static/") ||
     url.pathname.endsWith(".js") ||
     url.pathname.endsWith(".css");
 
@@ -53,8 +64,10 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(request, copy));
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(request, copy));
+          }
           return res;
         })
         .catch(() => caches.match(request))
@@ -62,14 +75,15 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Other static assets (images, fonts, manifest): cache-first is safe.
   event.respondWith(
     caches.match(request).then(
       (cached) =>
         cached ||
         fetch(request).then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(request, copy));
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(request, copy));
+          }
           return res;
         })
     )

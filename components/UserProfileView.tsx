@@ -262,7 +262,7 @@ export default function UserProfileView({
 
           setListings(lst ?? []);
         } catch (err) {
-          console.error("Failed to load profile", err);
+          if (process.env.NODE_ENV === "development") console.error("Failed to load profile", err);
         } finally {
           setLoading(false);
         }
@@ -871,5 +871,4 @@ function PerkRow({ icon, title, desc }: { icon: string; title: string; desc: str
     </div>
   );
 }
-
 

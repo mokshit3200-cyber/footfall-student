@@ -244,7 +244,7 @@ export default function Money() {
                           onClick={() => {
                             update((d) => { d.expenses = d.expenses.filter((x) => x.id !== e.id); });
                             if (!isDemo() && user) {
-                              dbDeleteExpense(e.id);
+                              dbDeleteExpense(e.id, user.id);
                             }
                           }}
                           className="text-ink-mute/50 active:text-red-500"
@@ -290,7 +290,7 @@ export default function Money() {
                     onClick={() => {
                       update((d) => { d.splits = d.splits.filter((x) => x.id !== s.id); });
                       if (!isDemo() && user) {
-                        dbDeleteSplit(s.id);
+                        dbDeleteSplit(s.id, user.id);
                       }
                     }}
                     className="text-ink-mute/50 active:text-red-500"

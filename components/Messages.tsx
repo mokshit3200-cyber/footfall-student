@@ -1019,7 +1019,7 @@ export default function Messages({
 
       setConvos(list);
     } catch (err) {
-      console.error(err);
+      if (process.env.NODE_ENV === "development") console.error(err);
     } finally {
       setLoading(false);
     }
@@ -1071,7 +1071,7 @@ export default function Messages({
 
       setSignals(signalsList);
     } catch (err) {
-      console.error(err);
+      if (process.env.NODE_ENV === "development") console.error(err);
     }
   }
 
@@ -1159,7 +1159,7 @@ export default function Messages({
         loadConvos();
       }
     } catch (err) {
-      console.error(err);
+      if (process.env.NODE_ENV === "development") console.error(err);
     }
   }
 
@@ -1184,7 +1184,7 @@ export default function Messages({
         loadConvos();
       }
     } catch (err) {
-      console.error(err);
+      if (process.env.NODE_ENV === "development") console.error(err);
     }
   }
 
@@ -1454,7 +1454,7 @@ export default function Messages({
         setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
       }
     } catch (err) {
-      console.error(err);
+      if (process.env.NODE_ENV === "development") console.error(err);
     }
   }
 
@@ -1683,7 +1683,7 @@ export default function Messages({
 
         const { error: memErr } = await supabase.from("group_members").insert(memberships);
         if (memErr) {
-          console.error(memErr);
+          if (process.env.NODE_ENV === "development") console.error(memErr);
         }
 
         setComposeOpen(false);
@@ -1703,7 +1703,7 @@ export default function Messages({
         });
       }
     } catch (err) {
-      console.error(err);
+      if (process.env.NODE_ENV === "development") console.error(err);
     }
   }
 
@@ -4072,7 +4072,7 @@ function NicknamesSheet({
       onSaveNicknames();
       onClose();
     } catch (err) {
-      console.error(err);
+      if (process.env.NODE_ENV === "development") console.error(err);
     } finally {
       setSaving(false);
     }

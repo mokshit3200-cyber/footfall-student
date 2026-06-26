@@ -83,7 +83,7 @@ export default function PWA() {
 // and replace these stubs with the real subscription logic.
 
 export async function subscribeUserToPush(_userId: string): Promise<boolean> {
-  console.warn("Push notifications not yet configured (VAPID key missing).");
+  if (process.env.NODE_ENV === "development") console.warn("Push notifications not yet configured (VAPID key missing).");
   return false;
 }
 
