@@ -96,9 +96,16 @@ export default function AuthGate() {
     });
     if (error) {
       if (process.env.NODE_ENV === "development") console.error("Supabase signUp error:", JSON.stringify(error), error);
-      const msg = error.message && error.message !== "{}"
-        ? error.message
-        : "Sign up failed. Please try again.";
+      let msg = "Sign up failed. Please try again.";
+      if (error.message) {
+        if (error.message.toLowerCase().includes("rate limit")) {
+          msg = "Too many attempts. Please wait a few minutes and try again.";
+        } else if (error.message.toLowerCase().includes("already registered")) {
+          msg = "An account with this email already exists. Try signing in instead.";
+        } else if (error.message !== "{}") {
+          msg = error.message;
+        }
+      }
       setError(msg);
     } else {
       if (typeof window !== "undefined") {
