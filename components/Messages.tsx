@@ -1783,24 +1783,29 @@ export default function Messages({
               <div className="flex gap-4 overflow-x-auto no-scrollbar pb-1 -mx-5 px-5 select-none">
                 {suggestedPeople.map((person) => (
                   <div key={person.id} className="flex flex-col items-center gap-1.5 shrink-0 w-[64px]">
-                    <div className="w-12 h-12 rounded-full bg-white/[0.06] border border-white/10 flex items-center justify-center overflow-hidden">
-                      {person.avatar_url && (person.avatar_url.startsWith("http") || person.avatar_url.startsWith("data:")) ? (
-                        <img src={person.avatar_url} alt={person.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-sm font-bold text-ink-mute">{person.name?.[0]?.toUpperCase()}</span>
-                      )}
-                    </div>
-                    <span className="text-[10px] font-semibold text-ink-mute truncate w-full text-center">{person.name.split(" ")[0]}</span>
+                    <button
+                      onClick={() => { setProfileUser(person); setProfileSheetOpen(true); }}
+                      className="flex flex-col items-center gap-1 active:scale-95 transition"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-white/[0.06] border border-white/10 flex items-center justify-center overflow-hidden">
+                        {person.avatar_url && (person.avatar_url.startsWith("http") || person.avatar_url.startsWith("data:")) ? (
+                          <img src={person.avatar_url} alt={person.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-sm font-bold text-ink-mute">{person.name?.[0]?.toUpperCase()}</span>
+                        )}
+                      </div>
+                      <span className="text-[10px] font-semibold text-ink-mute truncate w-full text-center">{person.name.split(" ")[0]}</span>
+                    </button>
                     <button
                       onClick={async () => {
                         if (!user) return;
                         const status = person.is_private ? "pending" : "following";
-                        await supabase.from("follows").insert({ follower_id: user.id, following_id: person.id, status });
-                        setSuggestedPeople(prev => prev.filter(p => p.id !== person.id));
+                        const { error } = await supabase.from("follows").insert({ follower_id: user.id, following_id: person.id, status });
+                        if (!error) setSuggestedPeople(prev => prev.filter(p => p.id !== person.id));
                       }}
                       className="px-2.5 py-0.5 text-[10px] font-bold bg-brand-500 text-white rounded-full active:scale-95 transition"
                     >
-                      Follow
+                      {person.is_private ? "Request" : "Follow"}
                     </button>
                   </div>
                 ))}
