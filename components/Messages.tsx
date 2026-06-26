@@ -3051,6 +3051,15 @@ function SwipeMessageBubble({
   const bubbleRef = useRef<HTMLDivElement>(null);
   const [showHeartBurst, setShowHeartBurst] = useState(false);
   const lastTap = useRef<number>(0);
+  const sharedVibe = parseVibeShare(msg.content);
+
+  if (sharedVibe) {
+    return (
+      <div className={`my-1 ${mine ? "flex justify-end" : "flex justify-start"}`}>
+        <SharedVibeCard vibe={sharedVibe} />
+      </div>
+    );
+  }
 
   const handleBubbleClick = (e: React.MouseEvent) => {
     const now = Date.now();
@@ -3197,15 +3206,6 @@ function SwipeMessageBubble({
 
         {/* Message content — shared vibe renders as a card, else text/attachments */}
         {(() => {
-          const sharedVibe = parseVibeShare(msg.content);
-          if (sharedVibe) {
-            return (
-              <div className="my-0.5">
-                <SharedVibeCard vibe={sharedVibe} />
-              </div>
-            );
-          }
-
           if (msg.type === "image") {
             const parts = msg.content.split("|||");
             const hasCaption = parts.length > 1;

@@ -67,10 +67,10 @@ export default function SharedVibeCard({
     <button
       type="button"
       onClick={() => onOpenProfile?.(vibe)}
-      className="w-[230px] max-w-full text-left rounded-2xl overflow-hidden border border-white/[0.1] bg-[#121214] active:scale-[0.98] transition shadow-lg"
+      className="w-[240px] max-w-full text-left rounded-2xl overflow-hidden border border-white/[0.07] bg-[#0f0f11] active:scale-[0.98] transition shadow-xl shadow-black/40"
     >
       {/* Accent strip in the intent colour */}
-      <div className="h-1 w-full" style={{ backgroundColor: intent.color }} />
+      <div className="h-0.5 w-full" style={{ backgroundColor: intent.color }} />
 
       <div className="p-3.5 space-y-2.5">
         {/* Sharer label */}
@@ -109,6 +109,7 @@ export default function SharedVibeCard({
         <p className="text-[13px] text-ink font-semibold leading-snug">
           &ldquo;{vibe.content}&rdquo;
         </p>
+        <p className="text-[9px] text-ink-mute mt-1.5">Tap to view profile →</p>
       </div>
     </button>
   );
