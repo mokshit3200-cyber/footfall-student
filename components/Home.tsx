@@ -116,15 +116,13 @@ export default function Home({ onSwitchTab }: { onSwitchTab?: (tab: any) => void
   }, [user, demo]);
 
   useEffect(() => {
-    if (
-      !localStorage.getItem("cmpus_tutorial_done") &&
-      profile?.college &&
-      data.subjects.length > 0
+    if (!localStorage.getItem("cmpus_tutorial_done") &&
+      (demo || (profile?.college && data.subjects.length > 0))
     ) {
       setShowTutorial(true);
       setTutorialStep(0);
     }
-  }, [profile?.college, data.subjects.length]);
+  }, [profile?.college, data.subjects.length, demo]);
 
   async function handleAcceptFollow(followerId: string) {
     playTick();
