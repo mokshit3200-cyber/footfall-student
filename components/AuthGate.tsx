@@ -6,6 +6,11 @@ import { supabase } from "@/lib/supabase";
 type Tab = "signup" | "signin";
 type SignupStep = 0 | 1 | 2; // 0=name, 1=username, 2=email+pw
 
+// Client-side login throttle (backs up Supabase's server-side rate limit)
+const loginThrottle = { failures: 0, lockedUntil: 0 };
+const MAX_FAILURES = 5;
+const LOCKOUT_MS = 15 * 60 * 1000;
+
 function generateSuggestions(name: string): string[] {
   const parts = name.trim().toLowerCase().replace(/[^a-z0-9 ]/g, "").split(/\s+/);
   const first = parts[0] || "";
@@ -76,13 +81,16 @@ export default function AuthGate() {
   async function signUp() {
     setLoading(true);
     setError("");
+    const refCode = typeof window !== "undefined" ? localStorage.getItem("cmpus_ref") : null;
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
       options: {
+        emailRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
         data: {
           name: name.trim(),
           username: username.trim().toLowerCase(),
+          referred_by_code: refCode || undefined,
         },
       },
     });
@@ -90,22 +98,59 @@ export default function AuthGate() {
       if (process.env.NODE_ENV === "development") console.error("Supabase signUp error:", JSON.stringify(error), error);
       const msg = error.message && error.message !== "{}"
         ? error.message
-        : `Error ${(error as any).status || ""}: ${JSON.stringify(error)}`;
+        : "Sign up failed. Please try again.";
       setError(msg);
-    } else if (data.user && !data.session) {
-      setCheckEmail(email.trim());
+    } else {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("cmpus_ref");
+      }
+      // data.user without data.session = email confirmation required
+      if (data.user && !data.session) {
+        setCheckEmail(email.trim());
+      }
     }
     setLoading(false);
   }
 
   async function signIn() {
+    // Client-side throttle
+    const now = Date.now();
+    if (loginThrottle.lockedUntil > now) {
+      const mins = Math.ceil((loginThrottle.lockedUntil - now) / 60000);
+      setError(`Too many failed attempts. Try again in ${mins} minute${mins > 1 ? "s" : ""}.`);
+      return;
+    }
+
     setLoading(true);
     setError("");
     const { error } = await supabase.auth.signInWithPassword({
       email: siEmail.trim(),
       password: siPassword,
     });
-    if (error) setError(error.message || "Incorrect email or password.");
+    if (error) {
+      loginThrottle.failures += 1;
+      if (loginThrottle.failures >= MAX_FAILURES) {
+        loginThrottle.lockedUntil = Date.now() + LOCKOUT_MS;
+        loginThrottle.failures = 0;
+        setError("Too many failed attempts. Your sign-in is locked for 15 minutes.");
+      } else if (error.message?.toLowerCase().includes("email not confirmed")) {
+        setCheckEmail(siEmail.trim());
+      } else if (error.message?.toLowerCase().includes("invalid login")) {
+        setError("Incorrect email or password.");
+      } else {
+        setError(error.message || "Sign in failed. Please try again.");
+      }
+    } else {
+      loginThrottle.failures = 0;
+      loginThrottle.lockedUntil = 0;
+    }
+    setLoading(false);
+  }
+
+  async function resendVerification() {
+    if (!checkEmail) return;
+    setLoading(true);
+    await supabase.auth.resend({ type: "signup", email: checkEmail });
     setLoading(false);
   }
 
@@ -139,6 +184,13 @@ export default function AuthGate() {
           className="mt-8 btn-primary px-8 py-3"
         >
           Go to Sign In →
+        </button>
+        <button
+          onClick={resendVerification}
+          disabled={loading}
+          className="mt-3 text-sm text-ink-mute underline underline-offset-2 disabled:opacity-50"
+        >
+          {loading ? "Sending…" : "Resend verification email"}
         </button>
       </div>
     );
@@ -313,10 +365,10 @@ export default function AuthGate() {
                     <input
                       type={showPw ? "text" : "password"}
                       className="input pr-14"
-                      placeholder="Min 6 characters"
+                      placeholder="Min 8 characters"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && !loading && email && password.length >= 6 && signUp()}
+                      onKeyDown={(e) => e.key === "Enter" && !loading && email && password.length >= 8 && signUp()}
                     />
                     <button
                       type="button"
@@ -341,7 +393,7 @@ export default function AuthGate() {
               <div className="pt-4 space-y-3">
                 <button
                   className="btn-primary w-full flex items-center justify-center gap-2"
-                  disabled={loading || !email.trim() || password.length < 6}
+                  disabled={loading || !email.trim() || password.length < 8}
                   onClick={signUp}
                 >
                   {loading ? <Spinner /> : "Create account 🎉"}
